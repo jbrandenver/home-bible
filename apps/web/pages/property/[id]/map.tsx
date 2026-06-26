@@ -14,7 +14,7 @@ export default function HomeMap() {
 
   return (
     <>
-      <PageHeader title="Home Map" subtitle="Organize floors, rooms, and utilities" />
+      <PageHeader title="Home Map" description="Organize floors, rooms, and utilities" />
       <Card>
         {floors.length > 0 ? (
           floors.map((floor) => (
@@ -22,7 +22,7 @@ export default function HomeMap() {
               <div className="grid grid-cols-2 gap-2">
                 {floor.rooms.map((r) => (
                   <Link key={r.id} href={`/property/${id}/room/${r.id}`}>
-                    <RoomCard name={r.name} roomType="Room" />
+                    <RoomCard name={r.name} type="Room" />
                   </Link>
                 ))}
               </div>
@@ -33,7 +33,7 @@ export default function HomeMap() {
         )}
         <div className="mt-4 pt-4 border-t border-gray-200">
           <Link href={`/property/${id}`}>
-            <Button variant="secondary">Back to Dashboard</Button>
+            <Button>Back to Dashboard</Button>
           </Link>
         </div>
       </Card>

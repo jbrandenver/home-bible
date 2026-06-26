@@ -3,20 +3,13 @@ import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 
 export default function SettingsPage() {
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        background: '#f8f5ef',
-        padding: '48px 20px'
-      }}
-    >
-      <div style={{ maxWidth: 980, margin: '0 auto' }}>
-        <PageHeader
-          title="Settings"
-          description="Account, property, privacy, sharing, billing, export, and deletion controls will live here."
-        />
+    <>
+      <PageHeader
+        title="Settings"
+        description="Account, property, privacy, sharing, billing, export, and deletion controls will live here."
+      />
 
-        <div style={{ display: 'grid', gap: 24 }}>
+      <div style={{ display: 'grid', gap: 24 }}>
           <Card>
             <h2 style={{ marginTop: 0 }}>Security and privacy</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -49,8 +42,7 @@ export default function SettingsPage() {
               <Button type="button">Home map</Button>
             </Link>
           </div>
-        </div>
       </div>
-    </main>
+    </>
   );
 }

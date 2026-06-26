@@ -9,19 +9,19 @@ export default function PropertyDashboard() {
 
   return (
     <>
-      <PageHeader title={propertyName || 'Property Dashboard'} subtitle={`ID: ${id ?? 'loading'}`} />
+      <PageHeader title={propertyName || 'Property Dashboard'} description={`ID: ${id ?? 'loading'}`} />
       <Card>
         <div className="space-y-4">
           <p>Property Overview — organize your home's information across floors, rooms, and utilities.</p>
           <div className="flex gap-2 flex-wrap">
             <Link href={`/property/${id}/map`}>
-              <Button variant="primary">Home Map</Button>
+              <Button>Home Map</Button>
             </Link>
             <Link href={`/property/${id}/add-rooms`}>
-              <Button variant="primary">Add Rooms</Button>
+              <Button>Add Rooms</Button>
             </Link>
             <Link href={`/property/${id}/settings`}>
-              <Button variant="secondary">Settings</Button>
+              <Button>Settings</Button>
             </Link>
           </div>
         </div>

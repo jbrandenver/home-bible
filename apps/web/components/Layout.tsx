@@ -40,12 +40,28 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               Create Property
             </Link>
             <Link
-              href="/property/demo"
+              href="/dashboard"
               className={`px-3 py-2 rounded ${
-                router.pathname.startsWith('/property/') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
+                isActive('/dashboard') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               Dashboard
+            </Link>
+            <Link
+              href="/home-map"
+              className={`px-3 py-2 rounded ${
+                isActive('/home-map') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Home Map
+            </Link>
+            <Link
+              href="/add-rooms"
+              className={`px-3 py-2 rounded ${
+                isActive('/add-rooms') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Add Rooms
             </Link>
             <Link
               href="/auth"

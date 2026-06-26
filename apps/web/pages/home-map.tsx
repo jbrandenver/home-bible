@@ -42,17 +42,10 @@ export default function HomeMapPage() {
   const floorNames = Object.keys(roomsByFloor);
 
   return (
-    <main
-      style={{
-        minHeight: '100vh',
-        background: '#f8f5ef',
-        padding: '48px 20px'
-      }}
-    >
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <PageHeader
-          title={`${propertyNickname} home map`}
-          description="A simple room-based map of your home. This is the foundation for utilities, appliances, accessories, tools, receipts, warranties, and repairs."
+    <>
+      <PageHeader
+        title={`${propertyNickname} home map`}
+        description="A simple room-based map of your home. This is the foundation for utilities, appliances, accessories, tools, receipts, warranties, and repairs."
         />
 
         <div style={{ display: 'grid', gap: 24 }}>
@@ -104,7 +97,6 @@ export default function HomeMapPage() {
             </Link>
           </div>
         </div>
-      </div>
-    </main>
-  );
-}
+      </>
+    );
+  }
