@@ -32,6 +32,16 @@ type Asset = {
   notes?: string;
 };
 
+type Reminder = {
+  id: string;
+  title: string;
+  reminder_type: string;
+  due_date: string;
+  linked_type?: string | null;
+  linked_id?: string | null;
+  status: string;
+};
+
 export default function RoomDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -39,11 +49,13 @@ export default function RoomDetailPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<Utility[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
 
   useEffect(() => {
     const storedRooms = window.localStorage.getItem('homeBible.rooms');
     const storedUtilities = window.localStorage.getItem('homeBible.utilities');
     const storedAssets = window.localStorage.getItem('homeBible.assets');
+    const storedReminders = window.localStorage.getItem('homeBible.reminders');
 
     if (storedRooms) {
       setRooms(JSON.parse(storedRooms));
@@ -55,6 +67,10 @@ export default function RoomDetailPage() {
 
     if (storedAssets) {
       setAssets(JSON.parse(storedAssets));
+    }
+
+    if (storedReminders) {
+      setReminders(JSON.parse(storedReminders));
     }
   }, []);
 
@@ -69,6 +85,11 @@ export default function RoomDetailPage() {
   const roomAssets = useMemo(() => {
     return assets.filter((a) => a.room_id === id);
   }, [assets, id]);
+
+  const roomReminders = useMemo(
+    () => reminders.filter((reminder) => reminder.linked_type === 'room' && reminder.linked_id === id),
+    [reminders, id]
+  );
 
   if (!room) {
     return (
@@ -101,7 +122,7 @@ export default function RoomDetailPage() {
             <UtilityBadge label={room.floor_name} />
             <UtilityBadge label={`${roomUtilities.length} utilit${roomUtilities.length === 1 ? 'y' : 'ies'}`} />
             <UtilityBadge label={`${roomAssets.length} asset${roomAssets.length === 1 ? '' : 's'}`} />
-            <UtilityBadge label="Receipts next" />
+            <UtilityBadge label={`${roomReminders.length} reminder${roomReminders.length === 1 ? '' : 's'}`} />
           </div>
         </Card>
 
@@ -184,6 +205,37 @@ export default function RoomDetailPage() {
         )}
 
         <Card>
+          <h2 style={{ marginTop: 0 }}>Reminders for this room</h2>
+          {roomReminders.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No reminders linked to this room yet.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {roomReminders.map((reminder) => (
+                <div
+                  key={reminder.id}
+                  style={{
+                    padding: 12,
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 8
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{reminder.title}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    {reminder.due_date} • {formatEnumLabel(reminder.status)} •{' '}
+                    {formatEnumLabel(reminder.reminder_type)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Link href="/reminders">
+              <Button type="button">Manage reminders</Button>
+            </Link>
+          </div>
+        </Card>
+
+        <Card>
           <h2 style={{ marginTop: 0 }}>What will live here</h2>
           <p style={{ color: '#4b5563' }}>
             This room will store utilities, appliances, accessories, smart devices, tools, receipts, warranties, repairs, photos, and notes.
@@ -199,6 +251,9 @@ export default function RoomDetailPage() {
           </Link>
           <Link href="/utilities">
             <Button type="button">All utilities</Button>
+          </Link>
+          <Link href="/reminders">
+            <Button type="button">All reminders</Button>
           </Link>
           <Link href="/settings">
             <Button type="button">Settings</Button>

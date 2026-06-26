@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Button } from '@home-bible/ui';
+import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 
 type Asset = {
   id: string;
@@ -26,6 +26,16 @@ type Asset = {
   updated_at?: string;
 };
 
+type Reminder = {
+  id: string;
+  title: string;
+  reminder_type: string;
+  due_date: string;
+  linked_type?: string | null;
+  linked_id?: string | null;
+  status: string;
+};
+
 type Room = {
   id: string;
   name: string;
@@ -36,11 +46,52 @@ export default function AssetDetailPage() {
   const { id } = router.query;
 
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+
+  const getWarrantyMeta = (assetItem: Asset) => {
+    let expirationDate: Date | null = null;
+
+    if (assetItem.warranty_expires_at) {
+      expirationDate = new Date(assetItem.warranty_expires_at);
+    } else if (assetItem.purchase_date && assetItem.warranty_length_months) {
+      const purchaseDate = new Date(assetItem.purchase_date);
+      expirationDate = new Date(purchaseDate);
+      expirationDate.setMonth(expirationDate.getMonth() + assetItem.warranty_length_months);
+    }
+
+    if (!expirationDate || Number.isNaN(expirationDate.getTime())) {
+      return { status: 'unknown', daysRemaining: null, expirationDate: null };
+    }
+
+    const daysRemaining = Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+
+    if (daysRemaining < 0) {
+      return {
+        status: 'expired',
+        daysRemaining,
+        expirationDate: expirationDate.toISOString().slice(0, 10)
+      };
+    }
+
+    if (daysRemaining <= 30) {
+      return {
+        status: 'expiring_soon',
+        daysRemaining,
+        expirationDate: expirationDate.toISOString().slice(0, 10)
+      };
+    }
+
+    return {
+      status: 'active',
+      daysRemaining,
+      expirationDate: expirationDate.toISOString().slice(0, 10)
+    };
+  };
 
   useEffect(() => {
     const storedAssets = window.localStorage.getItem('homeBible.assets');
     const storedRooms = window.localStorage.getItem('homeBible.rooms');
+    const storedReminders = window.localStorage.getItem('homeBible.reminders');
 
     if (storedAssets) {
       const parsedAssets = JSON.parse(storedAssets);
@@ -54,14 +105,19 @@ export default function AssetDetailPage() {
       setAssets(assetsWithRoomNames);
     }
 
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
+    if (storedReminders) {
+      setReminders(JSON.parse(storedReminders));
     }
   }, []);
 
   const asset = useMemo(() => {
     return assets.find((a) => a.id === id);
   }, [assets, id]);
+
+  const linkedReminders = useMemo(
+    () => reminders.filter((reminder) => reminder.linked_type === 'asset' && reminder.linked_id === id),
+    [reminders, id]
+  );
 
   const handleDelete = () => {
     if (!asset) return;
@@ -85,6 +141,8 @@ export default function AssetDetailPage() {
       </>
     );
   }
+
+  const warrantyMeta = getWarrantyMeta(asset);
 
   return (
     <>
@@ -163,25 +221,38 @@ export default function AssetDetailPage() {
         )}
 
         {/* Warranty Card */}
-        {(asset.warranty_length_months || asset.warranty_expires_at) && (
-          <Card>
-            <h2 style={{ marginTop: 0 }}>Warranty</h2>
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Warranty</h2>
 
-            <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: '#4b5563' }}>
-              {asset.warranty_length_months && (
-                <div>
-                  <strong>Coverage:</strong> {asset.warranty_length_months} months
-                </div>
-              )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            <UtilityBadge label={formatEnumLabel(warrantyMeta.status)} />
+            {warrantyMeta.daysRemaining !== null && (
+              <UtilityBadge label={`${warrantyMeta.daysRemaining} days`} />
+            )}
+          </div>
 
-              {asset.warranty_expires_at && (
-                <div>
-                  <strong>Expires:</strong> {asset.warranty_expires_at}
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
+          <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: '#4b5563' }}>
+            {asset.warranty_length_months && (
+              <div>
+                <strong>Coverage:</strong> {asset.warranty_length_months} months
+              </div>
+            )}
+
+            {warrantyMeta.expirationDate && (
+              <div>
+                <strong>Expires:</strong> {warrantyMeta.expirationDate}
+              </div>
+            )}
+
+            {!warrantyMeta.expirationDate && (
+              <div style={{ color: '#6b7280' }}>Add purchase date or warranty duration to calculate expiration.</div>
+            )}
+
+            <Link href="/warranties">
+              <Button type="button">Manage warranties</Button>
+            </Link>
+          </div>
+        </Card>
 
         {/* Documentation Card */}
         {(asset.manual_url || asset.support_url) && (
@@ -225,6 +296,37 @@ export default function AssetDetailPage() {
             <p style={{ color: '#4b5563', whiteSpace: 'pre-wrap' }}>{asset.notes}</p>
           </Card>
         )}
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Reminders for this asset</h2>
+          {linkedReminders.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No reminders linked to this asset.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {linkedReminders.map((reminder) => (
+                <div
+                  key={reminder.id}
+                  style={{
+                    padding: 12,
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 8
+                  }}
+                >
+                  <div style={{ fontWeight: 600 }}>{reminder.title}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    {reminder.due_date} • {formatEnumLabel(reminder.status)} •{' '}
+                    {formatEnumLabel(reminder.reminder_type)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Link href="/reminders">
+              <Button type="button">Open reminders</Button>
+            </Link>
+          </div>
+        </Card>
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

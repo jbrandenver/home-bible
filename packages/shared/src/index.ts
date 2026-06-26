@@ -72,6 +72,32 @@ export const VISIBILITY_OPTIONS = [
   'buyer_report'
 ] as const;
 
+export const WARRANTY_STATUSES = [
+  'active',
+  'expiring_soon',
+  'expired',
+  'unknown'
+] as const;
+
+export const REMINDER_TYPES = [
+  'warranty_expiration',
+  'hvac_filter',
+  'custom'
+] as const;
+
+export const REMINDER_LINKED_TYPES = [
+  'property',
+  'room',
+  'utility',
+  'asset'
+] as const;
+
+export const REMINDER_STATUSES = [
+  'open',
+  'done',
+  'snoozed'
+] as const;
+
 export const MEMBER_ROLES = [
   'owner',
   'co_owner',
@@ -157,11 +183,25 @@ export const createAssetSchema = z.object({
   visibility: z.enum(VISIBILITY_OPTIONS).default('private')
 });
 
+export const createReminderSchema = z.object({
+  title: z.string().min(1, 'Reminder title is required'),
+  reminder_type: z.enum(REMINDER_TYPES),
+  due_date: z.string(),
+  linked_type: z.enum(REMINDER_LINKED_TYPES).optional().nullable(),
+  linked_id: z.string().uuid().optional().nullable(),
+  repeat_rule: z.string().optional().nullable(),
+  status: z.enum(REMINDER_STATUSES).default('open')
+});
+
 export type PropertyType = typeof PROPERTY_TYPES[number];
 export type RoomType = typeof ROOM_TYPES[number];
 export type UtilityType = typeof UTILITY_TYPES[number];
 export type AssetType = typeof ASSET_TYPES[number];
 export type VisibilityOption = typeof VISIBILITY_OPTIONS[number];
+export type WarrantyStatus = typeof WARRANTY_STATUSES[number];
+export type ReminderType = typeof REMINDER_TYPES[number];
+export type ReminderLinkedType = typeof REMINDER_LINKED_TYPES[number];
+export type ReminderStatus = typeof REMINDER_STATUSES[number];
 export type MemberRole = typeof MEMBER_ROLES[number];
 export type PlanName = typeof PLAN_NAMES[number];
 
@@ -170,6 +210,7 @@ export type CreateFloorInput = z.infer<typeof createFloorSchema>;
 export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type CreateUtilityInput = z.infer<typeof createUtilitySchema>;
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;
+export type CreateReminderInput = z.infer<typeof createReminderSchema>;
 
 export function formatEnumLabel(value: string) {
   return value
