@@ -296,6 +296,125 @@ export type CreateReminderInput = z.infer<typeof createReminderSchema>;
 export type CreateServiceRecordInput = z.infer<typeof createServiceRecordSchema>;
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 
+export type DbRole = MemberRole;
+export type DbVisibility = VisibilityOption;
+
+export interface ProfileRow {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface HouseholdRow {
+  id: string;
+  owner_user_id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface PropertyRow {
+  id: string;
+  household_id: string;
+  owner_user_id: string;
+  nickname: string;
+  property_type: PropertyType;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface RoomRow {
+  id: string;
+  property_id: string;
+  floor_id: string | null;
+  name: string;
+  room_type: RoomType;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface UtilityRow {
+  id: string;
+  property_id: string;
+  room_id: string | null;
+  utility_type: UtilityType;
+  name: string;
+  visibility: VisibilityOption;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface AssetRow {
+  id: string;
+  property_id: string;
+  room_id: string | null;
+  asset_type: AssetType;
+  name: string;
+  visibility: VisibilityOption;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface ReminderRow {
+  id: string;
+  property_id: string;
+  room_id: string | null;
+  utility_id: string | null;
+  asset_id: string | null;
+  title: string;
+  reminder_type: ReminderType;
+  due_date: string;
+  status: ReminderStatus;
+  visibility: VisibilityOption;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface ServiceRecordRow {
+  id: string;
+  property_id: string;
+  room_id: string | null;
+  utility_id: string | null;
+  asset_id: string | null;
+  service_type: ServiceType;
+  title: string;
+  service_date: string;
+  follow_up_needed: boolean;
+  follow_up_date: string | null;
+  visibility: VisibilityOption;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface IssueRow {
+  id: string;
+  property_id: string;
+  room_id: string | null;
+  utility_id: string | null;
+  asset_id: string | null;
+  issue_type: IssueType;
+  title: string;
+  status: IssueStatus;
+  severity: IssueSeverity;
+  date_found: string;
+  resolution_date: string | null;
+  visibility: VisibilityOption;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
 export function formatEnumLabel(value: string) {
   return value
     .split('_')
