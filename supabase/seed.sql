@@ -1,0 +1,2 @@
+-- Seed minimal lookup data (property types, room types, utility types could be managed in app code)
+-- For now keep seeds empty to avoid shipping secrets or personal data.

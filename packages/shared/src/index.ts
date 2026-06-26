@@ -1,0 +1,137 @@
+import { z } from 'zod';
+
+export const PROPERTY_TYPES = [
+  'single_family_home',
+  'condo',
+  'apartment',
+  'townhome',
+  'duplex',
+  'cabin',
+  'rental_home'
+] as const;
+
+export const ROOM_TYPES = [
+  'bedroom',
+  'bathroom',
+  'kitchen',
+  'living_room',
+  'dining_room',
+  'office',
+  'laundry_room',
+  'garage',
+  'basement',
+  'attic',
+  'crawl_space',
+  'utility_room',
+  'closet',
+  'hallway',
+  'entryway',
+  'exterior',
+  'yard',
+  'shed',
+  'patio',
+  'deck',
+  'other'
+] as const;
+
+export const UTILITY_TYPES = [
+  'main_water_shutoff',
+  'electrical_panel',
+  'gas_shutoff',
+  'water_heater',
+  'hvac_unit',
+  'furnace',
+  'air_conditioner',
+  'breaker_panel',
+  'sump_pump',
+  'irrigation_shutoff',
+  'internet_modem',
+  'router',
+  'smoke_detector',
+  'carbon_monoxide_detector',
+  'other'
+] as const;
+
+export const MEMBER_ROLES = [
+  'owner',
+  'co_owner',
+  'editor',
+  'viewer',
+  'maintenance_guest'
+] as const;
+
+export const PLAN_NAMES = [
+  'free',
+  'paid',
+  'extra_property'
+] as const;
+
+export const createPropertySchema = z.object({
+  nickname: z.string().min(1, 'Property nickname is required'),
+  property_type: z.enum(PROPERTY_TYPES),
+  address_line_1: z.string().optional().nullable(),
+  address_line_2: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  postal_code: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
+  address_is_enabled: z.boolean().default(false),
+  square_feet: z.coerce.number().optional().nullable(),
+  year_built: z.coerce.number().optional().nullable(),
+  floor_count: z.coerce.number().optional().nullable(),
+  has_garage: z.boolean().default(false),
+  has_basement: z.boolean().default(false),
+  has_attic: z.boolean().default(false),
+  has_crawl_space: z.boolean().default(false),
+  has_yard: z.boolean().default(false),
+  has_shed: z.boolean().default(false)
+});
+
+export const createFloorSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  name: z.string().min(1, 'Floor name is required'),
+  floor_number: z.coerce.number(),
+  sort_order: z.coerce.number().default(0)
+});
+
+export const createRoomSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  floor_id: z.string().uuid().optional(),
+  name: z.string().min(1, 'Room name is required'),
+  room_type: z.enum(ROOM_TYPES),
+  sort_order: z.coerce.number().default(0),
+  notes: z.string().optional().nullable(),
+  outlet_count: z.coerce.number().optional().nullable(),
+  switch_count: z.coerce.number().optional().nullable(),
+  vent_count: z.coerce.number().optional().nullable(),
+  vent_type: z.string().optional().nullable(),
+  breaker_label: z.string().optional().nullable(),
+  has_plumbing: z.boolean().default(false)
+});
+
+export const createUtilitySchema = z.object({
+  property_id: z.string().uuid().optional(),
+  room_id: z.string().uuid().optional().nullable(),
+  utility_type: z.enum(UTILITY_TYPES),
+  name: z.string().min(1, 'Utility name is required'),
+  location_notes: z.string().optional().nullable(),
+  emergency_notes: z.string().optional().nullable()
+});
+
+export type PropertyType = typeof PROPERTY_TYPES[number];
+export type RoomType = typeof ROOM_TYPES[number];
+export type UtilityType = typeof UTILITY_TYPES[number];
+export type MemberRole = typeof MEMBER_ROLES[number];
+export type PlanName = typeof PLAN_NAMES[number];
+
+export type CreatePropertyInput = z.infer<typeof createPropertySchema>;
+export type CreateFloorInput = z.infer<typeof createFloorSchema>;
+export type CreateRoomInput = z.infer<typeof createRoomSchema>;
+export type CreateUtilityInput = z.infer<typeof createUtilitySchema>;
+
+export function formatEnumLabel(value: string) {
+  return value
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
