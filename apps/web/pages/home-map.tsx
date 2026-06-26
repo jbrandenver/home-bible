@@ -10,13 +10,22 @@ type Room = {
   floor_name: string;
 };
 
+type Utility = {
+  id: string;
+  utility_type: string;
+  name: string;
+  room_id?: string;
+};
+
 export default function HomeMapPage() {
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [utilities, setUtilities] = useState<Utility[]>([]);
 
   useEffect(() => {
     const storedProperty = window.localStorage.getItem('homeBible.activeProperty');
     const storedRooms = window.localStorage.getItem('homeBible.rooms');
+    const storedUtilities = window.localStorage.getItem('homeBible.utilities');
 
     if (storedProperty) {
       const property = JSON.parse(storedProperty);
@@ -25,6 +34,10 @@ export default function HomeMapPage() {
 
     if (storedRooms) {
       setRooms(JSON.parse(storedRooms));
+    }
+
+    if (storedUtilities) {
+      setUtilities(JSON.parse(storedUtilities));
     }
   }, []);
 
@@ -54,7 +67,7 @@ export default function HomeMapPage() {
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <UtilityBadge label={`${floorNames.length} floor${floorNames.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? '' : 's'}`} />
-              <UtilityBadge label="Utilities coming next" />
+              <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label="Assets coming next" />
             </div>
           </Card>
