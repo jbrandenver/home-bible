@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
 
 type Asset = {
   id: string;
@@ -36,6 +37,22 @@ type Reminder = {
   status: string;
 };
 
+type ServiceRecord = TrendServiceRecord & {
+  id: string;
+  title: string;
+  service_type: string;
+  service_date: string;
+  follow_up_needed?: boolean;
+  follow_up_date?: string | null;
+};
+
+type Issue = IssueRecord & {
+  id: string;
+  title: string;
+  issue_type: string;
+  date_found: string;
+};
+
 type Room = {
   id: string;
   name: string;
@@ -47,6 +64,8 @@ export default function AssetDetailPage() {
 
   const [assets, setAssets] = useState<Asset[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
 
   const getWarrantyMeta = (assetItem: Asset) => {
     let expirationDate: Date | null = null;
@@ -92,6 +111,8 @@ export default function AssetDetailPage() {
     const storedAssets = window.localStorage.getItem('homeBible.assets');
     const storedRooms = window.localStorage.getItem('homeBible.rooms');
     const storedReminders = window.localStorage.getItem('homeBible.reminders');
+    const storedServiceRecords = window.localStorage.getItem('homeBible.serviceRecords');
+    const storedIssues = window.localStorage.getItem('homeBible.issues');
 
     if (storedAssets) {
       const parsedAssets = JSON.parse(storedAssets);
@@ -108,6 +129,14 @@ export default function AssetDetailPage() {
     if (storedReminders) {
       setReminders(JSON.parse(storedReminders));
     }
+
+    if (storedServiceRecords) {
+      setServiceRecords(JSON.parse(storedServiceRecords));
+    }
+
+    if (storedIssues) {
+      setIssues(JSON.parse(storedIssues));
+    }
   }, []);
 
   const asset = useMemo(() => {
@@ -118,6 +147,19 @@ export default function AssetDetailPage() {
     () => reminders.filter((reminder) => reminder.linked_type === 'asset' && reminder.linked_id === id),
     [reminders, id]
   );
+
+  const linkedServiceRecords = useMemo(
+    () => serviceRecords.filter((record) => record.asset_id === id),
+    [serviceRecords, id]
+  );
+
+  const linkedIssues = useMemo(
+    () => issues.filter((issue) => issue.asset_id === id),
+    [issues, id]
+  );
+
+  const trendFlags = useMemo(() => detectTrendFlags(serviceRecords, issues), [serviceRecords, issues]);
+  const assetTrendFlags = useMemo(() => trendFlagsForEntity(trendFlags, 'asset', String(id)), [trendFlags, id]);
 
   const handleDelete = () => {
     if (!asset) return;
@@ -296,6 +338,79 @@ export default function AssetDetailPage() {
             <p style={{ color: '#4b5563', whiteSpace: 'pre-wrap' }}>{asset.notes}</p>
           </Card>
         )}
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+          {assetTrendFlags.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No trend flags currently for this asset.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {assetTrendFlags.map((flag) => (
+                <div key={flag.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                  <div style={{ fontWeight: 600 }}>{flag.label}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{flag.details}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Service records for this asset</h2>
+          {linkedServiceRecords.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No service records linked to this asset.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {linkedServiceRecords
+                .slice()
+                .sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
+                .map((record) => (
+                  <div key={record.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                    <div style={{ fontWeight: 600 }}>{record.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {record.service_date} • {formatEnumLabel(record.service_type)}
+                    </div>
+                    {record.follow_up_needed && (
+                      <div style={{ color: '#92400e', fontSize: '0.875rem' }}>
+                        Follow-up: {record.follow_up_date || 'Needed'}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Link href="/repairs">
+              <Button type="button">Open repairs</Button>
+            </Link>
+          </div>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Issues for this asset</h2>
+          {linkedIssues.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No issues linked to this asset.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {linkedIssues
+                .slice()
+                .sort((a, b) => new Date(b.date_found || 0).getTime() - new Date(a.date_found || 0).getTime())
+                .map((issue) => (
+                  <div key={issue.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                    <div style={{ fontWeight: 600 }}>{issue.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {issue.date_found} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Link href="/issues">
+              <Button type="button">Open issues</Button>
+            </Link>
+          </div>
+        </Card>
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Reminders for this asset</h2>

@@ -96,6 +96,22 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               Reminders
             </Link>
             <Link
+              href="/repairs"
+              className={`px-3 py-2 rounded ${
+                isActive('/repairs') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Repairs
+            </Link>
+            <Link
+              href="/issues"
+              className={`px-3 py-2 rounded ${
+                isActive('/issues') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Issues
+            </Link>
+            <Link
               href="/auth"
               className={`px-3 py-2 rounded ${
                 isActive('/auth') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'

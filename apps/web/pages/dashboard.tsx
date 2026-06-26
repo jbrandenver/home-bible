@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { detectTrendFlags, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../components/trendFlags';
 
 type Room = {
   id: string;
@@ -34,6 +35,17 @@ type Reminder = {
   status: 'open' | 'done' | 'snoozed' | string;
   linked_type?: string | null;
   reminder_type: string;
+};
+
+type ServiceRecord = TrendServiceRecord & {
+  title: string;
+  service_type: string;
+  service_date: string;
+};
+
+type Issue = IssueRecord & {
+  title: string;
+  issue_type: string;
 };
 
 function getWarrantyStatus(asset: Asset): 'active' | 'expiring_soon' | 'expired' | 'unknown' {
@@ -70,6 +82,8 @@ export default function DashboardPage() {
   const [utilities, setUtilities] = useState<Utility[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
 
   useEffect(() => {
     const storedProperty = window.localStorage.getItem('homeBible.activeProperty');
@@ -77,6 +91,8 @@ export default function DashboardPage() {
     const storedUtilities = window.localStorage.getItem('homeBible.utilities');
     const storedAssets = window.localStorage.getItem('homeBible.assets');
     const storedReminders = window.localStorage.getItem('homeBible.reminders');
+    const storedServiceRecords = window.localStorage.getItem('homeBible.serviceRecords');
+    const storedIssues = window.localStorage.getItem('homeBible.issues');
 
     if (storedProperty) {
       const property = JSON.parse(storedProperty);
@@ -97,6 +113,14 @@ export default function DashboardPage() {
 
     if (storedReminders) {
       setReminders(JSON.parse(storedReminders));
+    }
+
+    if (storedServiceRecords) {
+      setServiceRecords(JSON.parse(storedServiceRecords));
+    }
+
+    if (storedIssues) {
+      setIssues(JSON.parse(storedIssues));
     }
   }, []);
 
@@ -131,6 +155,22 @@ export default function DashboardPage() {
     [reminders]
   );
 
+  const trendFlags = useMemo(() => detectTrendFlags(serviceRecords, issues), [serviceRecords, issues]);
+
+  const recentServiceRecords = useMemo(
+    () =>
+      serviceRecords
+        .slice()
+        .sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
+        .slice(0, 4),
+    [serviceRecords]
+  );
+
+  const openIssueCount = useMemo(
+    () => issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'archived').length,
+    [issues]
+  );
+
   return (
     <>
       <PageHeader
@@ -146,6 +186,8 @@ export default function DashboardPage() {
               <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
             </div>
 
             <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -164,10 +206,58 @@ export default function DashboardPage() {
               <Link href="/reminders">
                 <Button type="button">View reminders</Button>
               </Link>
+              <Link href="/repairs">
+                <Button type="button">View repairs</Button>
+              </Link>
+              <Link href="/issues">
+                <Button type="button">View issues</Button>
+              </Link>
               <Link href="/settings">
                 <Button type="button">Settings</Button>
               </Link>
             </div>
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Service records</h2>
+            {recentServiceRecords.length === 0 ? (
+              <p style={{ color: '#6b7280' }}>No service records yet.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {recentServiceRecords.map((record) => (
+                  <div
+                    key={record.id}
+                    style={{
+                      padding: 12,
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 10,
+                      background: '#fff'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{record.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {record.service_date} • {formatEnumLabel(record.service_type)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+            {trendFlags.length === 0 ? (
+              <p style={{ color: '#6b7280' }}>No trend flags currently.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {trendFlags.slice(0, 6).map((flag) => (
+                  <div key={flag.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                    <div style={{ fontWeight: 600 }}>{flag.label}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{flag.details}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
 
           <Card>

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
 
 type Room = {
   id: string;
@@ -42,6 +43,22 @@ type Reminder = {
   status: string;
 };
 
+type ServiceRecord = TrendServiceRecord & {
+  id: string;
+  title: string;
+  service_type: string;
+  service_date: string;
+  follow_up_date?: string | null;
+  follow_up_needed?: boolean;
+};
+
+type Issue = IssueRecord & {
+  id: string;
+  title: string;
+  issue_type: string;
+  date_found: string;
+};
+
 export default function RoomDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -50,12 +67,16 @@ export default function RoomDetailPage() {
   const [utilities, setUtilities] = useState<Utility[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  const [issues, setIssues] = useState<Issue[]>([]);
 
   useEffect(() => {
     const storedRooms = window.localStorage.getItem('homeBible.rooms');
     const storedUtilities = window.localStorage.getItem('homeBible.utilities');
     const storedAssets = window.localStorage.getItem('homeBible.assets');
     const storedReminders = window.localStorage.getItem('homeBible.reminders');
+    const storedServiceRecords = window.localStorage.getItem('homeBible.serviceRecords');
+    const storedIssues = window.localStorage.getItem('homeBible.issues');
 
     if (storedRooms) {
       setRooms(JSON.parse(storedRooms));
@@ -71,6 +92,14 @@ export default function RoomDetailPage() {
 
     if (storedReminders) {
       setReminders(JSON.parse(storedReminders));
+    }
+
+    if (storedServiceRecords) {
+      setServiceRecords(JSON.parse(storedServiceRecords));
+    }
+
+    if (storedIssues) {
+      setIssues(JSON.parse(storedIssues));
     }
   }, []);
 
@@ -90,6 +119,30 @@ export default function RoomDetailPage() {
     () => reminders.filter((reminder) => reminder.linked_type === 'room' && reminder.linked_id === id),
     [reminders, id]
   );
+
+  const utilityIdsInRoom = useMemo(
+    () => new Set(roomUtilities.map((utility) => utility.id)),
+    [roomUtilities]
+  );
+
+  const roomServiceRecords = useMemo(
+    () =>
+      serviceRecords.filter(
+        (record) => record.room_id === id || (!!record.utility_id && utilityIdsInRoom.has(record.utility_id))
+      ),
+    [serviceRecords, id, utilityIdsInRoom]
+  );
+
+  const roomIssues = useMemo(
+    () =>
+      issues.filter(
+        (issue) => issue.room_id === id || (!!issue.utility_id && utilityIdsInRoom.has(issue.utility_id))
+      ),
+    [issues, id, utilityIdsInRoom]
+  );
+
+  const trendFlags = useMemo(() => detectTrendFlags(serviceRecords, issues), [serviceRecords, issues]);
+  const roomTrendFlags = useMemo(() => trendFlagsForEntity(trendFlags, 'room', String(id)), [trendFlags, id]);
 
   if (!room) {
     return (
@@ -123,7 +176,25 @@ export default function RoomDetailPage() {
             <UtilityBadge label={`${roomUtilities.length} utilit${roomUtilities.length === 1 ? 'y' : 'ies'}`} />
             <UtilityBadge label={`${roomAssets.length} asset${roomAssets.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomReminders.length} reminder${roomReminders.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${roomServiceRecords.length} service record${roomServiceRecords.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${roomIssues.length} issue${roomIssues.length === 1 ? '' : 's'}`} />
           </div>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+          {roomTrendFlags.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No room-level trend flags currently.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {roomTrendFlags.map((flag) => (
+                <div key={flag.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontWeight: 600 }}>{flag.label}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{flag.details}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         {roomUtilities.length > 0 && (
@@ -205,6 +276,63 @@ export default function RoomDetailPage() {
         )}
 
         <Card>
+          <h2 style={{ marginTop: 0 }}>Service records for this room</h2>
+          {roomServiceRecords.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No service records linked to this room.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {roomServiceRecords
+                .slice()
+                .sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
+                .map((record) => (
+                  <div key={record.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontWeight: 600 }}>{record.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {record.service_date} • {formatEnumLabel(record.service_type)}
+                    </div>
+                    {record.follow_up_needed && (
+                      <div style={{ color: '#92400e', fontSize: '0.875rem' }}>
+                        Follow-up: {record.follow_up_date || 'Needed'}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Link href="/repairs">
+              <Button type="button">Manage repairs</Button>
+            </Link>
+          </div>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Issues for this room</h2>
+          {roomIssues.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No issues linked to this room.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {roomIssues
+                .slice()
+                .sort((a, b) => new Date(b.date_found || 0).getTime() - new Date(a.date_found || 0).getTime())
+                .map((issue) => (
+                  <div key={issue.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontWeight: 600 }}>{issue.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {issue.date_found} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Link href="/issues">
+              <Button type="button">Manage issues</Button>
+            </Link>
+          </div>
+        </Card>
+
+        <Card>
           <h2 style={{ marginTop: 0 }}>Reminders for this room</h2>
           {roomReminders.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No reminders linked to this room yet.</p>
@@ -251,6 +379,12 @@ export default function RoomDetailPage() {
           </Link>
           <Link href="/utilities">
             <Button type="button">All utilities</Button>
+          </Link>
+          <Link href="/repairs">
+            <Button type="button">All repairs</Button>
+          </Link>
+          <Link href="/issues">
+            <Button type="button">All issues</Button>
           </Link>
           <Link href="/reminders">
             <Button type="button">All reminders</Button>

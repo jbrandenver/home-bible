@@ -98,6 +98,49 @@ export const REMINDER_STATUSES = [
   'snoozed'
 ] as const;
 
+export const SERVICE_TYPES = [
+  'repair',
+  'inspection',
+  'replacement',
+  'installation',
+  'remodel',
+  'cleaning',
+  'maintenance',
+  'emergency_issue'
+] as const;
+
+export const ISSUE_TYPES = [
+  'leak',
+  'flood',
+  'fire',
+  'mold',
+  'pest',
+  'storm_damage',
+  'electrical_issue',
+  'plumbing_issue',
+  'hvac_issue',
+  'structural_issue',
+  'roof_issue',
+  'appliance_issue',
+  'security_issue',
+  'other'
+] as const;
+
+export const ISSUE_STATUSES = [
+  'open',
+  'watching',
+  'scheduled',
+  'resolved',
+  'archived'
+] as const;
+
+export const ISSUE_SEVERITIES = [
+  'low',
+  'medium',
+  'high',
+  'urgent'
+] as const;
+
 export const MEMBER_ROLES = [
   'owner',
   'co_owner',
@@ -193,6 +236,41 @@ export const createReminderSchema = z.object({
   status: z.enum(REMINDER_STATUSES).default('open')
 });
 
+export const createServiceRecordSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  room_id: z.string().uuid().optional().nullable(),
+  asset_id: z.string().uuid().optional().nullable(),
+  utility_id: z.string().uuid().optional().nullable(),
+  service_type: z.enum(SERVICE_TYPES),
+  title: z.string().min(1, 'Service title is required'),
+  description: z.string().optional().nullable(),
+  service_date: z.string(),
+  cost: z.coerce.number().optional().nullable(),
+  vendor_name: z.string().optional().nullable(),
+  vendor_phone: z.string().optional().nullable(),
+  vendor_email: z.string().email().optional().nullable(),
+  follow_up_needed: z.boolean().default(false),
+  follow_up_date: z.string().optional().nullable(),
+  visibility: z.enum(VISIBILITY_OPTIONS).default('private')
+});
+
+export const createIssueSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  room_id: z.string().uuid().optional().nullable(),
+  asset_id: z.string().uuid().optional().nullable(),
+  utility_id: z.string().uuid().optional().nullable(),
+  issue_type: z.enum(ISSUE_TYPES),
+  title: z.string().min(1, 'Issue title is required'),
+  description: z.string().optional().nullable(),
+  status: z.enum(ISSUE_STATUSES).default('open'),
+  severity: z.enum(ISSUE_SEVERITIES).default('medium'),
+  date_found: z.string(),
+  resolution_date: z.string().optional().nullable(),
+  private_notes: z.string().optional().nullable(),
+  shareable_notes: z.string().optional().nullable(),
+  visibility: z.enum(VISIBILITY_OPTIONS).default('private')
+});
+
 export type PropertyType = typeof PROPERTY_TYPES[number];
 export type RoomType = typeof ROOM_TYPES[number];
 export type UtilityType = typeof UTILITY_TYPES[number];
@@ -202,6 +280,10 @@ export type WarrantyStatus = typeof WARRANTY_STATUSES[number];
 export type ReminderType = typeof REMINDER_TYPES[number];
 export type ReminderLinkedType = typeof REMINDER_LINKED_TYPES[number];
 export type ReminderStatus = typeof REMINDER_STATUSES[number];
+export type ServiceType = typeof SERVICE_TYPES[number];
+export type IssueType = typeof ISSUE_TYPES[number];
+export type IssueStatus = typeof ISSUE_STATUSES[number];
+export type IssueSeverity = typeof ISSUE_SEVERITIES[number];
 export type MemberRole = typeof MEMBER_ROLES[number];
 export type PlanName = typeof PLAN_NAMES[number];
 
@@ -211,6 +293,8 @@ export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type CreateUtilityInput = z.infer<typeof createUtilitySchema>;
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;
 export type CreateReminderInput = z.infer<typeof createReminderSchema>;
+export type CreateServiceRecordInput = z.infer<typeof createServiceRecordSchema>;
+export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 
 export function formatEnumLabel(value: string) {
   return value
