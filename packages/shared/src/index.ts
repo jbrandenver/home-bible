@@ -52,6 +52,26 @@ export const UTILITY_TYPES = [
   'other'
 ] as const;
 
+export const ASSET_TYPES = [
+  'appliance',
+  'accessory',
+  'smart_device',
+  'tool',
+  'fixture',
+  'furniture',
+  'electronics',
+  'outdoor_equipment',
+  'home_system_component',
+  'other'
+] as const;
+
+export const VISIBILITY_OPTIONS = [
+  'private',
+  'family',
+  'maintenance',
+  'buyer_report'
+] as const;
+
 export const MEMBER_ROLES = [
   'owner',
   'co_owner',
@@ -118,9 +138,30 @@ export const createUtilitySchema = z.object({
   emergency_notes: z.string().optional().nullable()
 });
 
+export const createAssetSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  room_id: z.string().uuid().optional().nullable(),
+  asset_type: z.enum(ASSET_TYPES),
+  name: z.string().min(1, 'Asset name is required'),
+  brand: z.string().optional().nullable(),
+  model: z.string().optional().nullable(),
+  serial_number: z.string().optional().nullable(),
+  purchase_date: z.string().optional().nullable(),
+  purchase_price: z.coerce.number().optional().nullable(),
+  retailer: z.string().optional().nullable(),
+  warranty_length_months: z.coerce.number().optional().nullable(),
+  warranty_expires_at: z.string().optional().nullable(),
+  manual_url: z.string().url().optional().nullable(),
+  support_url: z.string().url().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  visibility: z.enum(VISIBILITY_OPTIONS).default('private')
+});
+
 export type PropertyType = typeof PROPERTY_TYPES[number];
 export type RoomType = typeof ROOM_TYPES[number];
 export type UtilityType = typeof UTILITY_TYPES[number];
+export type AssetType = typeof ASSET_TYPES[number];
+export type VisibilityOption = typeof VISIBILITY_OPTIONS[number];
 export type MemberRole = typeof MEMBER_ROLES[number];
 export type PlanName = typeof PLAN_NAMES[number];
 
@@ -128,6 +169,7 @@ export type CreatePropertyInput = z.infer<typeof createPropertySchema>;
 export type CreateFloorInput = z.infer<typeof createFloorSchema>;
 export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type CreateUtilityInput = z.infer<typeof createUtilitySchema>;
+export type CreateAssetInput = z.infer<typeof createAssetSchema>;
 
 export function formatEnumLabel(value: string) {
   return value

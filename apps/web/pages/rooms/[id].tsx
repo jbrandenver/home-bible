@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Button, UtilityBadge, EmptyState } from '@home-bible/ui';
+import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 
 type Room = {
   id: string;
@@ -20,16 +20,30 @@ type Utility = {
   emergency_notes?: string;
 };
 
+type Asset = {
+  id: string;
+  asset_type: string;
+  name: string;
+  brand?: string;
+  model?: string;
+  serial_number?: string;
+  room_id?: string;
+  warranty_expires_at?: string;
+  notes?: string;
+};
+
 export default function RoomDetailPage() {
   const router = useRouter();
   const { id } = router.query;
 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<Utility[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
 
   useEffect(() => {
     const storedRooms = window.localStorage.getItem('homeBible.rooms');
     const storedUtilities = window.localStorage.getItem('homeBible.utilities');
+    const storedAssets = window.localStorage.getItem('homeBible.assets');
 
     if (storedRooms) {
       setRooms(JSON.parse(storedRooms));
@@ -37,6 +51,10 @@ export default function RoomDetailPage() {
 
     if (storedUtilities) {
       setUtilities(JSON.parse(storedUtilities));
+    }
+
+    if (storedAssets) {
+      setAssets(JSON.parse(storedAssets));
     }
   }, []);
 
@@ -47,6 +65,10 @@ export default function RoomDetailPage() {
   const roomUtilities = useMemo(() => {
     return utilities.filter((u) => u.room_id === id);
   }, [utilities, id]);
+
+  const roomAssets = useMemo(() => {
+    return assets.filter((a) => a.room_id === id);
+  }, [assets, id]);
 
   if (!room) {
     return (
@@ -78,7 +100,7 @@ export default function RoomDetailPage() {
             <UtilityBadge label={formatEnumLabel(room.room_type)} />
             <UtilityBadge label={room.floor_name} />
             <UtilityBadge label={`${roomUtilities.length} utilit${roomUtilities.length === 1 ? 'y' : 'ies'}`} />
-            <UtilityBadge label="Assets next" />
+            <UtilityBadge label={`${roomAssets.length} asset${roomAssets.length === 1 ? '' : 's'}`} />
             <UtilityBadge label="Receipts next" />
           </div>
         </Card>
@@ -110,6 +132,51 @@ export default function RoomDetailPage() {
                       <strong>Emergency:</strong> {utility.emergency_notes}
                     </div>
                   )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {roomAssets.length > 0 && (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Assets in this room</h2>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {roomAssets.map((asset) => (
+                <div
+                  key={asset.id}
+                  style={{
+                    padding: 12,
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 8
+                  }}
+                >
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>{asset.name}</div>
+                      <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: 4 }}>
+                        <UtilityBadge label={formatEnumLabel(asset.asset_type)} />
+                      </div>
+                      {asset.brand && (
+                        <div style={{ fontSize: '0.875rem', marginBottom: 4 }}>
+                          <strong>Brand:</strong> {asset.brand}
+                        </div>
+                      )}
+                      {asset.model && (
+                        <div style={{ fontSize: '0.875rem', marginBottom: 4 }}>
+                          <strong>Model:</strong> {asset.model}
+                        </div>
+                      )}
+                      {asset.warranty_expires_at && (
+                        <div style={{ fontSize: '0.875rem', color: '#d97706', marginBottom: 4 }}>
+                          <strong>Warranty expires:</strong> {asset.warranty_expires_at}
+                        </div>
+                      )}
+                    </div>
+                    <Link href={`/assets/${asset.id}`}>
+                      <Button type="button">View</Button>
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>

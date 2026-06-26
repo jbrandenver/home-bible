@@ -17,15 +17,24 @@ type Utility = {
   room_id?: string;
 };
 
+type Asset = {
+  id: string;
+  asset_type: string;
+  name: string;
+  room_id?: string;
+};
+
 export default function DashboardPage() {
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<Utility[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
 
   useEffect(() => {
     const storedProperty = window.localStorage.getItem('homeBible.activeProperty');
     const storedRooms = window.localStorage.getItem('homeBible.rooms');
     const storedUtilities = window.localStorage.getItem('homeBible.utilities');
+    const storedAssets = window.localStorage.getItem('homeBible.assets');
 
     if (storedProperty) {
       const property = JSON.parse(storedProperty);
@@ -38,6 +47,10 @@ export default function DashboardPage() {
 
     if (storedUtilities) {
       setUtilities(JSON.parse(storedUtilities));
+    }
+
+    if (storedAssets) {
+      setAssets(JSON.parse(storedAssets));
     }
   }, []);
 
@@ -57,7 +70,7 @@ export default function DashboardPage() {
               <UtilityBadge label={`${floors.length} floor${floors.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
-              <UtilityBadge label="Assets next" />
+              <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
             </div>
 
             <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -66,6 +79,9 @@ export default function DashboardPage() {
               </Link>
               <Link href="/utilities">
                 <Button type="button">View utilities</Button>
+              </Link>
+              <Link href="/assets">
+                <Button type="button">View assets</Button>
               </Link>
               <Link href="/settings">
                 <Button type="button">Settings</Button>
