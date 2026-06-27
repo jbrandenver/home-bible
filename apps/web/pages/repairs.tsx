@@ -7,9 +7,9 @@ import {
   SERVICE_TYPES
 } from '@home-bible/shared';
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-bible/ui';
-import { detectTrendFlags, type IssueRecord } from '../components/trendFlags';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
-import { getDemoCollection, getDemoRooms } from '../lib/demoStorage';
+import { getDemoRooms } from '../lib/demoStorage';
+import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
 import {
   createRepairForContext,
   deleteRepairForContext,
@@ -29,6 +29,7 @@ import {
   type ServiceRecordRow
 } from '../lib/serviceRecords';
 import { getRoomsForProperty } from '../lib/rooms';
+import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import { getDemoUtilities, getUtilitiesForProperty, type UtilityRow } from '../lib/utilities';
 
 type LinkOption = {
@@ -66,7 +67,8 @@ export default function RepairsPage() {
   const [hasProperty, setHasProperty] = useState(false);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
-  const [issues, setIssues] = useState<IssueRecord[]>([]);
+  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [rooms, setRooms] = useState<LinkOption[]>([]);
   const [assets, setAssets] = useState<LinkOption[]>([]);
   const [utilities, setUtilities] = useState<LinkOption[]>([]);
@@ -117,12 +119,16 @@ export default function RepairsPage() {
       setLoadError('');
 
       const errors: string[] = [];
-      const [nextRepairContext, nextServiceContext] = await Promise.all([
+      const [nextRepairContext, nextServiceContext, issueContext, trendFlagContext] = await Promise.all([
         getRepairDataContext(),
-        getServiceRecordDataContext()
+        getServiceRecordDataContext(),
+        getIssueDataContext(),
+        getTrendFlagDataContext()
       ]);
       let nextRepairs: RepairRow[] = [];
       let nextServiceRecords: ServiceRecordRow[] = [];
+      let nextIssues: IssueRow[] = [];
+      let nextTrendFlags: TrendFlagRow[] = [];
       let nextRooms: LinkOption[] = [];
       let nextAssets: LinkOption[] = [];
       let nextUtilities: LinkOption[] = [];
@@ -137,6 +143,18 @@ export default function RepairsPage() {
         nextServiceRecords = await getServiceRecordsForContext(nextServiceContext);
       } catch (loadRecordsError) {
         errors.push(loadRecordsError instanceof Error ? loadRecordsError.message : 'Failed to load service records.');
+      }
+
+      try {
+        nextIssues = await getIssuesForContext(issueContext);
+      } catch (loadIssuesError) {
+        errors.push(loadIssuesError instanceof Error ? loadIssuesError.message : 'Failed to load issues.');
+      }
+
+      try {
+        nextTrendFlags = await getTrendFlagsForContext(trendFlagContext);
+      } catch (loadFlagsError) {
+        errors.push(loadFlagsError instanceof Error ? loadFlagsError.message : 'Failed to load trend flags.');
       }
 
       try {
@@ -172,7 +190,8 @@ export default function RepairsPage() {
       setRooms(nextRooms);
       setAssets(nextAssets);
       setUtilities(nextUtilities);
-      setIssues(getDemoCollection<IssueRecord>('homeBible.issues'));
+      setIssues(nextIssues);
+      setTrendFlags(nextTrendFlags);
       setLoadError(errors.join(' '));
       setLoading(false);
     }
@@ -184,11 +203,26 @@ export default function RepairsPage() {
     };
   }, []);
 
-  const trendFlags = useMemo(() => detectTrendFlags(serviceRecords, issues), [serviceRecords, issues]);
   const openRepairCount = useMemo(
     () => repairs.filter((repair) => repair.status === 'open').length,
     [repairs]
   );
+  const openIssueCount = useMemo(
+    () => issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length,
+    [issues]
+  );
+  const activeTrendFlagCount = useMemo(
+    () => trendFlags.filter((flag) => flag.status === 'active').length,
+    [trendFlags]
+  );
+
+  const getIssueCountForRepair = (repairId: string) =>
+    issues.filter(
+      (issue) =>
+        issue.repair_id === repairId &&
+        issue.status !== 'resolved' &&
+        issue.status !== 'dismissed'
+    ).length;
 
   const resetRepairForm = () => {
     setRepairTitle('');
@@ -439,11 +473,13 @@ export default function RepairsPage() {
             <UtilityBadge label={`${openRepairCount} open repair${openRepairCount === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${repairs.length} repair${repairs.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${activeTrendFlagCount} active trend flag${activeTrendFlagCount === 1 ? '' : 's'}`} />
           </div>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: repairs and service records are loaded from Supabase.'
-              : 'Demo mode: repairs and service records are stored in localStorage.'}
+              ? 'Signed-in mode: repairs, service records, issues, and trend flags are loaded from Supabase.'
+              : 'Demo mode: repairs, service records, issues, and trend flags are stored in localStorage.'}
           </p>
           {loading ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>Loading repairs and service history...</p>
@@ -648,8 +684,10 @@ export default function RepairsPage() {
             <div style={{ display: 'grid', gap: 8 }}>
               {trendFlags.map((flag) => (
                 <div key={flag.id} style={{ padding: 10, border: '1px solid #e5e7eb', borderRadius: 8 }}>
-                  <strong>{flag.label}</strong>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{flag.details}</div>
+                  <strong>{flag.title}</strong>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    {flag.description || `${formatEnumLabel(flag.flag_type)} • ${formatEnumLabel(flag.status)} • ${formatEnumLabel(flag.severity)}`}
+                  </div>
                 </div>
               ))}
             </div>
@@ -675,6 +713,7 @@ export default function RepairsPage() {
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
                         <UtilityBadge label={formatEnumLabel(repair.repair_type)} />
                         <UtilityBadge label={formatEnumLabel(repair.priority)} />
+                        <UtilityBadge label={`${getIssueCountForRepair(repair.id)} linked issue${getIssueCountForRepair(repair.id) === 1 ? '' : 's'}`} />
                         {repair.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, repair.room_id) || 'Unknown'}`} />}
                         {repair.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, repair.asset_id) || 'Unknown'}`} />}
                         {repair.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, repair.utility_id) || 'Unknown'}`} />}

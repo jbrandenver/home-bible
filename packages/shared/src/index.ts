@@ -172,28 +172,29 @@ export const SERVICE_TYPES = [
 ] as const;
 
 export const ISSUE_TYPES = [
-  'leak',
-  'flood',
-  'fire',
+  'general',
+  'water_leak',
+  'electrical',
+  'hvac',
+  'appliance',
+  'structural',
+  'roof',
   'mold',
   'pest',
-  'storm_damage',
-  'electrical_issue',
-  'plumbing_issue',
-  'hvac_issue',
-  'structural_issue',
-  'roof_issue',
-  'appliance_issue',
-  'security_issue',
+  'safety',
+  'utility',
+  'smart_home',
+  'cosmetic',
   'other'
 ] as const;
 
 export const ISSUE_STATUSES = [
   'open',
-  'watching',
+  'monitoring',
   'scheduled',
+  'in_progress',
   'resolved',
-  'archived'
+  'dismissed'
 ] as const;
 
 export const ISSUE_SEVERITIES = [
@@ -201,6 +202,36 @@ export const ISSUE_SEVERITIES = [
   'medium',
   'high',
   'urgent'
+] as const;
+
+export const TREND_FLAG_TYPES = [
+  'repeat_issue',
+  'recurring_repair',
+  'rising_cost',
+  'maintenance_overdue',
+  'warranty_risk',
+  'safety_pattern',
+  'water_risk',
+  'hvac_pattern',
+  'electrical_pattern',
+  'manual_flag',
+  'other'
+] as const;
+
+export const TREND_FLAG_STATUSES = [
+  'active',
+  'monitoring',
+  'resolved',
+  'dismissed'
+] as const;
+
+export const TREND_FLAG_DETECTED_FROM = [
+  'manual',
+  'issue_history',
+  'repair_history',
+  'service_history',
+  'reminder_history',
+  'system_suggestion'
 ] as const;
 
 export const MEMBER_ROLES = [
@@ -347,16 +378,33 @@ export const createIssueSchema = z.object({
   room_id: z.string().uuid().optional().nullable(),
   asset_id: z.string().uuid().optional().nullable(),
   utility_id: z.string().uuid().optional().nullable(),
-  issue_type: z.enum(ISSUE_TYPES),
+  repair_id: z.string().uuid().optional().nullable(),
+  issue_type: z.enum(ISSUE_TYPES).default('general'),
   title: z.string().min(1, 'Issue title is required'),
   description: z.string().optional().nullable(),
   status: z.enum(ISSUE_STATUSES).default('open'),
   severity: z.enum(ISSUE_SEVERITIES).default('medium'),
-  date_found: z.string(),
-  resolution_date: z.string().optional().nullable(),
-  private_notes: z.string().optional().nullable(),
-  shareable_notes: z.string().optional().nullable(),
-  visibility: z.enum(VISIBILITY_OPTIONS).default('private')
+  first_seen_date: z.string().optional().nullable(),
+  last_seen_date: z.string().optional().nullable(),
+  resolved_date: z.string().optional().nullable(),
+  notes: z.string().optional().nullable()
+});
+
+export const createTrendFlagSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  room_id: z.string().uuid().optional().nullable(),
+  asset_id: z.string().uuid().optional().nullable(),
+  utility_id: z.string().uuid().optional().nullable(),
+  issue_id: z.string().uuid().optional().nullable(),
+  flag_type: z.enum(TREND_FLAG_TYPES),
+  title: z.string().min(1, 'Trend flag title is required'),
+  description: z.string().optional().nullable(),
+  severity: z.enum(ISSUE_SEVERITIES).default('medium'),
+  status: z.enum(TREND_FLAG_STATUSES).default('active'),
+  detected_from: z.enum(TREND_FLAG_DETECTED_FROM).default('manual'),
+  first_detected_at: z.string().optional().nullable(),
+  last_detected_at: z.string().optional().nullable(),
+  resolved_at: z.string().optional().nullable()
 });
 
 export type PropertyType = typeof PROPERTY_TYPES[number];
@@ -378,6 +426,9 @@ export type ServiceType = typeof SERVICE_TYPES[number];
 export type IssueType = typeof ISSUE_TYPES[number];
 export type IssueStatus = typeof ISSUE_STATUSES[number];
 export type IssueSeverity = typeof ISSUE_SEVERITIES[number];
+export type TrendFlagType = typeof TREND_FLAG_TYPES[number];
+export type TrendFlagStatus = typeof TREND_FLAG_STATUSES[number];
+export type TrendFlagDetectedFrom = typeof TREND_FLAG_DETECTED_FROM[number];
 export type MemberRole = typeof MEMBER_ROLES[number];
 export type PlanName = typeof PLAN_NAMES[number];
 
@@ -390,6 +441,7 @@ export type CreateReminderInput = z.infer<typeof createReminderSchema>;
 export type CreateRepairInput = z.infer<typeof createRepairSchema>;
 export type CreateServiceRecordInput = z.infer<typeof createServiceRecordSchema>;
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
+export type CreateTrendFlagInput = z.infer<typeof createTrendFlagSchema>;
 
 export type DbRole = MemberRole;
 export type DbVisibility = VisibilityOption;
@@ -533,13 +585,37 @@ export interface IssueRow {
   room_id: string | null;
   utility_id: string | null;
   asset_id: string | null;
+  repair_id: string | null;
   issue_type: IssueType;
   title: string;
+  description: string | null;
   status: IssueStatus;
   severity: IssueSeverity;
-  date_found: string;
-  resolution_date: string | null;
-  visibility: VisibilityOption;
+  first_seen_date: string | null;
+  last_seen_date: string | null;
+  resolved_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface TrendFlagRow {
+  id: string;
+  property_id: string;
+  room_id: string | null;
+  utility_id: string | null;
+  asset_id: string | null;
+  issue_id: string | null;
+  flag_type: TrendFlagType;
+  title: string;
+  description: string | null;
+  severity: IssueSeverity;
+  status: TrendFlagStatus;
+  detected_from: TrendFlagDetectedFrom;
+  first_detected_at: string;
+  last_detected_at: string | null;
+  resolved_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

@@ -3,10 +3,12 @@ import Link from 'next/link';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
 import { getDemoRooms } from '../lib/demoStorage';
+import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getRoomsForProperty } from '../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
+import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import {
   deleteUtilityForContext,
   getUtilitiesForContext,
@@ -23,12 +25,16 @@ export default function UtilitiesPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
+  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [rooms, setRooms] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reminderError, setReminderError] = useState('');
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
+  const [issueError, setIssueError] = useState('');
+  const [trendFlagError, setTrendFlagError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -40,13 +46,17 @@ export default function UtilitiesPage() {
       setReminderError('');
       setRepairError('');
       setServiceRecordError('');
+      setIssueError('');
+      setTrendFlagError('');
 
       try {
-        const [nextContext, reminderContext, repairContext, serviceRecordContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, serviceRecordContext, issueContext, trendFlagContext] = await Promise.all([
           getUtilityDataContext(),
           getReminderDataContext(),
           getRepairDataContext(),
-          getServiceRecordDataContext()
+          getServiceRecordDataContext(),
+          getIssueDataContext(),
+          getTrendFlagDataContext()
         ]);
         const [nextUtilities, roomList] =
           nextContext.mode === 'supabase' && nextContext.property
@@ -58,6 +68,8 @@ export default function UtilitiesPage() {
         let nextReminders: ReminderRow[] = [];
         let nextRepairs: RepairRow[] = [];
         let nextServiceRecords: ServiceRecordRow[] = [];
+        let nextIssues: IssueRow[] = [];
+        let nextTrendFlags: TrendFlagRow[] = [];
 
         try {
           nextReminders = await getRemindersForContext(reminderContext);
@@ -83,6 +95,22 @@ export default function UtilitiesPage() {
           }
         }
 
+        try {
+          nextIssues = await getIssuesForContext(issueContext);
+        } catch (loadError) {
+          if (isMounted) {
+            setIssueError(loadError instanceof Error ? loadError.message : 'Failed to load utility issues.');
+          }
+        }
+
+        try {
+          nextTrendFlags = await getTrendFlagsForContext(trendFlagContext);
+        } catch (loadError) {
+          if (isMounted) {
+            setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load utility trend flags.');
+          }
+        }
+
         if (!isMounted) {
           return;
         }
@@ -93,6 +121,8 @@ export default function UtilitiesPage() {
         setReminders(nextReminders);
         setRepairs(nextRepairs);
         setServiceRecords(nextServiceRecords);
+        setIssues(nextIssues);
+        setTrendFlags(nextTrendFlags);
         setRooms(new Map(roomList.map((room) => [room.id, room.name])));
       } catch (loadError) {
         if (isMounted) {
@@ -148,6 +178,17 @@ export default function UtilitiesPage() {
   const getServiceRecordCount = (utilityId: string) =>
     serviceRecords.filter((record) => record.utility_id === utilityId).length;
 
+  const getIssueCount = (utilityId: string) =>
+    issues.filter(
+      (issue) =>
+        issue.utility_id === utilityId &&
+        issue.status !== 'resolved' &&
+        issue.status !== 'dismissed'
+    ).length;
+
+  const getTrendFlagCount = (utilityId: string) =>
+    trendFlags.filter((flag) => flag.utility_id === utilityId && flag.status === 'active').length;
+
   return (
     <>
       <PageHeader
@@ -159,8 +200,8 @@ export default function UtilitiesPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities, utility-linked reminders, repairs, and service records are loaded from Supabase.'
-              : 'Demo mode: utilities, utility-linked reminders, repairs, and service records are stored in localStorage.'}
+              ? 'Signed-in mode: utilities, utility-linked reminders, repairs, service records, issues, and trend flags are loaded from Supabase.'
+              : 'Demo mode: utilities, utility-linked reminders, repairs, service records, issues, and trend flags are stored in localStorage.'}
           </p>
           {reminderError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -175,6 +216,16 @@ export default function UtilitiesPage() {
           {serviceRecordError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {serviceRecordError}
+            </p>
+          ) : null}
+          {issueError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {issueError}
+            </p>
+          ) : null}
+          {trendFlagError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {trendFlagError}
             </p>
           ) : null}
         </Card>
@@ -228,6 +279,12 @@ export default function UtilitiesPage() {
                       </span>
                       <span style={{ marginLeft: 8 }}>
                         <UtilityBadge label={`${getServiceRecordCount(utility.id)} service${getServiceRecordCount(utility.id) === 1 ? '' : 's'}`} />
+                      </span>
+                      <span style={{ marginLeft: 8 }}>
+                        <UtilityBadge label={`${getIssueCount(utility.id)} issue${getIssueCount(utility.id) === 1 ? '' : 's'}`} />
+                      </span>
+                      <span style={{ marginLeft: 8 }}>
+                        <UtilityBadge label={`${getTrendFlagCount(utility.id)} trend${getTrendFlagCount(utility.id) === 1 ? '' : 's'}`} />
                       </span>
                       <span style={{ marginLeft: 8 }}>•</span>
                       <span style={{ marginLeft: 8 }}>{getRoomName(utility.room_id)}</span>

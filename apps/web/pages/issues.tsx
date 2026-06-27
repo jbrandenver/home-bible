@@ -1,334 +1,768 @@
-import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel, ISSUE_SEVERITIES, ISSUE_STATUSES, ISSUE_TYPES, VISIBILITY_OPTIONS } from '@home-bible/shared';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  formatEnumLabel,
+  ISSUE_SEVERITIES,
+  ISSUE_STATUSES,
+  ISSUE_TYPES,
+  TREND_FLAG_DETECTED_FROM,
+  TREND_FLAG_STATUSES,
+  TREND_FLAG_TYPES
+} from '@home-bible/shared';
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
+import { getDemoRooms } from '../lib/demoStorage';
+import {
+  createIssueForContext,
+  deleteIssueForContext,
+  getIssueDataContext,
+  getIssuesForContext,
+  updateIssueStatusForContext,
+  type IssueDataContext,
+  type IssueRow,
+  type IssueSeverity,
+  type IssueStatus,
+  type IssueType
+} from '../lib/issues';
+import { getRepairsForProperty, getDemoRepairs, type RepairRow } from '../lib/repairs';
+import { getRoomsForProperty } from '../lib/rooms';
+import {
+  createTrendFlagForContext,
+  deleteTrendFlagForContext,
+  getTrendFlagDataContext,
+  getTrendFlagsForContext,
+  updateTrendFlagStatusForContext,
+  type TrendFlagDataContext,
+  type TrendFlagDetectedFrom,
+  type TrendFlagRow,
+  type TrendFlagSeverity,
+  type TrendFlagStatus,
+  type TrendFlagType
+} from '../lib/trendFlags';
+import { getDemoUtilities, getUtilitiesForProperty, type UtilityRow } from '../lib/utilities';
 
-type Room = { id: string; name: string };
-type Asset = { id: string; name: string };
-type Utility = { id: string; name: string };
-
-type IssueRecord = {
+type LinkOption = {
   id: string;
-  property_id?: string | null;
-  room_id?: string | null;
-  asset_id?: string | null;
-  utility_id?: string | null;
-  issue_type: string;
-  title: string;
-  description?: string | null;
-  status: string;
-  severity: string;
-  date_found: string;
-  resolution_date?: string | null;
-  private_notes?: string | null;
-  shareable_notes?: string | null;
-  visibility: string;
-  created_at: string;
-  updated_at: string;
+  name: string;
 };
 
-function createLocalId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+const fieldStyle = {
+  padding: 10,
+  borderRadius: 8,
+  border: '1px solid #d1d5db'
+};
+
+const destructiveButtonStyle = {
+  padding: '8px 12px',
+  borderRadius: 6,
+  border: '1px solid #fecaca',
+  background: '#fef2f2',
+  color: '#b91c1c',
+  cursor: 'pointer'
+};
+
+function nameFromId(list: LinkOption[], id?: string | null) {
+  if (!id) {
+    return null;
+  }
+
+  return list.find((item) => item.id === id)?.name || 'Unknown';
+}
+
+function issueTitleFromId(issues: IssueRow[], id?: string | null) {
+  if (!id) {
+    return null;
+  }
+
+  return issues.find((issue) => issue.id === id)?.title || 'Unknown';
 }
 
 export default function IssuesPage() {
-  const [issues, setIssues] = useState<IssueRecord[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [utilities, setUtilities] = useState<Utility[]>([]);
-  const [error, setError] = useState('');
+  const [issueContext, setIssueContext] = useState<IssueDataContext | null>(null);
+  const [trendContext, setTrendContext] = useState<TrendFlagDataContext | null>(null);
+  const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
+  const [hasProperty, setHasProperty] = useState(false);
+  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
+  const [rooms, setRooms] = useState<LinkOption[]>([]);
+  const [assets, setAssets] = useState<LinkOption[]>([]);
+  const [utilities, setUtilities] = useState<LinkOption[]>([]);
+  const [repairs, setRepairs] = useState<LinkOption[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [formError, setFormError] = useState('');
+  const [savingIssue, setSavingIssue] = useState(false);
+  const [savingTrendFlag, setSavingTrendFlag] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const [title, setTitle] = useState('');
-  const [issueType, setIssueType] = useState<(typeof ISSUE_TYPES)[number]>('other');
+  const [issueType, setIssueType] = useState<IssueType>('general');
   const [description, setDescription] = useState('');
-  const [status, setStatus] = useState<(typeof ISSUE_STATUSES)[number]>('open');
-  const [severity, setSeverity] = useState<(typeof ISSUE_SEVERITIES)[number]>('medium');
-  const [dateFound, setDateFound] = useState(new Date().toISOString().slice(0, 10));
-  const [resolutionDate, setResolutionDate] = useState('');
-  const [privateNotes, setPrivateNotes] = useState('');
-  const [shareableNotes, setShareableNotes] = useState('');
+  const [status, setStatus] = useState<IssueStatus>('open');
+  const [severity, setSeverity] = useState<IssueSeverity>('medium');
+  const [firstSeenDate, setFirstSeenDate] = useState(new Date().toISOString().slice(0, 10));
+  const [lastSeenDate, setLastSeenDate] = useState('');
+  const [resolvedDate, setResolvedDate] = useState('');
+  const [notes, setNotes] = useState('');
   const [roomId, setRoomId] = useState('');
   const [assetId, setAssetId] = useState('');
   const [utilityId, setUtilityId] = useState('');
-  const [visibility, setVisibility] = useState<(typeof VISIBILITY_OPTIONS)[number]>('private');
+  const [repairId, setRepairId] = useState('');
+
+  const [flagTitle, setFlagTitle] = useState('');
+  const [flagType, setFlagType] = useState<TrendFlagType>('manual_flag');
+  const [flagSeverity, setFlagSeverity] = useState<TrendFlagSeverity>('medium');
+  const [flagStatus, setFlagStatus] = useState<TrendFlagStatus>('active');
+  const [detectedFrom, setDetectedFrom] = useState<TrendFlagDetectedFrom>('manual');
+  const [flagDescription, setFlagDescription] = useState('');
+  const [flagRoomId, setFlagRoomId] = useState('');
+  const [flagAssetId, setFlagAssetId] = useState('');
+  const [flagUtilityId, setFlagUtilityId] = useState('');
+  const [flagIssueId, setFlagIssueId] = useState('');
 
   useEffect(() => {
-    const storedIssues = window.localStorage.getItem('homeBible.issues');
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
-    const storedAssets = window.localStorage.getItem('homeBible.assets');
-    const storedUtilities = window.localStorage.getItem('homeBible.utilities');
+    let isMounted = true;
 
-    if (storedIssues) {
-      setIssues(JSON.parse(storedIssues));
+    async function load() {
+      setLoading(true);
+      setLoadError('');
+      setFormError('');
+
+      const errors: string[] = [];
+      const [nextIssueContext, nextTrendContext] = await Promise.all([
+        getIssueDataContext(),
+        getTrendFlagDataContext()
+      ]);
+      let nextIssues: IssueRow[] = [];
+      let nextTrendFlags: TrendFlagRow[] = [];
+      let nextRooms: LinkOption[] = [];
+      let nextAssets: LinkOption[] = [];
+      let nextUtilities: LinkOption[] = [];
+      let nextRepairs: LinkOption[] = [];
+
+      try {
+        nextIssues = await getIssuesForContext(nextIssueContext);
+      } catch (loadIssuesError) {
+        errors.push(loadIssuesError instanceof Error ? loadIssuesError.message : 'Failed to load issues.');
+      }
+
+      try {
+        nextTrendFlags = await getTrendFlagsForContext(nextTrendContext);
+      } catch (loadFlagsError) {
+        errors.push(loadFlagsError instanceof Error ? loadFlagsError.message : 'Failed to load trend flags.');
+      }
+
+      try {
+        if (nextIssueContext.mode === 'supabase' && nextIssueContext.property) {
+          const [roomRows, assetRows, utilityRows, repairRows] = await Promise.all([
+            getRoomsForProperty(nextIssueContext.property.id),
+            getAssetsForProperty(nextIssueContext.property.id),
+            getUtilitiesForProperty(nextIssueContext.property.id),
+            getRepairsForProperty(nextIssueContext.property.id)
+          ]);
+
+          nextRooms = roomRows.map((room) => ({ id: room.id, name: room.name }));
+          nextAssets = assetRows.map((asset: AssetRow) => ({ id: asset.id, name: asset.name }));
+          nextUtilities = utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name }));
+          nextRepairs = repairRows.map((repair: RepairRow) => ({ id: repair.id, name: repair.title }));
+        } else {
+          nextRooms = getDemoRooms().map((room) => ({ id: room.id, name: room.name }));
+          nextAssets = getDemoAssets().map((asset) => ({ id: asset.id, name: asset.name }));
+          nextUtilities = getDemoUtilities().map((utility) => ({ id: utility.id, name: utility.name }));
+          nextRepairs = getDemoRepairs().map((repair) => ({ id: repair.id, name: repair.title }));
+        }
+      } catch (loadLinksError) {
+        errors.push(loadLinksError instanceof Error ? loadLinksError.message : 'Failed to load link options.');
+      }
+
+      if (!isMounted) {
+        return;
+      }
+
+      setIssueContext(nextIssueContext);
+      setTrendContext(nextTrendContext);
+      setDataMode(nextIssueContext.mode);
+      setHasProperty(nextIssueContext.mode === 'demo' || Boolean(nextIssueContext.property));
+      setIssues(nextIssues);
+      setTrendFlags(nextTrendFlags);
+      setRooms(nextRooms);
+      setAssets(nextAssets);
+      setUtilities(nextUtilities);
+      setRepairs(nextRepairs);
+      setLoadError(errors.join(' '));
+      setLoading(false);
     }
 
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
-    }
+    load();
 
-    if (storedAssets) {
-      setAssets(JSON.parse(storedAssets));
-    }
-
-    if (storedUtilities) {
-      setUtilities(JSON.parse(storedUtilities));
-    }
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const openIssueCount = useMemo(
-    () => issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'archived').length,
+    () => issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length,
     [issues]
   );
 
-  const saveIssues = (next: IssueRecord[]) => {
-    setIssues(next);
-    window.localStorage.setItem('homeBible.issues', JSON.stringify(next));
-  };
+  const highPriorityIssueCount = useMemo(
+    () =>
+      issues.filter(
+        (issue) =>
+          (issue.severity === 'high' || issue.severity === 'urgent') &&
+          issue.status !== 'resolved' &&
+          issue.status !== 'dismissed'
+      ).length,
+    [issues]
+  );
 
-  const submitIssue = (event: React.FormEvent) => {
-    event.preventDefault();
-    setError('');
+  const activeTrendFlagCount = useMemo(
+    () => trendFlags.filter((flag) => flag.status === 'active').length,
+    [trendFlags]
+  );
 
-    if (!title.trim()) {
-      setError('Title is required.');
-      return;
-    }
-
-    if (!dateFound) {
-      setError('Date found is required.');
-      return;
-    }
-
-    const newIssue: IssueRecord = {
-      id: createLocalId(),
-      property_id: null,
-      room_id: roomId || null,
-      asset_id: assetId || null,
-      utility_id: utilityId || null,
-      issue_type: issueType,
-      title: title.trim(),
-      description: description.trim() || null,
-      status,
-      severity,
-      date_found: dateFound,
-      resolution_date: resolutionDate || null,
-      private_notes: privateNotes.trim() || null,
-      shareable_notes: shareableNotes.trim() || null,
-      visibility,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-
-    saveIssues([newIssue, ...issues]);
-
+  const resetIssueForm = () => {
     setTitle('');
-    setIssueType('other');
+    setIssueType('general');
     setDescription('');
     setStatus('open');
     setSeverity('medium');
-    setDateFound(new Date().toISOString().slice(0, 10));
-    setResolutionDate('');
-    setPrivateNotes('');
-    setShareableNotes('');
+    setFirstSeenDate(new Date().toISOString().slice(0, 10));
+    setLastSeenDate('');
+    setResolvedDate('');
+    setNotes('');
     setRoomId('');
     setAssetId('');
     setUtilityId('');
-    setVisibility('private');
+    setRepairId('');
   };
 
-  const deleteIssue = (id: string) => {
-    saveIssues(issues.filter((issue) => issue.id !== id));
+  const resetTrendFlagForm = () => {
+    setFlagTitle('');
+    setFlagType('manual_flag');
+    setFlagSeverity('medium');
+    setFlagStatus('active');
+    setDetectedFrom('manual');
+    setFlagDescription('');
+    setFlagRoomId('');
+    setFlagAssetId('');
+    setFlagUtilityId('');
+    setFlagIssueId('');
   };
 
-  const nameFromId = (list: Array<{ id: string; name: string }>, id?: string | null) => {
-    if (!id) {
-      return 'Not linked';
+  const submitIssue = async (event: FormEvent) => {
+    event.preventDefault();
+    setFormError('');
+
+    if (!issueContext) {
+      setFormError('Issue data is still loading.');
+      return;
     }
 
-    return list.find((item) => item.id === id)?.name || 'Unknown';
+    if (!title.trim()) {
+      setFormError('Issue title is required.');
+      return;
+    }
+
+    setSavingIssue(true);
+
+    try {
+      const createdIssue = await createIssueForContext(issueContext, {
+        title,
+        description,
+        issue_type: issueType,
+        status,
+        severity,
+        first_seen_date: firstSeenDate || null,
+        last_seen_date: lastSeenDate || null,
+        resolved_date: resolvedDate || null,
+        notes,
+        room_id: roomId || null,
+        asset_id: assetId || null,
+        utility_id: utilityId || null,
+        repair_id: repairId || null
+      });
+
+      setIssues((currentIssues) => [createdIssue, ...currentIssues]);
+      resetIssueForm();
+    } catch (saveError) {
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save issue.');
+    } finally {
+      setSavingIssue(false);
+    }
   };
+
+  const submitTrendFlag = async (event: FormEvent) => {
+    event.preventDefault();
+    setFormError('');
+
+    if (!trendContext) {
+      setFormError('Trend flag data is still loading.');
+      return;
+    }
+
+    if (!flagTitle.trim()) {
+      setFormError('Trend flag title is required.');
+      return;
+    }
+
+    setSavingTrendFlag(true);
+
+    try {
+      const createdFlag = await createTrendFlagForContext(trendContext, {
+        title: flagTitle,
+        description: flagDescription,
+        flag_type: flagType,
+        severity: flagSeverity,
+        status: flagStatus,
+        detected_from: detectedFrom,
+        room_id: flagRoomId || null,
+        asset_id: flagAssetId || null,
+        utility_id: flagUtilityId || null,
+        issue_id: flagIssueId || null
+      });
+
+      setTrendFlags((currentFlags) => [createdFlag, ...currentFlags]);
+      resetTrendFlagForm();
+    } catch (saveError) {
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save trend flag.');
+    } finally {
+      setSavingTrendFlag(false);
+    }
+  };
+
+  const changeIssueStatus = async (issueId: string, nextStatus: IssueStatus) => {
+    if (!issueContext) {
+      return;
+    }
+
+    setUpdatingId(issueId);
+    setFormError('');
+
+    try {
+      const updatedIssue = await updateIssueStatusForContext(issueContext, issueId, nextStatus);
+      if (updatedIssue) {
+        setIssues((currentIssues) =>
+          currentIssues.map((issue) => (issue.id === issueId ? updatedIssue : issue))
+        );
+      }
+    } catch (statusError) {
+      setFormError(statusError instanceof Error ? statusError.message : 'Failed to update issue status.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const changeTrendFlagStatus = async (flagId: string, nextStatus: TrendFlagStatus) => {
+    if (!trendContext) {
+      return;
+    }
+
+    setUpdatingId(flagId);
+    setFormError('');
+
+    try {
+      const updatedFlag = await updateTrendFlagStatusForContext(trendContext, flagId, nextStatus);
+      if (updatedFlag) {
+        setTrendFlags((currentFlags) =>
+          currentFlags.map((flag) => (flag.id === flagId ? updatedFlag : flag))
+        );
+      }
+    } catch (statusError) {
+      setFormError(statusError instanceof Error ? statusError.message : 'Failed to update trend flag status.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const deleteIssue = async (issueId: string) => {
+    if (!issueContext) {
+      return;
+    }
+
+    setDeletingId(issueId);
+    setFormError('');
+
+    try {
+      await deleteIssueForContext(issueContext, issueId);
+      setIssues((currentIssues) => currentIssues.filter((issue) => issue.id !== issueId));
+    } catch (deleteError) {
+      setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete issue.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const deleteTrendFlag = async (flagId: string) => {
+    if (!trendContext) {
+      return;
+    }
+
+    setDeletingId(flagId);
+    setFormError('');
+
+    try {
+      await deleteTrendFlagForContext(trendContext, flagId);
+      setTrendFlags((currentFlags) => currentFlags.filter((flag) => flag.id !== flagId));
+    } catch (deleteError) {
+      setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete trend flag.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const renderLinkSelectors = (
+    selectedRoomId: string,
+    setSelectedRoomId: (value: string) => void,
+    selectedAssetId: string,
+    setSelectedAssetId: (value: string) => void,
+    selectedUtilityId: string,
+    setSelectedUtilityId: (value: string) => void
+  ) => (
+    <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+      <label style={{ display: 'grid', gap: 6 }}>
+        <span style={{ fontWeight: 600 }}>Room</span>
+        <select value={selectedRoomId} onChange={(event) => setSelectedRoomId(event.target.value)} style={fieldStyle}>
+          <option value="">Not linked</option>
+          {rooms.map((room) => (
+            <option key={room.id} value={room.id}>{room.name}</option>
+          ))}
+        </select>
+      </label>
+
+      <label style={{ display: 'grid', gap: 6 }}>
+        <span style={{ fontWeight: 600 }}>Asset</span>
+        <select value={selectedAssetId} onChange={(event) => setSelectedAssetId(event.target.value)} style={fieldStyle}>
+          <option value="">Not linked</option>
+          {assets.map((asset) => (
+            <option key={asset.id} value={asset.id}>{asset.name}</option>
+          ))}
+        </select>
+      </label>
+
+      <label style={{ display: 'grid', gap: 6 }}>
+        <span style={{ fontWeight: 600 }}>Utility</span>
+        <select value={selectedUtilityId} onChange={(event) => setSelectedUtilityId(event.target.value)} style={fieldStyle}>
+          <option value="">Not linked</option>
+          {utilities.map((utility) => (
+            <option key={utility.id} value={utility.id}>{utility.name}</option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
 
   return (
     <>
       <PageHeader
         title="Issues"
-        description="Track observed issues and their progress with calm, practical notes."
+        description="Track observed issues and trend flags across rooms, assets, utilities, and repairs."
       />
 
-      <Card>
-        <h2 style={{ marginTop: 0 }}>Add issue</h2>
-        <form onSubmit={submitIssue} style={{ display: 'grid', gap: 12 }}>
-          {error && (
-            <div style={{ background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: 8, padding: 10 }}>
-              {error}
+      <div style={{ display: 'grid', gap: 24 }}>
+        <Card>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+            <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${highPriorityIssueCount} high or urgent`} />
+            <UtilityBadge label={`${activeTrendFlagCount} active trend flag${activeTrendFlagCount === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${trendFlags.length} trend flag${trendFlags.length === 1 ? '' : 's'}`} />
+          </div>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode: issues and trend flags are loaded from Supabase.'
+              : 'Demo mode: issues and trend flags are stored in localStorage.'}
+          </p>
+          {loading ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>Loading issues and trend flags...</p>
+          ) : null}
+          {loadError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>{loadError}</p>
+          ) : null}
+          {dataMode === 'supabase' && !hasProperty ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>
+              Create a property before adding Supabase issues or trend flags.
+            </p>
+          ) : null}
+          {formError ? (
+            <div style={{ marginTop: 12, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: 8, padding: 10 }}>
+              {formError}
             </div>
-          )}
+          ) : null}
+        </Card>
 
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Title</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }} />
-          </label>
-
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Add issue</h2>
+          <form onSubmit={submitIssue} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Issue type</span>
-              <select value={issueType} onChange={(e) => setIssueType(e.target.value as (typeof ISSUE_TYPES)[number])} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
-                {ISSUE_TYPES.map((type) => (
-                  <option key={type} value={type}>{formatEnumLabel(type)}</option>
-                ))}
-              </select>
+              <span style={{ fontWeight: 600 }}>Title</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} style={fieldStyle} />
             </label>
 
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Status</span>
-              <select value={status} onChange={(e) => setStatus(e.target.value as (typeof ISSUE_STATUSES)[number])} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
-                {ISSUE_STATUSES.map((value) => (
-                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
-                ))}
-              </select>
-            </label>
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Issue type</span>
+                <select value={issueType} onChange={(event) => setIssueType(event.target.value as IssueType)} style={fieldStyle}>
+                  {ISSUE_TYPES.map((type) => (
+                    <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Status</span>
+                <select value={status} onChange={(event) => setStatus(event.target.value as IssueStatus)} style={fieldStyle}>
+                  {ISSUE_STATUSES.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Severity</span>
+                <select value={severity} onChange={(event) => setSeverity(event.target.value as IssueSeverity)} style={fieldStyle}>
+                  {ISSUE_SEVERITIES.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {renderLinkSelectors(roomId, setRoomId, assetId, setAssetId, utilityId, setUtilityId)}
 
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Severity</span>
-              <select value={severity} onChange={(e) => setSeverity(e.target.value as (typeof ISSUE_SEVERITIES)[number])} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
-                {ISSUE_SEVERITIES.map((value) => (
-                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
-                ))}
-              </select>
-            </label>
-
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Date found</span>
-              <input type="date" value={dateFound} onChange={(e) => setDateFound(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }} />
-            </label>
-          </div>
-
-          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Room</span>
-              <select value={roomId} onChange={(e) => setRoomId(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <span style={{ fontWeight: 600 }}>Repair</span>
+              <select value={repairId} onChange={(event) => setRepairId(event.target.value)} style={fieldStyle}>
                 <option value="">Not linked</option>
-                {rooms.map((room) => (
-                  <option key={room.id} value={room.id}>{room.name}</option>
+                {repairs.map((repair) => (
+                  <option key={repair.id} value={repair.id}>{repair.name}</option>
                 ))}
               </select>
             </label>
 
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>First seen</span>
+                <input type="date" value={firstSeenDate} onChange={(event) => setFirstSeenDate(event.target.value)} style={fieldStyle} />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Last seen</span>
+                <input type="date" value={lastSeenDate} onChange={(event) => setLastSeenDate(event.target.value)} style={fieldStyle} />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Resolved</span>
+                <input type="date" value={resolvedDate} onChange={(event) => setResolvedDate(event.target.value)} style={fieldStyle} />
+              </label>
+            </div>
+
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Asset</span>
-              <select value={assetId} onChange={(e) => setAssetId(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <span style={{ fontWeight: 600 }}>Description</span>
+              <textarea value={description} onChange={(event) => setDescription(event.target.value)} style={{ ...fieldStyle, minHeight: 76 }} />
+            </label>
+
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Notes</span>
+              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} style={{ ...fieldStyle, minHeight: 76 }} />
+            </label>
+
+            <div>
+              <Button type="submit" disabled={savingIssue || (dataMode === 'supabase' && !hasProperty)}>
+                {savingIssue ? 'Saving issue...' : 'Save issue'}
+              </Button>
+            </div>
+          </form>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Add trend flag</h2>
+          <form onSubmit={submitTrendFlag} style={{ display: 'grid', gap: 12 }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Title</span>
+              <input value={flagTitle} onChange={(event) => setFlagTitle(event.target.value)} style={fieldStyle} />
+            </label>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Flag type</span>
+                <select value={flagType} onChange={(event) => setFlagType(event.target.value as TrendFlagType)} style={fieldStyle}>
+                  {TREND_FLAG_TYPES.map((type) => (
+                    <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Status</span>
+                <select value={flagStatus} onChange={(event) => setFlagStatus(event.target.value as TrendFlagStatus)} style={fieldStyle}>
+                  {TREND_FLAG_STATUSES.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Severity</span>
+                <select value={flagSeverity} onChange={(event) => setFlagSeverity(event.target.value as TrendFlagSeverity)} style={fieldStyle}>
+                  {ISSUE_SEVERITIES.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Detected from</span>
+                <select value={detectedFrom} onChange={(event) => setDetectedFrom(event.target.value as TrendFlagDetectedFrom)} style={fieldStyle}>
+                  {TREND_FLAG_DETECTED_FROM.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            {renderLinkSelectors(flagRoomId, setFlagRoomId, flagAssetId, setFlagAssetId, flagUtilityId, setFlagUtilityId)}
+
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Issue</span>
+              <select value={flagIssueId} onChange={(event) => setFlagIssueId(event.target.value)} style={fieldStyle}>
                 <option value="">Not linked</option>
-                {assets.map((asset) => (
-                  <option key={asset.id} value={asset.id}>{asset.name}</option>
+                {issues.map((issue) => (
+                  <option key={issue.id} value={issue.id}>{issue.title}</option>
                 ))}
               </select>
             </label>
 
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Utility</span>
-              <select value={utilityId} onChange={(e) => setUtilityId(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
-                <option value="">Not linked</option>
-                {utilities.map((utility) => (
-                  <option key={utility.id} value={utility.id}>{utility.name}</option>
-                ))}
-              </select>
+              <span style={{ fontWeight: 600 }}>Description</span>
+              <textarea value={flagDescription} onChange={(event) => setFlagDescription(event.target.value)} style={{ ...fieldStyle, minHeight: 76 }} />
             </label>
 
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Resolution date</span>
-              <input type="date" value={resolutionDate} onChange={(e) => setResolutionDate(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }} />
-            </label>
-          </div>
+            <div>
+              <Button type="submit" disabled={savingTrendFlag || (dataMode === 'supabase' && !hasProperty)}>
+                {savingTrendFlag ? 'Saving trend flag...' : 'Save trend flag'}
+              </Button>
+            </div>
+          </form>
+        </Card>
 
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Description</span>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db', minHeight: 70 }} />
-          </label>
+        {!loading && issues.length === 0 && trendFlags.length === 0 ? (
+          <EmptyState title="No issues or trend flags yet" description="Add your first issue or trend flag to start tracking home health." />
+        ) : null}
 
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Private notes</span>
-            <textarea value={privateNotes} onChange={(e) => setPrivateNotes(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db', minHeight: 70 }} />
-          </label>
-
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Shareable notes</span>
-            <textarea value={shareableNotes} onChange={(e) => setShareableNotes(e.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db', minHeight: 70 }} />
-          </label>
-
-          <label style={{ display: 'grid', gap: 6, maxWidth: 260 }}>
-            <span style={{ fontWeight: 600 }}>Visibility</span>
-            <select value={visibility} onChange={(e) => setVisibility(e.target.value as (typeof VISIBILITY_OPTIONS)[number])} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
-              {VISIBILITY_OPTIONS.map((option) => (
-                <option key={option} value={option}>{formatEnumLabel(option)}</option>
-              ))}
-            </select>
-          </label>
-
-          <div>
-            <Button type="submit">Save issue</Button>
-          </div>
-        </form>
-      </Card>
-
-      <Card>
-        <h2 style={{ marginTop: 0 }}>Issue overview</h2>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <UtilityBadge label={`${openIssueCount} open`} />
-          <UtilityBadge label={`${issues.filter((issue) => issue.severity === 'urgent' && issue.status !== 'resolved' && issue.status !== 'archived').length} urgent open`} />
-        </div>
-      </Card>
-
-      {issues.length === 0 ? (
-        <EmptyState title="No issues yet" description="Add your first issue to track status and resolution progress." />
-      ) : (
-        <div style={{ display: 'grid', gap: 12 }}>
-          {issues
-            .slice()
-            .sort((a, b) => new Date(b.date_found).getTime() - new Date(a.date_found).getTime())
-            .map((issue) => (
-              <Card key={issue.id}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12 }}>
-                  <div>
-                    <h3 style={{ margin: '0 0 8px 0' }}>{issue.title}</h3>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                      <UtilityBadge label={formatEnumLabel(issue.issue_type)} />
-                      <UtilityBadge label={formatEnumLabel(issue.status)} />
-                      <UtilityBadge label={formatEnumLabel(issue.severity)} />
-                      {issue.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, issue.room_id)}`} />}
-                      {issue.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, issue.asset_id)}`} />}
-                      {issue.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, issue.utility_id)}`} />}
+        {issues.length > 0 ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Issues</h2>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {issues.map((issue) => (
+                <div key={issue.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
+                    <div>
+                      <h3 style={{ margin: '0 0 8px 0' }}>{issue.title}</h3>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <UtilityBadge label={formatEnumLabel(issue.issue_type)} />
+                        <UtilityBadge label={formatEnumLabel(issue.severity)} />
+                        {issue.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, issue.room_id) || 'Unknown'}`} />}
+                        {issue.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, issue.asset_id) || 'Unknown'}`} />}
+                        {issue.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, issue.utility_id) || 'Unknown'}`} />}
+                        {issue.repair_id && <UtilityBadge label={`Repair: ${nameFromId(repairs, issue.repair_id) || 'Unknown'}`} />}
+                      </div>
+                      <div style={{ color: '#6b7280', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
+                        <div><strong>First seen:</strong> {issue.first_seen_date || 'Not set'}</div>
+                        {issue.last_seen_date && <div><strong>Last seen:</strong> {issue.last_seen_date}</div>}
+                        {issue.resolved_date && <div><strong>Resolved:</strong> {issue.resolved_date}</div>}
+                        {issue.description && <div><strong>Description:</strong> {issue.description}</div>}
+                        {issue.notes && <div><strong>Notes:</strong> {issue.notes}</div>}
+                      </div>
                     </div>
-                    <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-                      <div><strong>Date found:</strong> {issue.date_found}</div>
-                      {issue.resolution_date && <div><strong>Resolution date:</strong> {issue.resolution_date}</div>}
-                      {issue.description && <div><strong>Description:</strong> {issue.description}</div>}
-                      {issue.private_notes && <div><strong>Private notes:</strong> {issue.private_notes}</div>}
-                      {issue.shareable_notes && <div><strong>Shareable notes:</strong> {issue.shareable_notes}</div>}
+
+                    <div style={{ display: 'grid', gap: 8, minWidth: 150 }}>
+                      <select
+                        value={issue.status}
+                        onChange={(event) => changeIssueStatus(issue.id, event.target.value as IssueStatus)}
+                        disabled={updatingId === issue.id}
+                        style={fieldStyle}
+                      >
+                        {ISSUE_STATUSES.map((value) => (
+                          <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => deleteIssue(issue.id)}
+                        disabled={deletingId === issue.id}
+                        style={{
+                          ...destructiveButtonStyle,
+                          cursor: deletingId === issue.id ? 'not-allowed' : 'pointer',
+                          opacity: deletingId === issue.id ? 0.7 : 1
+                        }}
+                      >
+                        {deletingId === issue.id ? 'Deleting...' : 'Delete'}
+                      </button>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => deleteIssue(issue.id)}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #fecaca',
-                      background: '#fef2f2',
-                      color: '#b91c1c',
-                      cursor: 'pointer',
-                      height: 'fit-content'
-                    }}
-                  >
-                    Delete
-                  </button>
                 </div>
-              </Card>
-            ))}
-        </div>
-      )}
+              ))}
+            </div>
+          </Card>
+        ) : null}
+
+        {trendFlags.length > 0 ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {trendFlags.map((flag) => (
+                <div key={flag.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
+                    <div>
+                      <h3 style={{ margin: '0 0 8px 0' }}>{flag.title}</h3>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                        <UtilityBadge label={formatEnumLabel(flag.flag_type)} />
+                        <UtilityBadge label={formatEnumLabel(flag.severity)} />
+                        <UtilityBadge label={formatEnumLabel(flag.detected_from)} />
+                        {flag.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, flag.room_id) || 'Unknown'}`} />}
+                        {flag.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, flag.asset_id) || 'Unknown'}`} />}
+                        {flag.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, flag.utility_id) || 'Unknown'}`} />}
+                        {flag.issue_id && <UtilityBadge label={`Issue: ${issueTitleFromId(issues, flag.issue_id) || 'Unknown'}`} />}
+                      </div>
+                      <div style={{ color: '#6b7280', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
+                        <div><strong>First detected:</strong> {flag.first_detected_at.slice(0, 10)}</div>
+                        {flag.last_detected_at && <div><strong>Last detected:</strong> {flag.last_detected_at.slice(0, 10)}</div>}
+                        {flag.resolved_at && <div><strong>Resolved:</strong> {flag.resolved_at.slice(0, 10)}</div>}
+                        {flag.description && <div><strong>Description:</strong> {flag.description}</div>}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: 8, minWidth: 150 }}>
+                      <select
+                        value={flag.status}
+                        onChange={(event) => changeTrendFlagStatus(flag.id, event.target.value as TrendFlagStatus)}
+                        disabled={updatingId === flag.id}
+                        style={fieldStyle}
+                      >
+                        {TREND_FLAG_STATUSES.map((value) => (
+                          <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => deleteTrendFlag(flag.id)}
+                        disabled={deletingId === flag.id}
+                        style={{
+                          ...destructiveButtonStyle,
+                          cursor: deletingId === flag.id ? 'not-allowed' : 'pointer',
+                          opacity: deletingId === flag.id ? 0.7 : 1
+                        }}
+                      >
+                        {deletingId === flag.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
+      </div>
     </>
   );
 }

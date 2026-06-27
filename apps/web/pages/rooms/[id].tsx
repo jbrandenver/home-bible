@@ -3,13 +3,14 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
-import { detectTrendFlags, trendFlagsForEntity, type IssueRecord } from '../../components/trendFlags';
 import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
-import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
+import { getDemoRooms } from '../../lib/demoStorage';
+import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForRoom, type ReminderRow } from '../../lib/reminders';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../../lib/repairs';
 import { getRoomById } from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../../lib/serviceRecords';
+import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../../lib/trendFlags';
 import { getUtilitiesForRoom, getUtilityDataContext, type UtilityRow } from '../../lib/utilities';
 
 type Room = {
@@ -17,13 +18,6 @@ type Room = {
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type Issue = IssueRecord & {
-  id: string;
-  title: string;
-  issue_type: string;
-  date_found: string;
 };
 
 export default function RoomDetailPage() {
@@ -38,12 +32,15 @@ export default function RoomDetailPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
-  const [issues, setIssues] = useState<Issue[]>([]);
+  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [utilityError, setUtilityError] = useState('');
   const [assetError, setAssetError] = useState('');
   const [reminderError, setReminderError] = useState('');
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
+  const [issueError, setIssueError] = useState('');
+  const [trendFlagError, setTrendFlagError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -58,19 +55,33 @@ export default function RoomDetailPage() {
       setReminderError('');
       setRepairError('');
       setServiceRecordError('');
+      setIssueError('');
+      setTrendFlagError('');
 
-      const [utilityContext, assetContext, reminderContext, repairContext, serviceRecordContext] = await Promise.all([
+      const [
+        utilityContext,
+        assetContext,
+        reminderContext,
+        repairContext,
+        serviceRecordContext,
+        issueContext,
+        trendFlagContext
+      ] = await Promise.all([
         getUtilityDataContext(),
         getAssetDataContext(),
         getReminderDataContext(),
         getRepairDataContext(),
-        getServiceRecordDataContext()
+        getServiceRecordDataContext(),
+        getIssueDataContext(),
+        getTrendFlagDataContext()
       ]);
       let nextUtilities: UtilityRow[] = [];
       let nextAssets: AssetRow[] = [];
       let nextReminders: ReminderRow[] = [];
       let nextRepairs: RepairRow[] = [];
       let nextServiceRecords: ServiceRecordRow[] = [];
+      let nextIssues: IssueRow[] = [];
+      let nextTrendFlags: TrendFlagRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForRoom(utilityContext, roomId);
@@ -112,6 +123,22 @@ export default function RoomDetailPage() {
         }
       }
 
+      try {
+        nextIssues = await getIssuesForContext(issueContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setIssueError(loadError instanceof Error ? loadError.message : 'Failed to load room issues.');
+        }
+      }
+
+      try {
+        nextTrendFlags = await getTrendFlagsForContext(trendFlagContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load room trend flags.');
+        }
+      }
+
       if (utilityContext.mode === 'supabase') {
         const remoteRoom = await getRoomById(roomId);
 
@@ -146,7 +173,8 @@ export default function RoomDetailPage() {
       setReminders(nextReminders);
       setRepairs(nextRepairs);
       setServiceRecords(nextServiceRecords);
-      setIssues(getDemoCollection<Issue>('homeBible.issues'));
+      setIssues(nextIssues);
+      setTrendFlags(nextTrendFlags);
     }
 
     load();
@@ -207,8 +235,13 @@ export default function RoomDetailPage() {
     [issues, roomId, utilityIdsInRoom]
   );
 
-  const trendFlags = useMemo(() => detectTrendFlags(serviceRecords, issues), [serviceRecords, issues]);
-  const roomTrendFlags = useMemo(() => trendFlagsForEntity(trendFlags, 'room', roomId), [trendFlags, roomId]);
+  const roomTrendFlags = useMemo(
+    () =>
+      trendFlags.filter(
+        (flag) => flag.room_id === roomId || (!!flag.utility_id && utilityIdsInRoom.has(flag.utility_id))
+      ),
+    [trendFlags, roomId, utilityIdsInRoom]
+  );
 
   if (!room) {
     return (
@@ -250,11 +283,12 @@ export default function RoomDetailPage() {
             <UtilityBadge label={`${roomRepairs.length} repair${roomRepairs.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomServiceRecords.length} service record${roomServiceRecords.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomIssues.length} issue${roomIssues.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${roomTrendFlags.length} trend flag${roomTrendFlags.length === 1 ? '' : 's'}`} />
           </div>
           <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities, assets, reminders, repairs, and service records for this room are loaded from Supabase.'
-              : 'Demo mode: utilities, assets, reminders, repairs, and service records for this room are loaded from localStorage.'}
+              ? 'Signed-in mode: utilities, assets, reminders, repairs, service records, issues, and trend flags for this room are loaded from Supabase.'
+              : 'Demo mode: utilities, assets, reminders, repairs, service records, issues, and trend flags for this room are loaded from localStorage.'}
           </p>
           {utilityError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -281,6 +315,16 @@ export default function RoomDetailPage() {
               {serviceRecordError}
             </p>
           ) : null}
+          {issueError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {issueError}
+            </p>
+          ) : null}
+          {trendFlagError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {trendFlagError}
+            </p>
+          ) : null}
         </Card>
 
         <Card>
@@ -291,8 +335,13 @@ export default function RoomDetailPage() {
             <div style={{ display: 'grid', gap: 10 }}>
               {roomTrendFlags.map((flag) => (
                 <div key={flag.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
-                  <div style={{ fontWeight: 600 }}>{flag.label}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{flag.details}</div>
+                  <div style={{ fontWeight: 600 }}>{flag.title}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    {formatEnumLabel(flag.flag_type)} • {formatEnumLabel(flag.status)} • {formatEnumLabel(flag.severity)}
+                  </div>
+                  {flag.description ? (
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: 4 }}>{flag.description}</div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -442,12 +491,12 @@ export default function RoomDetailPage() {
             <div style={{ display: 'grid', gap: 10 }}>
               {roomIssues
                 .slice()
-                .sort((a, b) => new Date(b.date_found || 0).getTime() - new Date(a.date_found || 0).getTime())
+                .sort((a, b) => new Date(b.first_seen_date || b.created_at).getTime() - new Date(a.first_seen_date || a.created_at).getTime())
                 .map((issue) => (
                   <div key={issue.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
                     <div style={{ fontWeight: 600 }}>{issue.title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                      {issue.date_found} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
+                      {issue.first_seen_date || 'Not set'} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
                     </div>
                   </div>
                 ))}

@@ -3,7 +3,6 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
-import { detectTrendFlags, trendFlagsForEntity, type IssueRecord } from '../../components/trendFlags';
 import {
   deleteAssetForContext,
   getAssetByIdForContext,
@@ -12,18 +11,13 @@ import {
   type AssetDataMode,
   type AssetRow
 } from '../../lib/assets';
-import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
+import { getDemoRooms } from '../../lib/demoStorage';
+import { getIssueDataContext, getIssuesForAsset, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForAsset, type ReminderRow } from '../../lib/reminders';
 import { getRepairDataContext, getRepairsForAsset, type RepairRow } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForAsset, type ServiceRecordRow } from '../../lib/serviceRecords';
-
-type Issue = IssueRecord & {
-  id: string;
-  title: string;
-  issue_type: string;
-  date_found: string;
-};
+import { getTrendFlagDataContext, getTrendFlagsForAsset, type TrendFlagRow } from '../../lib/trendFlags';
 
 type Room = {
   id: string;
@@ -42,12 +36,15 @@ export default function AssetDetailPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
-  const [issues, setIssues] = useState<Issue[]>([]);
+  const [issues, setIssues] = useState<IssueRow[]>([]);
+  const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reminderError, setReminderError] = useState('');
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
+  const [issueError, setIssueError] = useState('');
+  const [trendFlagError, setTrendFlagError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   const getWarrantyMeta = (assetItem: AssetRow) => {
@@ -103,18 +100,24 @@ export default function AssetDetailPage() {
       setReminderError('');
       setRepairError('');
       setServiceRecordError('');
+      setIssueError('');
+      setTrendFlagError('');
 
       try {
-        const [nextContext, reminderContext, repairContext, serviceRecordContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, serviceRecordContext, issueContext, trendFlagContext] = await Promise.all([
           getAssetDataContext(),
           getReminderDataContext(),
           getRepairDataContext(),
-          getServiceRecordDataContext()
+          getServiceRecordDataContext(),
+          getIssueDataContext(),
+          getTrendFlagDataContext()
         ]);
         const nextAsset = await getAssetByIdForContext(nextContext, assetId);
         let nextReminders: ReminderRow[] = [];
         let nextRepairs: RepairRow[] = [];
         let nextServiceRecords: ServiceRecordRow[] = [];
+        let nextIssues: IssueRow[] = [];
+        let nextTrendFlags: TrendFlagRow[] = [];
 
         try {
           nextReminders = await getRemindersForAsset(reminderContext, assetId);
@@ -140,6 +143,22 @@ export default function AssetDetailPage() {
           }
         }
 
+        try {
+          nextIssues = await getIssuesForAsset(issueContext, assetId);
+        } catch (loadError) {
+          if (isMounted) {
+            setIssueError(loadError instanceof Error ? loadError.message : 'Failed to load asset issues.');
+          }
+        }
+
+        try {
+          nextTrendFlags = await getTrendFlagsForAsset(trendFlagContext, assetId);
+        } catch (loadError) {
+          if (isMounted) {
+            setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load asset trend flags.');
+          }
+        }
+
         const roomList =
           nextContext.mode === 'supabase' && nextContext.property
             ? await getRoomsForProperty(nextContext.property.id)
@@ -155,6 +174,8 @@ export default function AssetDetailPage() {
         setReminders(nextReminders);
         setRepairs(nextRepairs);
         setServiceRecords(nextServiceRecords);
+        setIssues(nextIssues);
+        setTrendFlags(nextTrendFlags);
         setRoomName(
           nextAsset?.room_id
             ? roomList.find((room: Room) => room.id === nextAsset.room_id)?.name || 'Unknown room'
@@ -170,9 +191,6 @@ export default function AssetDetailPage() {
         }
       }
 
-      if (isMounted) {
-        setIssues(getDemoCollection<Issue>('homeBible.issues'));
-      }
     }
 
     load();
@@ -202,13 +220,7 @@ export default function AssetDetailPage() {
     [repairs, assetId]
   );
 
-  const linkedIssues = useMemo(
-    () => issues.filter((issue) => issue.asset_id === assetId),
-    [issues, assetId]
-  );
-
-  const trendFlags = useMemo(() => detectTrendFlags(serviceRecords, issues), [serviceRecords, issues]);
-  const assetTrendFlags = useMemo(() => trendFlagsForEntity(trendFlags, 'asset', assetId), [trendFlags, assetId]);
+  const linkedIssues = useMemo(() => issues.filter((issue) => issue.asset_id === assetId), [issues, assetId]);
 
   const handleDelete = async () => {
     if (!asset || !context) return;
@@ -284,8 +296,8 @@ export default function AssetDetailPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: this asset, reminders, repairs, and service records are loaded from Supabase.'
-              : 'Demo mode: this asset, reminders, repairs, and service records are loaded from localStorage.'}
+              ? 'Signed-in mode: this asset, reminders, repairs, service records, issues, and trend flags are loaded from Supabase.'
+              : 'Demo mode: this asset, reminders, repairs, service records, issues, and trend flags are loaded from localStorage.'}
           </p>
           {reminderError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -300,6 +312,16 @@ export default function AssetDetailPage() {
           {serviceRecordError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {serviceRecordError}
+            </p>
+          ) : null}
+          {issueError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {issueError}
+            </p>
+          ) : null}
+          {trendFlagError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {trendFlagError}
             </p>
           ) : null}
         </Card>
@@ -451,14 +473,19 @@ export default function AssetDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Trend flags</h2>
-          {assetTrendFlags.length === 0 ? (
+          {trendFlags.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No trend flags currently for this asset.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
-              {assetTrendFlags.map((flag) => (
+              {trendFlags.map((flag) => (
                 <div key={flag.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
-                  <div style={{ fontWeight: 600 }}>{flag.label}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{flag.details}</div>
+                  <div style={{ fontWeight: 600 }}>{flag.title}</div>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    {formatEnumLabel(flag.flag_type)} • {formatEnumLabel(flag.status)} • {formatEnumLabel(flag.severity)}
+                  </div>
+                  {flag.description ? (
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: 4 }}>{flag.description}</div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -530,12 +557,12 @@ export default function AssetDetailPage() {
             <div style={{ display: 'grid', gap: 10 }}>
               {linkedIssues
                 .slice()
-                .sort((a, b) => new Date(b.date_found || 0).getTime() - new Date(a.date_found || 0).getTime())
+                .sort((a, b) => new Date(b.first_seen_date || b.created_at).getTime() - new Date(a.first_seen_date || a.created_at).getTime())
                 .map((issue) => (
                   <div key={issue.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
                     <div style={{ fontWeight: 600 }}>{issue.title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                      {issue.date_found} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
+                      {issue.first_seen_date || 'Not set'} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
                     </div>
                   </div>
                 ))}
