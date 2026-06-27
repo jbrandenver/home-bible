@@ -1,7 +1,53 @@
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import {
+  getCurrentUser,
+  getSupabaseSetupMessage,
+  isSupabaseConfigured,
+  onAuthStateChange,
+  signOut
+} from '../lib/auth';
 
 export default function SettingsPage() {
+  const [isReady, setIsReady] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getCurrentUser().then((currentUser) => {
+      if (!isMounted) {
+        return;
+      }
+
+      setUser(currentUser);
+      setIsReady(true);
+    });
+
+    const unsubscribe = onAuthStateChange((nextUser) => {
+      if (!isMounted) {
+        return;
+      }
+
+      setUser(nextUser);
+      setIsReady(true);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  async function handleSignOut() {
+    await signOut();
+    setUser(null);
+  }
+
+  const supabaseReady = isSupabaseConfigured();
+
   return (
     <>
       <PageHeader
@@ -10,6 +56,36 @@ export default function SettingsPage() {
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Account</h2>
+            {!supabaseReady ? (
+              <p style={{ color: '#92400e', margin: 0 }}>{getSupabaseSetupMessage()}</p>
+            ) : !isReady ? (
+              <p style={{ color: '#6b7280', margin: 0 }}>Loading account…</p>
+            ) : user ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <UtilityBadge label={`Signed in as ${user.email || 'unknown user'}`} />
+                <div>
+                  <Button type="button" onClick={handleSignOut}>
+                    Sign out
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <p style={{ color: '#6b7280', margin: 0 }}>You are in demo mode.</p>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <Link href="/sign-in">
+                    <Button type="button">Sign in</Button>
+                  </Link>
+                  <Link href="/sign-up">
+                    <Button type="button">Create account</Button>
+                  </Link>
+                </div>
+              </div>
+            )}
+          </Card>
+
           <Card>
             <h2 style={{ marginTop: 0 }}>Security and privacy</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

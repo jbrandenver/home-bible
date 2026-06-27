@@ -1,6 +1,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { useEffect, useState } from 'react';
+import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -9,8 +11,28 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
 
   const isActive = (path: string) => router.pathname === path;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getCurrentUser().then((user) => {
+      if (isMounted) {
+        setUserEmail(user?.email ?? null);
+      }
+    });
+
+    const unsubscribe = onAuthStateChange((user) => {
+      setUserEmail(user?.email ?? null);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -21,6 +43,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             <Link href="/" className="text-lg font-semibold text-amber-700">
               Home Bible
             </Link>
+            <div className="text-sm text-gray-600">
+              {userEmail ? `Signed in: ${userEmail}` : 'Demo mode'}
+            </div>
           </div>
           <div className="flex gap-4 text-sm">
             <Link
@@ -111,14 +136,37 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             >
               Issues
             </Link>
-            <Link
-              href="/auth"
-              className={`px-3 py-2 rounded ${
-                isActive('/auth') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Auth
-            </Link>
+            {userEmail ? (
+              <>
+                <Link
+                  href="/settings"
+                  className={`px-3 py-2 rounded ${
+                    isActive('/settings') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Account
+                </Link>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await signOut();
+                    router.push('/sign-in');
+                  }}
+                  className="px-3 py-2 rounded text-gray-600 hover:text-gray-900"
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <Link
+                href="/sign-in"
+                className={`px-3 py-2 rounded ${
+                  isActive('/sign-in') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Sign in
+              </Link>
+            )}
             <Link
               href="/settings"
               className={`px-3 py-2 rounded ${

@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
+import { getCurrentUser, isSupabaseConfigured } from '../../lib/auth';
+import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
+import { getRoomById } from '../../lib/rooms';
 
 type Room = {
   id: string;
@@ -62,7 +65,9 @@ type Issue = IssueRecord & {
 export default function RoomDetailPage() {
   const router = useRouter();
   const { id } = router.query;
+  const roomId = typeof id === 'string' ? id : '';
 
+  const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<Utility[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -71,53 +76,71 @@ export default function RoomDetailPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
 
   useEffect(() => {
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
-    const storedUtilities = window.localStorage.getItem('homeBible.utilities');
-    const storedAssets = window.localStorage.getItem('homeBible.assets');
-    const storedReminders = window.localStorage.getItem('homeBible.reminders');
-    const storedServiceRecords = window.localStorage.getItem('homeBible.serviceRecords');
-    const storedIssues = window.localStorage.getItem('homeBible.issues');
+    let isMounted = true;
 
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
+    async function load() {
+      if (!roomId) {
+        return;
+      }
+
+      const supabaseReady = isSupabaseConfigured();
+      const user = await getCurrentUser();
+      let loadedFromSupabase = false;
+
+      if (user && supabaseReady) {
+        const remoteRoom = await getRoomById(roomId);
+        if (remoteRoom && isMounted) {
+          loadedFromSupabase = true;
+          setDataMode('supabase');
+          setRooms([
+            {
+              id: remoteRoom.id,
+              name: remoteRoom.name,
+              room_type: remoteRoom.room_type,
+              floor_name: remoteRoom.floor_name
+            }
+          ]);
+        }
+      }
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (!loadedFromSupabase) {
+        setDataMode('demo');
+        setRooms(getDemoRooms());
+      }
+
+      setUtilities(getDemoCollection<Utility>('homeBible.utilities'));
+      setAssets(getDemoCollection<Asset>('homeBible.assets'));
+      setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
+      setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
+      setIssues(getDemoCollection<Issue>('homeBible.issues'));
     }
 
-    if (storedUtilities) {
-      setUtilities(JSON.parse(storedUtilities));
-    }
+    load();
 
-    if (storedAssets) {
-      setAssets(JSON.parse(storedAssets));
-    }
-
-    if (storedReminders) {
-      setReminders(JSON.parse(storedReminders));
-    }
-
-    if (storedServiceRecords) {
-      setServiceRecords(JSON.parse(storedServiceRecords));
-    }
-
-    if (storedIssues) {
-      setIssues(JSON.parse(storedIssues));
-    }
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [roomId]);
 
   const room = useMemo(() => {
-    return rooms.find((currentRoom) => currentRoom.id === id);
-  }, [rooms, id]);
+    return rooms.find((currentRoom) => currentRoom.id === roomId);
+  }, [rooms, roomId]);
 
   const roomUtilities = useMemo(() => {
-    return utilities.filter((u) => u.room_id === id);
-  }, [utilities, id]);
+    return utilities.filter((u) => u.room_id === roomId);
+  }, [utilities, roomId]);
 
   const roomAssets = useMemo(() => {
-    return assets.filter((a) => a.room_id === id);
-  }, [assets, id]);
+    return assets.filter((a) => a.room_id === roomId);
+  }, [assets, roomId]);
 
   const roomReminders = useMemo(
-    () => reminders.filter((reminder) => reminder.linked_type === 'room' && reminder.linked_id === id),
-    [reminders, id]
+    () => reminders.filter((reminder) => reminder.linked_type === 'room' && reminder.linked_id === roomId),
+    [reminders, roomId]
   );
 
   const utilityIdsInRoom = useMemo(
@@ -128,21 +151,21 @@ export default function RoomDetailPage() {
   const roomServiceRecords = useMemo(
     () =>
       serviceRecords.filter(
-        (record) => record.room_id === id || (!!record.utility_id && utilityIdsInRoom.has(record.utility_id))
+        (record) => record.room_id === roomId || (!!record.utility_id && utilityIdsInRoom.has(record.utility_id))
       ),
-    [serviceRecords, id, utilityIdsInRoom]
+    [serviceRecords, roomId, utilityIdsInRoom]
   );
 
   const roomIssues = useMemo(
     () =>
       issues.filter(
-        (issue) => issue.room_id === id || (!!issue.utility_id && utilityIdsInRoom.has(issue.utility_id))
+        (issue) => issue.room_id === roomId || (!!issue.utility_id && utilityIdsInRoom.has(issue.utility_id))
       ),
-    [issues, id, utilityIdsInRoom]
+    [issues, roomId, utilityIdsInRoom]
   );
 
   const trendFlags = useMemo(() => detectTrendFlags(serviceRecords, issues), [serviceRecords, issues]);
-  const roomTrendFlags = useMemo(() => trendFlagsForEntity(trendFlags, 'room', String(id)), [trendFlags, id]);
+  const roomTrendFlags = useMemo(() => trendFlagsForEntity(trendFlags, 'room', roomId), [trendFlags, roomId]);
 
   if (!room) {
     return (
@@ -150,7 +173,12 @@ export default function RoomDetailPage() {
         <PageHeader title="Room not found" />
         <Card>
           <p style={{ color: '#6b7280' }}>
-            This room may not exist yet, or your local setup data was cleared.
+            This room may not exist yet, or setup data was cleared.
+          </p>
+          <p style={{ color: '#6b7280', marginTop: 8 }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode is active. If this room was removed, it will no longer appear.'
+              : 'Demo mode is active. Add rooms from the onboarding flow to continue.'}
           </p>
           <Link href="/home-map">
             <Button type="button">Back to home map</Button>

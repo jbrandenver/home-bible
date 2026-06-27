@@ -3,6 +3,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../components/trendFlags';
+import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
+import { getDemoActiveProperty, getDemoCollection, getDemoRooms } from '../lib/demoStorage';
+import { getPrimaryPropertyForUser } from '../lib/properties';
+import { getFloorsForProperty, getRoomsForProperty } from '../lib/rooms';
 
 type Room = {
   id: string;
@@ -78,53 +82,81 @@ function getWarrantyStatus(asset: Asset): 'active' | 'expiring_soon' | 'expired'
 
 export default function DashboardPage() {
   const [propertyNickname, setPropertyNickname] = useState('Your property');
+  const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
+  const [hasProperty, setHasProperty] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<Utility[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [floorCount, setFloorCount] = useState(0);
 
   useEffect(() => {
-    const storedProperty = window.localStorage.getItem('homeBible.activeProperty');
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
-    const storedUtilities = window.localStorage.getItem('homeBible.utilities');
-    const storedAssets = window.localStorage.getItem('homeBible.assets');
-    const storedReminders = window.localStorage.getItem('homeBible.reminders');
-    const storedServiceRecords = window.localStorage.getItem('homeBible.serviceRecords');
-    const storedIssues = window.localStorage.getItem('homeBible.issues');
+    let isMounted = true;
 
-    if (storedProperty) {
-      const property = JSON.parse(storedProperty);
-      setPropertyNickname(property.nickname || 'Your property');
+    async function load() {
+      const supabaseReady = isSupabaseConfigured();
+      const user = await getCurrentUser();
+      let foundSupabaseProperty = false;
+
+      if (user && supabaseReady) {
+        const property = await getPrimaryPropertyForUser(user.id);
+        if (property && isMounted) {
+          foundSupabaseProperty = true;
+          setDataMode('supabase');
+          setHasProperty(true);
+          setPropertyNickname(property.nickname || 'Your property');
+
+          const [floors, remoteRooms] = await Promise.all([
+            getFloorsForProperty(property.id),
+            getRoomsForProperty(property.id)
+          ]);
+
+          if (isMounted) {
+            setFloorCount(floors.length);
+            setRooms(
+              remoteRooms.map((room) => ({
+                id: room.id,
+                name: room.name,
+                room_type: room.room_type,
+                floor_name: room.floor_name
+              }))
+            );
+          }
+        }
+      }
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (!user || !supabaseReady || !foundSupabaseProperty) {
+        const demoProperty = getDemoActiveProperty();
+        const demoRooms = getDemoRooms();
+
+        setDataMode('demo');
+        setHasProperty(Boolean(demoProperty));
+        setPropertyNickname(demoProperty?.nickname || 'Your property');
+        setRooms(demoRooms);
+        setFloorCount(Array.from(new Set(demoRooms.map((room) => room.floor_name))).length);
+      }
+
+      setUtilities(getDemoCollection<Utility>('homeBible.utilities'));
+      setAssets(getDemoCollection<Asset>('homeBible.assets'));
+      setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
+      setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
+      setIssues(getDemoCollection<Issue>('homeBible.issues'));
     }
 
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
-    }
+    load();
 
-    if (storedUtilities) {
-      setUtilities(JSON.parse(storedUtilities));
-    }
-
-    if (storedAssets) {
-      setAssets(JSON.parse(storedAssets));
-    }
-
-    if (storedReminders) {
-      setReminders(JSON.parse(storedReminders));
-    }
-
-    if (storedServiceRecords) {
-      setServiceRecords(JSON.parse(storedServiceRecords));
-    }
-
-    if (storedIssues) {
-      setIssues(JSON.parse(storedIssues));
-    }
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const floors = Array.from(new Set(rooms.map((room) => room.floor_name)));
+  const floors = floorCount || Array.from(new Set(rooms.map((room) => room.floor_name))).length;
 
   const warrantySummary = useMemo(
     () => ({
@@ -182,13 +214,19 @@ export default function DashboardPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Home map summary</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <UtilityBadge label={`${floors.length} floor${floors.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${floors} floor${floors === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
             </div>
+
+            <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
+              {dataMode === 'supabase'
+                ? 'Signed-in mode: profile, property, floors, and rooms are loaded from Supabase.'
+                : 'Demo mode: property, floors, and rooms are loaded from localStorage.'}
+            </p>
 
             <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Link href="/home-map">
@@ -304,8 +342,20 @@ export default function DashboardPage() {
 
           <Card>
             <h2 style={{ marginTop: 0 }}>Rooms</h2>
-            {rooms.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No rooms added yet.</p>
+            {!hasProperty ? (
+              <div>
+                <p style={{ color: '#6b7280' }}>No property found yet.</p>
+                <Link href="/create-property">
+                  <Button type="button">Create property</Button>
+                </Link>
+              </div>
+            ) : rooms.length === 0 ? (
+              <div>
+                <p style={{ color: '#6b7280' }}>No rooms added yet.</p>
+                <Link href="/add-rooms">
+                  <Button type="button">Add rooms</Button>
+                </Link>
+              </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
                 {rooms.map((room) => (

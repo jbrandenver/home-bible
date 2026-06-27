@@ -2,6 +2,10 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, FloorSection, RoomCard, UtilityBadge } from '@home-bible/ui';
+import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
+import { getDemoActiveProperty, getDemoCollection, getDemoRooms } from '../lib/demoStorage';
+import { getPrimaryPropertyForUser } from '../lib/properties';
+import { getRoomsForProperty } from '../lib/rooms';
 
 type Room = {
   id: string;
@@ -26,32 +30,63 @@ type Asset = {
 
 export default function HomeMapPage() {
   const [propertyNickname, setPropertyNickname] = useState('Your property');
+  const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
+  const [hasProperty, setHasProperty] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<Utility[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
 
   useEffect(() => {
-    const storedProperty = window.localStorage.getItem('homeBible.activeProperty');
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
-    const storedUtilities = window.localStorage.getItem('homeBible.utilities');
-    const storedAssets = window.localStorage.getItem('homeBible.assets');
+    let isMounted = true;
 
-    if (storedProperty) {
-      const property = JSON.parse(storedProperty);
-      setPropertyNickname(property.nickname || 'Your property');
+    async function load() {
+      const supabaseReady = isSupabaseConfigured();
+      const user = await getCurrentUser();
+      let foundSupabaseProperty = false;
+
+      if (user && supabaseReady) {
+        const property = await getPrimaryPropertyForUser(user.id);
+        if (property && isMounted) {
+          foundSupabaseProperty = true;
+          setDataMode('supabase');
+          setHasProperty(true);
+          setPropertyNickname(property.nickname || 'Your property');
+
+          const remoteRooms = await getRoomsForProperty(property.id);
+          if (isMounted) {
+            setRooms(
+              remoteRooms.map((room) => ({
+                id: room.id,
+                name: room.name,
+                room_type: room.room_type,
+                floor_name: room.floor_name
+              }))
+            );
+          }
+        }
+      }
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (!user || !supabaseReady || !foundSupabaseProperty) {
+        const demoProperty = getDemoActiveProperty();
+        setDataMode('demo');
+        setHasProperty(Boolean(demoProperty));
+        setPropertyNickname(demoProperty?.nickname || 'Your property');
+        setRooms(getDemoRooms());
+      }
+
+      setUtilities(getDemoCollection<Utility>('homeBible.utilities'));
+      setAssets(getDemoCollection<Asset>('homeBible.assets'));
     }
 
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
-    }
+    load();
 
-    if (storedUtilities) {
-      setUtilities(JSON.parse(storedUtilities));
-    }
-
-    if (storedAssets) {
-      setAssets(JSON.parse(storedAssets));
-    }
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const roomsByFloor = useMemo(() => {
@@ -83,9 +118,22 @@ export default function HomeMapPage() {
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
             </div>
+            <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
+              {dataMode === 'supabase'
+                ? 'Signed-in mode: property, floors, and rooms are loaded from Supabase.'
+                : 'Demo mode: property, floors, and rooms are loaded from localStorage.'}
+            </p>
           </Card>
 
-          {rooms.length === 0 ? (
+          {!hasProperty ? (
+            <Card>
+              <h2 style={{ marginTop: 0 }}>No property yet</h2>
+              <p style={{ color: '#6b7280' }}>Create a property first to build your home map.</p>
+              <Link href="/create-property">
+                <Button type="button">Create property</Button>
+              </Link>
+            </Card>
+          ) : rooms.length === 0 ? (
             <Card>
               <h2 style={{ marginTop: 0 }}>No rooms yet</h2>
               <p style={{ color: '#6b7280' }}>

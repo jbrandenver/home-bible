@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { ROOM_TYPES, formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Input, Select, Button } from '@home-bible/ui';
+import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from '../lib/auth';
+import { getPrimaryPropertyForUser } from '../lib/properties';
+import { createRoomsForProperty, getRoomsForProperty } from '../lib/rooms';
+import { getDemoActiveProperty, getDemoRooms, setDemoRooms } from '../lib/demoStorage';
 
 type Room = {
   id: string;
@@ -13,33 +17,78 @@ type Room = {
 export default function AddRoomsPage() {
   const router = useRouter();
 
+  const [userId, setUserId] = useState<string | null>(null);
+  const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [roomName, setRoomName] = useState('');
   const [roomType, setRoomType] = useState<(typeof ROOM_TYPES)[number]>('bedroom');
   const [floorName, setFloorName] = useState('Main Floor');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const supabaseReady = isSupabaseConfigured();
 
   useEffect(() => {
-    const storedProperty = window.localStorage.getItem('homeBible.activeProperty');
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
+    let isMounted = true;
 
-    if (storedProperty) {
-      const property = JSON.parse(storedProperty);
-      setPropertyNickname(property.nickname || 'Your property');
+    async function load() {
+      const user = await getCurrentUser();
+
+      if (user && supabaseReady) {
+        const property = await getPrimaryPropertyForUser(user.id);
+        if (!isMounted) {
+          return;
+        }
+
+        setUserId(user.id);
+
+        if (property) {
+          setActivePropertyId(property.id);
+          setPropertyNickname(property.nickname || 'Your property');
+          const remoteRooms = await getRoomsForProperty(property.id);
+          if (isMounted) {
+            setRooms(
+              remoteRooms.map((room) => ({
+                id: room.id,
+                name: room.name,
+                room_type: room.room_type,
+                floor_name: room.floor_name
+              }))
+            );
+          }
+          return;
+        }
+      }
+
+      const demoProperty = getDemoActiveProperty();
+      const demoRooms = getDemoRooms();
+
+      if (!isMounted) {
+        return;
+      }
+
+      if (demoProperty) {
+        setPropertyNickname(demoProperty.nickname || 'Your property');
+        setActivePropertyId(demoProperty.id);
+      }
+
+      setRooms(demoRooms);
     }
 
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
-    }
+    load();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   function saveRooms(nextRooms: Room[]) {
     setRooms(nextRooms);
-    window.localStorage.setItem('homeBible.rooms', JSON.stringify(nextRooms));
+    setDemoRooms(nextRooms);
   }
 
-  function handleAddRoom(event: React.FormEvent<HTMLFormElement>) {
+  async function handleAddRoom(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!roomName.trim()) {
@@ -48,6 +97,37 @@ export default function AddRoomsPage() {
     }
 
     setError('');
+
+    setIsSubmitting(true);
+
+    if (userId && supabaseReady && activePropertyId) {
+      try {
+        const remoteRooms = await createRoomsForProperty(activePropertyId, [
+          {
+            name: roomName.trim(),
+            room_type: roomType,
+            floor_name: floorName.trim() || 'Main Floor'
+          }
+        ]);
+
+        setRooms(
+          remoteRooms.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }))
+        );
+        setRoomName('');
+        setRoomType('bedroom');
+        setIsSubmitting(false);
+        return;
+      } catch (submitError) {
+        setError(submitError instanceof Error ? submitError.message : 'Failed to save room to Supabase.');
+        setIsSubmitting(false);
+        return;
+      }
+    }
 
     const nextRooms = [
       ...rooms,
@@ -62,6 +142,7 @@ export default function AddRoomsPage() {
     saveRooms(nextRooms);
     setRoomName('');
     setRoomType('bedroom');
+    setIsSubmitting(false);
   }
 
   function handleContinue() {
@@ -79,6 +160,25 @@ export default function AddRoomsPage() {
           title={`Add rooms for ${propertyNickname}`}
           description="Start simple. You can add detailed outlets, vents, utilities, appliances, and accessories later."
         />
+
+        {userId ? (
+          <Card>
+            <p style={{ margin: 0, color: '#065f46' }}>
+              Signed in mode: floors and rooms save to Supabase.
+            </p>
+          </Card>
+        ) : (
+          <Card>
+            <p style={{ margin: 0, color: '#6b7280' }}>
+              Demo mode: floors and rooms save to localStorage.
+            </p>
+            {!supabaseReady ? (
+              <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
+                {getSupabaseSetupMessage()}
+              </p>
+            ) : null}
+          </Card>
+        )}
 
         <div style={{ display: 'grid', gap: 24 }}>
           <Card>
@@ -131,7 +231,7 @@ export default function AddRoomsPage() {
               ) : null}
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <Button type="submit">Add room</Button>
+                <Button type="submit">{isSubmitting ? 'Saving...' : 'Add room'}</Button>
                 <Button type="button" onClick={handleContinue}>Continue to dashboard</Button>
               </div>
             </form>

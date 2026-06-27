@@ -11,7 +11,7 @@ export default function Home() {
           <Link href="/create-property">
             <Button>Create Property</Button>
           </Link>
-          <Link href="/auth">
+          <Link href="/sign-in">
             <Button>Sign In</Button>
           </Link>
         </div>
