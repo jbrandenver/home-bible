@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
 import { getDemoRooms } from '../lib/demoStorage';
+import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { getRoomsForProperty } from '../lib/rooms';
 import {
   deleteUtilityForContext,
@@ -17,9 +18,11 @@ export default function UtilitiesPage() {
   const [context, setContext] = useState<UtilityDataContext | null>(null);
   const [dataMode, setDataMode] = useState<UtilityDataMode>('demo');
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
+  const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [rooms, setRooms] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reminderError, setReminderError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -28,9 +31,13 @@ export default function UtilitiesPage() {
     async function load() {
       setLoading(true);
       setError('');
+      setReminderError('');
 
       try {
-        const nextContext = await getUtilityDataContext();
+        const [nextContext, reminderContext] = await Promise.all([
+          getUtilityDataContext(),
+          getReminderDataContext()
+        ]);
         const [nextUtilities, roomList] =
           nextContext.mode === 'supabase' && nextContext.property
             ? await Promise.all([
@@ -38,6 +45,15 @@ export default function UtilitiesPage() {
                 getRoomsForProperty(nextContext.property.id)
               ])
             : [await getUtilitiesForContext(nextContext), getDemoRooms()];
+        let nextReminders: ReminderRow[] = [];
+
+        try {
+          nextReminders = await getRemindersForContext(reminderContext);
+        } catch (loadError) {
+          if (isMounted) {
+            setReminderError(loadError instanceof Error ? loadError.message : 'Failed to load utility reminders.');
+          }
+        }
 
         if (!isMounted) {
           return;
@@ -46,6 +62,7 @@ export default function UtilitiesPage() {
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setUtilities(nextUtilities);
+        setReminders(nextReminders);
         setRooms(new Map(roomList.map((room) => [room.id, room.name])));
       } catch (loadError) {
         if (isMounted) {
@@ -88,6 +105,13 @@ export default function UtilitiesPage() {
     return rooms.get(roomId) || 'Unknown room';
   };
 
+  const getReminderCount = (utilityId: string) =>
+    reminders.filter(
+      (reminder) =>
+        reminder.utility_id === utilityId ||
+        (reminder.linked_type === 'utility' && reminder.linked_id === utilityId)
+    ).length;
+
   return (
     <>
       <PageHeader
@@ -99,9 +123,14 @@ export default function UtilitiesPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities are loaded from Supabase.'
-              : 'Demo mode: utilities are stored in localStorage only.'}
+              ? 'Signed-in mode: utilities and utility-linked reminders are loaded from Supabase.'
+              : 'Demo mode: utilities and utility-linked reminders are stored in localStorage.'}
           </p>
+          {reminderError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {reminderError}
+            </p>
+          ) : null}
         </Card>
 
         <Card>
@@ -145,6 +174,9 @@ export default function UtilitiesPage() {
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>{utility.name}</div>
                     <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: 8 }}>
                       <UtilityBadge label={formatEnumLabel(utility.utility_type)} />
+                      <span style={{ marginLeft: 8 }}>
+                        <UtilityBadge label={`${getReminderCount(utility.id)} reminder${getReminderCount(utility.id) === 1 ? '' : 's'}`} />
+                      </span>
                       <span style={{ marginLeft: 8 }}>•</span>
                       <span style={{ marginLeft: 8 }}>{getRoomName(utility.room_id)}</span>
                     </div>

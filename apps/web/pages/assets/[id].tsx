@@ -13,17 +13,8 @@ import {
   type AssetRow
 } from '../../lib/assets';
 import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
+import { getReminderDataContext, getRemindersForAsset, type ReminderRow } from '../../lib/reminders';
 import { getRoomsForProperty } from '../../lib/rooms';
-
-type Reminder = {
-  id: string;
-  title: string;
-  reminder_type: string;
-  due_date: string;
-  linked_type?: string | null;
-  linked_id?: string | null;
-  status: string;
-};
 
 type ServiceRecord = TrendServiceRecord & {
   id: string;
@@ -55,11 +46,12 @@ export default function AssetDetailPage() {
   const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
   const [asset, setAsset] = useState<AssetRow | null>(null);
   const [roomName, setRoomName] = useState<string | null>(null);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reminderError, setReminderError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   const getWarrantyMeta = (assetItem: AssetRow) => {
@@ -112,10 +104,24 @@ export default function AssetDetailPage() {
 
       setLoading(true);
       setError('');
+      setReminderError('');
 
       try {
-        const nextContext = await getAssetDataContext();
+        const [nextContext, reminderContext] = await Promise.all([
+          getAssetDataContext(),
+          getReminderDataContext()
+        ]);
         const nextAsset = await getAssetByIdForContext(nextContext, assetId);
+        let nextReminders: ReminderRow[] = [];
+
+        try {
+          nextReminders = await getRemindersForAsset(reminderContext, assetId);
+        } catch (loadError) {
+          if (isMounted) {
+            setReminderError(loadError instanceof Error ? loadError.message : 'Failed to load asset reminders.');
+          }
+        }
+
         const roomList =
           nextContext.mode === 'supabase' && nextContext.property
             ? await getRoomsForProperty(nextContext.property.id)
@@ -128,6 +134,7 @@ export default function AssetDetailPage() {
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setAsset(nextAsset);
+        setReminders(nextReminders);
         setRoomName(
           nextAsset?.room_id
             ? roomList.find((room: Room) => room.id === nextAsset.room_id)?.name || 'Unknown room'
@@ -144,7 +151,6 @@ export default function AssetDetailPage() {
       }
 
       if (isMounted) {
-        setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
         setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
         setIssues(getDemoCollection<Issue>('homeBible.issues'));
       }
@@ -158,7 +164,12 @@ export default function AssetDetailPage() {
   }, [assetId]);
 
   const linkedReminders = useMemo(
-    () => reminders.filter((reminder) => reminder.linked_type === 'asset' && reminder.linked_id === assetId),
+    () =>
+      reminders.filter(
+        (reminder) =>
+          reminder.asset_id === assetId ||
+          (reminder.linked_type === 'asset' && reminder.linked_id === assetId)
+      ),
     [reminders, assetId]
   );
 
@@ -249,9 +260,14 @@ export default function AssetDetailPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: this asset is loaded from Supabase.'
-              : 'Demo mode: this asset is loaded from localStorage.'}
+              ? 'Signed-in mode: this asset and its reminders are loaded from Supabase.'
+              : 'Demo mode: this asset and its reminders are loaded from localStorage.'}
           </p>
+          {reminderError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {reminderError}
+            </p>
+          ) : null}
         </Card>
 
         {/* Summary Card */}
@@ -489,7 +505,7 @@ export default function AssetDetailPage() {
                 >
                   <div style={{ fontWeight: 600 }}>{reminder.title}</div>
                   <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                    {reminder.due_date} • {formatEnumLabel(reminder.status)} •{' '}
+                    {reminder.due_date || 'No due date'} • {formatEnumLabel(reminder.status)} •{' '}
                     {formatEnumLabel(reminder.reminder_type)}
                   </div>
                 </div>

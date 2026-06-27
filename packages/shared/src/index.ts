@@ -80,9 +80,15 @@ export const WARRANTY_STATUSES = [
 ] as const;
 
 export const REMINDER_TYPES = [
-  'warranty_expiration',
-  'hvac_filter',
-  'custom'
+  'general',
+  'maintenance',
+  'warranty',
+  'filter_change',
+  'inspection',
+  'seasonal',
+  'utility',
+  'asset',
+  'other'
 ] as const;
 
 export const REMINDER_LINKED_TYPES = [
@@ -94,8 +100,33 @@ export const REMINDER_LINKED_TYPES = [
 
 export const REMINDER_STATUSES = [
   'open',
-  'done',
-  'snoozed'
+  'completed',
+  'dismissed'
+] as const;
+
+export const REMINDER_FREQUENCIES = [
+  'none',
+  'weekly',
+  'monthly',
+  'quarterly',
+  'semiannual',
+  'annual',
+  'custom'
+] as const;
+
+export const REMINDER_PRIORITIES = [
+  'low',
+  'normal',
+  'high',
+  'urgent'
+] as const;
+
+export const REMINDER_SOURCES = [
+  'manual',
+  'warranty',
+  'asset',
+  'utility',
+  'system_suggestion'
 ] as const;
 
 export const SERVICE_TYPES = [
@@ -228,12 +259,19 @@ export const createAssetSchema = z.object({
 
 export const createReminderSchema = z.object({
   title: z.string().min(1, 'Reminder title is required'),
+  description: z.string().optional().nullable(),
   reminder_type: z.enum(REMINDER_TYPES),
-  due_date: z.string(),
+  due_date: z.string().optional().nullable(),
   linked_type: z.enum(REMINDER_LINKED_TYPES).optional().nullable(),
   linked_id: z.string().uuid().optional().nullable(),
+  room_id: z.string().uuid().optional().nullable(),
+  asset_id: z.string().uuid().optional().nullable(),
+  utility_id: z.string().uuid().optional().nullable(),
+  frequency: z.enum(REMINDER_FREQUENCIES).default('none'),
   repeat_rule: z.string().optional().nullable(),
-  status: z.enum(REMINDER_STATUSES).default('open')
+  status: z.enum(REMINDER_STATUSES).default('open'),
+  priority: z.enum(REMINDER_PRIORITIES).default('normal'),
+  source: z.enum(REMINDER_SOURCES).default('manual')
 });
 
 export const createServiceRecordSchema = z.object({
@@ -280,6 +318,9 @@ export type WarrantyStatus = typeof WARRANTY_STATUSES[number];
 export type ReminderType = typeof REMINDER_TYPES[number];
 export type ReminderLinkedType = typeof REMINDER_LINKED_TYPES[number];
 export type ReminderStatus = typeof REMINDER_STATUSES[number];
+export type ReminderFrequency = typeof REMINDER_FREQUENCIES[number];
+export type ReminderPriority = typeof REMINDER_PRIORITIES[number];
+export type ReminderSource = typeof REMINDER_SOURCES[number];
 export type ServiceType = typeof SERVICE_TYPES[number];
 export type IssueType = typeof ISSUE_TYPES[number];
 export type IssueStatus = typeof ISSUE_STATUSES[number];
@@ -371,9 +412,16 @@ export interface ReminderRow {
   utility_id: string | null;
   asset_id: string | null;
   title: string;
+  description: string | null;
   reminder_type: ReminderType;
-  due_date: string;
+  due_date: string | null;
+  linked_type: ReminderLinkedType | null;
+  linked_id: string | null;
+  repeat_rule: string | null;
+  frequency: ReminderFrequency;
   status: ReminderStatus;
+  priority: ReminderPriority;
+  source: ReminderSource;
   visibility: VisibilityOption;
   created_at: string;
   updated_at: string;

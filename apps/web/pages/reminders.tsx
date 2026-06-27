@@ -1,98 +1,134 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { formatEnumLabel, REMINDER_LINKED_TYPES, REMINDER_STATUSES, REMINDER_TYPES } from '@home-bible/shared';
+import {
+  formatEnumLabel,
+  REMINDER_FREQUENCIES,
+  REMINDER_LINKED_TYPES,
+  REMINDER_PRIORITIES,
+  REMINDER_STATUSES,
+  REMINDER_TYPES
+} from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
+import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
+import {
+  createReminderForContext,
+  deleteReminderForContext,
+  getReminderDataContext,
+  getRemindersForContext,
+  updateReminderStatusForContext,
+  type ReminderDataContext,
+  type ReminderDataMode,
+  type ReminderFrequency,
+  type ReminderLinkedType,
+  type ReminderPriority,
+  type ReminderRow,
+  type ReminderStatus,
+  type ReminderType
+} from '../lib/reminders';
+import { getRoomsForProperty } from '../lib/rooms';
+import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
-type Reminder = {
-  id: string;
-  title: string;
-  reminder_type: string;
-  due_date: string;
-  linked_type?: string | null;
-  linked_id?: string | null;
-  repeat_rule?: string | null;
-  status: string;
-  created_at: string;
-  updated_at: string;
-};
+type LinkTypeOption = '' | ReminderLinkedType;
+type PropertyOption = { id: string; nickname: string };
+type RoomOption = { id: string; name: string };
 
-type Property = {
-  id?: string;
-  nickname?: string;
-};
-
-type Room = { id: string; name: string };
-
-type Utility = { id: string; name: string };
-
-type Asset = { id: string; name: string };
-
-function createLocalId() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
+function formatDateLabel(value: string | null) {
+  return value || 'No due date';
 }
 
 export default function RemindersPage() {
-  const [reminders, setReminders] = useState<Reminder[]>([]);
-  const [property, setProperty] = useState<Property | null>(null);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [utilities, setUtilities] = useState<Utility[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [context, setContext] = useState<ReminderDataContext | null>(null);
+  const [dataMode, setDataMode] = useState<ReminderDataMode>('demo');
+  const [property, setProperty] = useState<PropertyOption | null>(null);
+  const [reminders, setReminders] = useState<ReminderRow[]>([]);
+  const [rooms, setRooms] = useState<RoomOption[]>([]);
+  const [utilities, setUtilities] = useState<UtilityRow[]>([]);
+  const [assets, setAssets] = useState<AssetRow[]>([]);
 
   const [title, setTitle] = useState('');
-  const [reminderType, setReminderType] = useState<(typeof REMINDER_TYPES)[number]>('custom');
+  const [description, setDescription] = useState('');
+  const [reminderType, setReminderType] = useState<ReminderType>('general');
   const [dueDate, setDueDate] = useState('');
-  const [linkedType, setLinkedType] = useState<(typeof REMINDER_LINKED_TYPES)[number]>('asset');
+  const [linkedType, setLinkedType] = useState<LinkTypeOption>('');
   const [linkedId, setLinkedId] = useState('');
-  const [repeatRule, setRepeatRule] = useState('none');
-  const [status, setStatus] = useState<(typeof REMINDER_STATUSES)[number]>('open');
+  const [frequency, setFrequency] = useState<ReminderFrequency>('none');
+  const [priority, setPriority] = useState<ReminderPriority>('normal');
+  const [status, setStatus] = useState<ReminderStatus>('open');
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const storedReminders = window.localStorage.getItem('homeBible.reminders');
-    const storedProperty = window.localStorage.getItem('homeBible.activeProperty');
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
-    const storedUtilities = window.localStorage.getItem('homeBible.utilities');
-    const storedAssets = window.localStorage.getItem('homeBible.assets');
+    let isMounted = true;
 
-    if (storedReminders) {
-      setReminders(JSON.parse(storedReminders));
+    async function load() {
+      setLoading(true);
+      setError('');
+
+      try {
+        const [nextContext, assetContext, utilityContext] = await Promise.all([
+          getReminderDataContext(),
+          getAssetDataContext(),
+          getUtilityDataContext()
+        ]);
+
+        const [nextReminders, nextAssets, nextUtilities] = await Promise.all([
+          getRemindersForContext(nextContext),
+          getAssetsForContext(assetContext),
+          getUtilitiesForContext(utilityContext)
+        ]);
+
+        const nextRooms =
+          nextContext.mode === 'supabase' && nextContext.property
+            ? await getRoomsForProperty(nextContext.property.id)
+            : getDemoRooms();
+        const nextProperty =
+          nextContext.mode === 'supabase'
+            ? nextContext.property
+            : getDemoActiveProperty();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setContext(nextContext);
+        setDataMode(nextContext.mode);
+        setProperty(
+          nextProperty
+            ? {
+                id: nextProperty.id,
+                nickname: nextProperty.nickname
+              }
+            : null
+        );
+        setReminders(nextReminders);
+        setRooms(nextRooms);
+        setAssets(nextAssets);
+        setUtilities(nextUtilities);
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load reminders.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
     }
 
-    if (storedProperty) {
-      setProperty(JSON.parse(storedProperty));
-    }
+    load();
 
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
-    }
-
-    if (storedUtilities) {
-      setUtilities(JSON.parse(storedUtilities));
-    }
-
-    if (storedAssets) {
-      setAssets(JSON.parse(storedAssets));
-    }
-
-    setDueDate(new Date().toISOString().slice(0, 10));
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const linkedOptions = useMemo(() => {
     if (linkedType === 'property') {
-      if (!property) {
-        return [];
-      }
-
-      return [
-        {
-          id: property.id || 'active-property',
-          label: property.nickname || 'Current property'
-        }
-      ];
+      return property ? [{ id: property.id, label: property.nickname || 'Current property' }] : [];
     }
 
     if (linkedType === 'room') {
@@ -103,23 +139,29 @@ export default function RemindersPage() {
       return utilities.map((utility) => ({ id: utility.id, label: utility.name }));
     }
 
-    return assets.map((asset) => ({ id: asset.id, label: asset.name }));
+    if (linkedType === 'asset') {
+      return assets.map((asset) => ({ id: asset.id, label: asset.name }));
+    }
+
+    return [] as Array<{ id: string; label: string }>;
   }, [linkedType, property, rooms, utilities, assets]);
 
   useEffect(() => {
-    setLinkedId(linkedOptions[0]?.id || '');
+    setLinkedId((currentId) =>
+      linkedOptions.some((option) => option.id === currentId) ? currentId : linkedOptions[0]?.id || ''
+    );
   }, [linkedOptions]);
 
   const remindersByStatus = useMemo(
     () => ({
       open: reminders.filter((reminder) => reminder.status === 'open'),
-      snoozed: reminders.filter((reminder) => reminder.status === 'snoozed'),
-      done: reminders.filter((reminder) => reminder.status === 'done')
+      completed: reminders.filter((reminder) => reminder.status === 'completed'),
+      dismissed: reminders.filter((reminder) => reminder.status === 'dismissed')
     }),
     [reminders]
   );
 
-  const getLinkedLabel = (reminder: Reminder) => {
+  const getLinkedLabel = (reminder: ReminderRow) => {
     if (!reminder.linked_type || !reminder.linked_id) {
       return 'Not linked';
     }
@@ -139,67 +181,97 @@ export default function RemindersPage() {
     return assets.find((asset) => asset.id === reminder.linked_id)?.name || 'Asset';
   };
 
-  const saveReminders = (next: Reminder[]) => {
-    setReminders(next);
-    window.localStorage.setItem('homeBible.reminders', JSON.stringify(next));
-  };
-
-  const addReminder = (event: React.FormEvent) => {
+  const addReminder = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
+
+    if (!context) {
+      setError('Reminder storage is still loading. Please try again.');
+      return;
+    }
 
     if (!title.trim()) {
       setError('Reminder title is required.');
       return;
     }
 
-    if (!dueDate) {
-      setError('Due date is required.');
+    if (linkedType && !linkedId) {
+      setError('Choose a linked item, or set the linked type to not linked.');
       return;
     }
 
-    const newReminder: Reminder = {
-      id: createLocalId(),
-      title: title.trim(),
-      reminder_type: reminderType,
-      due_date: dueDate,
-      linked_type: linkedType || null,
-      linked_id: linkedId || null,
-      repeat_rule: repeatRule || 'none',
-      status,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
+    setSaving(true);
 
-    saveReminders([newReminder, ...reminders]);
+    try {
+      const newReminder = await createReminderForContext(context, {
+        title,
+        description,
+        reminder_type: reminderType,
+        due_date: dueDate || null,
+        linked_type: linkedType || null,
+        linked_id: linkedType ? linkedId : null,
+        frequency,
+        priority,
+        status,
+        source: 'manual'
+      });
 
-    setTitle('');
-    setReminderType('custom');
-    setDueDate(new Date().toISOString().slice(0, 10));
-    setLinkedType('asset');
-    setRepeatRule('none');
-    setStatus('open');
+      setReminders((currentReminders) => [newReminder, ...currentReminders]);
+      setTitle('');
+      setDescription('');
+      setReminderType('general');
+      setDueDate('');
+      setLinkedType('');
+      setFrequency('none');
+      setPriority('normal');
+      setStatus('open');
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save reminder.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const setReminderStatus = (id: string, nextStatus: (typeof REMINDER_STATUSES)[number]) => {
-    const updated = reminders.map((reminder) => {
-      if (reminder.id !== id) {
-        return reminder;
+  const setReminderStatus = async (id: string, nextStatus: ReminderStatus) => {
+    if (!context) return;
+
+    setActingId(id);
+    setError('');
+
+    try {
+      const updatedReminder = await updateReminderStatusForContext(context, id, nextStatus);
+
+      if (updatedReminder) {
+        setReminders((currentReminders) =>
+          currentReminders.map((reminder) =>
+            reminder.id === updatedReminder.id ? updatedReminder : reminder
+          )
+        );
       }
-
-      return {
-        ...reminder,
-        status: nextStatus,
-        updated_at: new Date().toISOString()
-      };
-    });
-
-    saveReminders(updated);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : 'Failed to update reminder.');
+    } finally {
+      setActingId(null);
+    }
   };
 
-  const removeReminder = (id: string) => {
-    saveReminders(reminders.filter((reminder) => reminder.id !== id));
+  const removeReminder = async (id: string) => {
+    if (!context) return;
+
+    setActingId(id);
+    setError('');
+
+    try {
+      await deleteReminderForContext(context, id);
+      setReminders((currentReminders) => currentReminders.filter((reminder) => reminder.id !== id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete reminder.');
+    } finally {
+      setActingId(null);
+    }
   };
+
+  const formDisabled = loading || saving || (dataMode === 'supabase' && !context?.property);
 
   return (
     <>
@@ -209,70 +281,156 @@ export default function RemindersPage() {
       />
 
       <Card>
+        <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          {dataMode === 'supabase'
+            ? 'Signed-in mode: reminders save to Supabase.'
+            : 'Demo mode: reminders save to localStorage.'}
+        </p>
+        {error ? (
+          <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            {error}
+          </p>
+        ) : null}
+      </Card>
+
+      <Card>
         <h2 style={{ marginTop: 0 }}>Add reminder</h2>
-        <form onSubmit={addReminder} style={{ display: 'grid', gap: 12 }}>
-          {error && (
-            <div
-              style={{
-                padding: 10,
-                borderRadius: 8,
-                background: '#fef2f2',
-                border: '1px solid #fecaca',
-                color: '#991b1b'
-              }}
-            >
-              {error}
-            </div>
-          )}
-
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontWeight: 600 }}>Title</span>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Change HVAC filter"
-              style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
-            />
-          </label>
-
-          <div
-            style={{
-              display: 'grid',
-              gap: 12,
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'
-            }}
-          >
+        {dataMode === 'supabase' && !context?.property ? (
+          <div>
+            <p style={{ color: '#6b7280' }}>Create a property before adding Supabase reminders.</p>
+            <Link href="/create-property">
+              <Button type="button">Create property</Button>
+            </Link>
+          </div>
+        ) : (
+          <form onSubmit={addReminder} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Reminder type</span>
-              <select
-                value={reminderType}
-                onChange={(e) => setReminderType(e.target.value as (typeof REMINDER_TYPES)[number])}
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
-              >
-                {REMINDER_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {formatEnumLabel(type)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Due date</span>
+              <span style={{ fontWeight: 600 }}>Title</span>
               <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
+                type="text"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="Change HVAC filter"
+                disabled={formDisabled}
                 style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
               />
             </label>
 
             <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Description</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Optional notes"
+                disabled={formDisabled}
+                rows={3}
+                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db', resize: 'vertical' }}
+              />
+            </label>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Reminder type</span>
+                <select
+                  value={reminderType}
+                  onChange={(event) => setReminderType(event.target.value as ReminderType)}
+                  disabled={formDisabled}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                >
+                  {REMINDER_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {formatEnumLabel(type)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Due date</span>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(event) => setDueDate(event.target.value)}
+                  disabled={formDisabled}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Frequency</span>
+                <select
+                  value={frequency}
+                  onChange={(event) => setFrequency(event.target.value as ReminderFrequency)}
+                  disabled={formDisabled}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                >
+                  {REMINDER_FREQUENCIES.map((option) => (
+                    <option key={option} value={option}>
+                      {formatEnumLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Linked type</span>
+                <select
+                  value={linkedType}
+                  onChange={(event) => setLinkedType(event.target.value as LinkTypeOption)}
+                  disabled={formDisabled}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                >
+                  <option value="">Not linked</option>
+                  {REMINDER_LINKED_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {formatEnumLabel(type)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Linked item</span>
+                <select
+                  value={linkedId}
+                  onChange={(event) => setLinkedId(event.target.value)}
+                  disabled={formDisabled || !linkedType}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                >
+                  <option value="">Not linked</option>
+                  {linkedOptions.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Priority</span>
+                <select
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value as ReminderPriority)}
+                  disabled={formDisabled}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                >
+                  {REMINDER_PRIORITIES.map((option) => (
+                    <option key={option} value={option}>
+                      {formatEnumLabel(option)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label style={{ display: 'grid', gap: 6, maxWidth: 260 }}>
               <span style={{ fontWeight: 600 }}>Status</span>
               <select
                 value={status}
-                onChange={(e) => setStatus(e.target.value as (typeof REMINDER_STATUSES)[number])}
+                onChange={(event) => setStatus(event.target.value as ReminderStatus)}
+                disabled={formDisabled}
                 style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
               >
                 {REMINDER_STATUSES.map((statusOption) => (
@@ -282,166 +440,127 @@ export default function RemindersPage() {
                 ))}
               </select>
             </label>
-          </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gap: 12,
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'
-            }}
-          >
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Linked type</span>
-              <select
-                value={linkedType}
-                onChange={(e) => setLinkedType(e.target.value as (typeof REMINDER_LINKED_TYPES)[number])}
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
-              >
-                {REMINDER_LINKED_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {formatEnumLabel(type)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Linked item</span>
-              <select
-                value={linkedId}
-                onChange={(e) => setLinkedId(e.target.value)}
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
-              >
-                <option value="">Not linked</option>
-                {linkedOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Repeat rule</span>
-              <input
-                type="text"
-                value={repeatRule}
-                onChange={(e) => setRepeatRule(e.target.value)}
-                placeholder="none"
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
-              />
-            </label>
-          </div>
-
-          <div>
-            <Button type="submit">Save reminder</Button>
-          </div>
-        </form>
+            <div>
+              <Button type="submit" disabled={formDisabled}>
+                {saving ? 'Saving...' : 'Save reminder'}
+              </Button>
+            </div>
+          </form>
+        )}
       </Card>
 
       <Card>
         <h2 style={{ marginTop: 0 }}>Reminder summary</h2>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <UtilityBadge label={`${remindersByStatus.open.length} open`} />
-          <UtilityBadge label={`${remindersByStatus.snoozed.length} snoozed`} />
-          <UtilityBadge label={`${remindersByStatus.done.length} done`} />
+          <UtilityBadge label={`${remindersByStatus.completed.length} completed`} />
+          <UtilityBadge label={`${remindersByStatus.dismissed.length} dismissed`} />
         </div>
       </Card>
 
-      {reminders.length === 0 ? (
+      {loading ? (
+        <Card>
+          <p style={{ color: '#6b7280', margin: 0 }}>Loading reminders...</p>
+        </Card>
+      ) : reminders.length === 0 ? (
         <Card>
           <h3 style={{ marginTop: 0 }}>No reminders yet</h3>
           <p style={{ color: '#6b7280' }}>Add your first reminder to track upcoming home tasks.</p>
         </Card>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
-          {reminders
-            .slice()
-            .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
-            .map((reminder) => (
-              <Card key={reminder.id}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12 }}>
-                  <div>
-                    <h3 style={{ margin: '0 0 8px 0' }}>{reminder.title}</h3>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                      <UtilityBadge label={formatEnumLabel(reminder.reminder_type)} />
-                      <UtilityBadge label={formatEnumLabel(reminder.status)} />
-                      {reminder.linked_type && <UtilityBadge label={formatEnumLabel(reminder.linked_type)} />}
-                    </div>
-                    <div style={{ color: '#6b7280', fontSize: '0.9rem' }}>
-                      <div>
-                        <strong>Due:</strong> {reminder.due_date}
-                      </div>
-                      <div>
-                        <strong>Linked:</strong> {getLinkedLabel(reminder)}
-                      </div>
-                      {reminder.repeat_rule && reminder.repeat_rule !== 'none' && (
-                        <div>
-                          <strong>Repeat:</strong> {reminder.repeat_rule}
-                        </div>
-                      )}
-                    </div>
+          {reminders.map((reminder) => (
+            <Card key={reminder.id}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12 }}>
+                <div>
+                  <h3 style={{ margin: '0 0 8px 0' }}>{reminder.title}</h3>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                    <UtilityBadge label={formatEnumLabel(reminder.reminder_type)} />
+                    <UtilityBadge label={formatEnumLabel(reminder.status)} />
+                    <UtilityBadge label={formatEnumLabel(reminder.priority)} />
+                    {reminder.linked_type && <UtilityBadge label={formatEnumLabel(reminder.linked_type)} />}
                   </div>
-
-                  <div style={{ display: 'grid', gap: 6, alignContent: 'start' }}>
-                    <button
-                      type="button"
-                      onClick={() => setReminderStatus(reminder.id, 'open')}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 6,
-                        border: '1px solid #d1d5db',
-                        background: '#ffffff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Mark open
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReminderStatus(reminder.id, 'snoozed')}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 6,
-                        border: '1px solid #d1d5db',
-                        background: '#ffffff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Snooze
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setReminderStatus(reminder.id, 'done')}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 6,
-                        border: '1px solid #d1d5db',
-                        background: '#ffffff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Mark done
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeReminder(reminder.id)}
-                      style={{
-                        padding: '8px 10px',
-                        borderRadius: 6,
-                        border: '1px solid #fecaca',
-                        background: '#fef2f2',
-                        color: '#b91c1c',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Delete
-                    </button>
+                  <div style={{ color: '#6b7280', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                    <div>
+                      <strong>Due:</strong> {formatDateLabel(reminder.due_date)}
+                    </div>
+                    <div>
+                      <strong>Linked:</strong> {getLinkedLabel(reminder)}
+                    </div>
+                    {reminder.frequency !== 'none' && (
+                      <div>
+                        <strong>Frequency:</strong> {formatEnumLabel(reminder.frequency)}
+                      </div>
+                    )}
+                    {reminder.description && (
+                      <div style={{ marginTop: 4, color: '#4b5563' }}>{reminder.description}</div>
+                    )}
                   </div>
                 </div>
-              </Card>
-            ))}
+
+                <div style={{ display: 'grid', gap: 6, alignContent: 'start' }}>
+                  <button
+                    type="button"
+                    onClick={() => setReminderStatus(reminder.id, 'open')}
+                    disabled={actingId === reminder.id}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #d1d5db',
+                      background: '#ffffff',
+                      cursor: actingId === reminder.id ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Mark open
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReminderStatus(reminder.id, 'completed')}
+                    disabled={actingId === reminder.id}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #d1d5db',
+                      background: '#ffffff',
+                      cursor: actingId === reminder.id ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Complete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setReminderStatus(reminder.id, 'dismissed')}
+                    disabled={actingId === reminder.id}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #d1d5db',
+                      background: '#ffffff',
+                      cursor: actingId === reminder.id ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeReminder(reminder.id)}
+                    disabled={actingId === reminder.id}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      border: '1px solid #fecaca',
+                      background: '#fef2f2',
+                      color: '#b91c1c',
+                      cursor: actingId === reminder.id ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </Card>
+          ))}
         </div>
       )}
 

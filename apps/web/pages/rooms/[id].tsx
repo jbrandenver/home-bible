@@ -6,6 +6,7 @@ import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
 import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
 import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
+import { getReminderDataContext, getRemindersForRoom, type ReminderRow } from '../../lib/reminders';
 import { getRoomById } from '../../lib/rooms';
 import { getUtilitiesForRoom, getUtilityDataContext, type UtilityRow } from '../../lib/utilities';
 
@@ -14,16 +15,6 @@ type Room = {
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type Reminder = {
-  id: string;
-  title: string;
-  reminder_type: string;
-  due_date: string;
-  linked_type?: string | null;
-  linked_id?: string | null;
-  status: string;
 };
 
 type ServiceRecord = TrendServiceRecord & {
@@ -51,11 +42,12 @@ export default function RoomDetailPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [utilityError, setUtilityError] = useState('');
   const [assetError, setAssetError] = useState('');
+  const [reminderError, setReminderError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -67,13 +59,16 @@ export default function RoomDetailPage() {
 
       setUtilityError('');
       setAssetError('');
+      setReminderError('');
 
-      const [utilityContext, assetContext] = await Promise.all([
+      const [utilityContext, assetContext, reminderContext] = await Promise.all([
         getUtilityDataContext(),
-        getAssetDataContext()
+        getAssetDataContext(),
+        getReminderDataContext()
       ]);
       let nextUtilities: UtilityRow[] = [];
       let nextAssets: AssetRow[] = [];
+      let nextReminders: ReminderRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForRoom(utilityContext, roomId);
@@ -88,6 +83,14 @@ export default function RoomDetailPage() {
       } catch (loadError) {
         if (isMounted) {
           setAssetError(loadError instanceof Error ? loadError.message : 'Failed to load room assets.');
+        }
+      }
+
+      try {
+        nextReminders = await getRemindersForRoom(reminderContext, roomId);
+      } catch (loadError) {
+        if (isMounted) {
+          setReminderError(loadError instanceof Error ? loadError.message : 'Failed to load room reminders.');
         }
       }
 
@@ -122,7 +125,7 @@ export default function RoomDetailPage() {
 
       setUtilities(nextUtilities);
       setAssets(nextAssets);
-      setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
+      setReminders(nextReminders);
       setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
       setIssues(getDemoCollection<Issue>('homeBible.issues'));
     }
@@ -147,7 +150,12 @@ export default function RoomDetailPage() {
   }, [assets, roomId]);
 
   const roomReminders = useMemo(
-    () => reminders.filter((reminder) => reminder.linked_type === 'room' && reminder.linked_id === roomId),
+    () =>
+      reminders.filter(
+        (reminder) =>
+          reminder.room_id === roomId ||
+          (reminder.linked_type === 'room' && reminder.linked_id === roomId)
+      ),
     [reminders, roomId]
   );
 
@@ -217,8 +225,8 @@ export default function RoomDetailPage() {
           </div>
           <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities and assets for this room are loaded from Supabase.'
-              : 'Demo mode: utilities and assets for this room are loaded from localStorage.'}
+              ? 'Signed-in mode: utilities, assets, and reminders for this room are loaded from Supabase.'
+              : 'Demo mode: utilities, assets, and reminders for this room are loaded from localStorage.'}
           </p>
           {utilityError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -228,6 +236,11 @@ export default function RoomDetailPage() {
           {assetError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {assetError}
+            </p>
+          ) : null}
+          {reminderError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {reminderError}
             </p>
           ) : null}
         </Card>
@@ -400,7 +413,7 @@ export default function RoomDetailPage() {
                 >
                   <div style={{ fontWeight: 600 }}>{reminder.title}</div>
                   <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                    {reminder.due_date} • {formatEnumLabel(reminder.status)} •{' '}
+                    {reminder.due_date || 'No due date'} • {formatEnumLabel(reminder.status)} •{' '}
                     {formatEnumLabel(reminder.reminder_type)}
                   </div>
                 </div>

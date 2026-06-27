@@ -4,6 +4,7 @@ import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, FloorSection, RoomCard, UtilityBadge } from '@home-bible/ui';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
+import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { getRoomsForProperty } from '../lib/rooms';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
@@ -21,8 +22,10 @@ export default function HomeMapPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
+  const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [utilityError, setUtilityError] = useState('');
   const [assetError, setAssetError] = useState('');
+  const [reminderError, setReminderError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -30,13 +33,16 @@ export default function HomeMapPage() {
     async function load() {
       setUtilityError('');
       setAssetError('');
+      setReminderError('');
 
-      const [utilityContext, assetContext] = await Promise.all([
+      const [utilityContext, assetContext, reminderContext] = await Promise.all([
         getUtilityDataContext(),
-        getAssetDataContext()
+        getAssetDataContext(),
+        getReminderDataContext()
       ]);
       let nextUtilities: UtilityRow[] = [];
       let nextAssets: AssetRow[] = [];
+      let nextReminders: ReminderRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForContext(utilityContext);
@@ -54,6 +60,14 @@ export default function HomeMapPage() {
         }
       }
 
+      try {
+        nextReminders = await getRemindersForContext(reminderContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setReminderError(loadError instanceof Error ? loadError.message : 'Failed to load reminders.');
+        }
+      }
+
       if (!isMounted) {
         return;
       }
@@ -61,6 +75,7 @@ export default function HomeMapPage() {
       setDataMode(utilityContext.mode);
       setUtilities(nextUtilities);
       setAssets(nextAssets);
+      setReminders(nextReminders);
 
       if (utilityContext.mode === 'supabase') {
         setHasProperty(Boolean(utilityContext.property));
@@ -124,6 +139,18 @@ export default function HomeMapPage() {
     }, {});
   }, [assets]);
 
+  const reminderCountsByRoom = useMemo(() => {
+    return reminders.reduce<Record<string, number>>((acc, reminder) => {
+      const roomId = reminder.room_id || (reminder.linked_type === 'room' ? reminder.linked_id : null);
+      if (!roomId) {
+        return acc;
+      }
+
+      acc[roomId] = (acc[roomId] || 0) + 1;
+      return acc;
+    }, {});
+  }, [reminders]);
+
   return (
     <>
       <PageHeader
@@ -139,11 +166,12 @@ export default function HomeMapPage() {
               <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${reminders.length} reminder${reminders.length === 1 ? '' : 's'}`} />
             </div>
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, and assets are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, and assets are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, assets, and reminders are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, assets, and reminders are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -153,6 +181,11 @@ export default function HomeMapPage() {
             {assetError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {assetError}
+              </p>
+            ) : null}
+            {reminderError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {reminderError}
               </p>
             ) : null}
           </Card>
@@ -186,7 +219,7 @@ export default function HomeMapPage() {
                   >
                     <RoomCard
                       name={room.name}
-                      type={`${formatEnumLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'}`}
+                      type={`${formatEnumLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'} • ${reminderCountsByRoom[room.id] || 0} reminder${reminderCountsByRoom[room.id] === 1 ? '' : 's'}`}
                     />
                   </Link>
                 ))}

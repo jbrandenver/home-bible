@@ -10,6 +10,11 @@ import {
   type AssetDataMode,
   type AssetRow
 } from '../lib/assets';
+import {
+  createReminderForContext,
+  getReminderDataContext,
+  type ReminderDataContext
+} from '../lib/reminders';
 
 function getWarrantyMeta(asset: AssetRow): {
   status: 'active' | 'expiring_soon' | 'expired' | 'unknown';
@@ -85,12 +90,15 @@ function getStatusTextColor(status: string): string {
 
 export default function WarrantiesPage() {
   const [context, setContext] = useState<AssetDataContext | null>(null);
+  const [reminderContext, setReminderContext] = useState<ReminderDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [savingAssetId, setSavingAssetId] = useState<string | null>(null);
+  const [savingReminderAssetId, setSavingReminderAssetId] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     purchase_date: '',
     warranty_length_months: '',
@@ -105,9 +113,13 @@ export default function WarrantiesPage() {
     async function load() {
       setLoading(true);
       setError('');
+      setNotice('');
 
       try {
-        const nextContext = await getAssetDataContext();
+        const [nextContext, nextReminderContext] = await Promise.all([
+          getAssetDataContext(),
+          getReminderDataContext()
+        ]);
         const nextAssets = await getAssetsForContext(nextContext);
 
         if (!isMounted) {
@@ -115,6 +127,7 @@ export default function WarrantiesPage() {
         }
 
         setContext(nextContext);
+        setReminderContext(nextReminderContext);
         setDataMode(nextContext.mode);
         setAssets(nextAssets);
       } catch (loadError) {
@@ -188,6 +201,48 @@ export default function WarrantiesPage() {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save warranty changes.');
     } finally {
       setSavingAssetId(null);
+    }
+  };
+
+  const createWarrantyReminder = async (asset: AssetRow) => {
+    if (!reminderContext) {
+      setError('Reminder storage is still loading. Please try again.');
+      return;
+    }
+
+    const warrantyMeta = getWarrantyMeta(asset);
+    if (!warrantyMeta.expirationDate) {
+      setError('Add a warranty expiration date before creating a warranty reminder.');
+      return;
+    }
+
+    setSavingReminderAssetId(asset.id);
+    setError('');
+    setNotice('');
+
+    try {
+      await createReminderForContext(reminderContext, {
+        title: `Review warranty for ${asset.name}`,
+        description: `Warranty reminder created from the warranty tracker for ${asset.name}.`,
+        reminder_type: 'warranty',
+        due_date: warrantyMeta.expirationDate,
+        linked_type: 'asset',
+        linked_id: asset.id,
+        asset_id: asset.id,
+        frequency: 'none',
+        status: 'open',
+        priority:
+          warrantyMeta.daysRemaining !== null && warrantyMeta.daysRemaining <= 30
+            ? 'high'
+            : 'normal',
+        source: 'warranty'
+      });
+
+      setNotice(`Warranty reminder created for ${asset.name}.`);
+    } catch (reminderError) {
+      setError(reminderError instanceof Error ? reminderError.message : 'Failed to create warranty reminder.');
+    } finally {
+      setSavingReminderAssetId(null);
     }
   };
 
@@ -360,6 +415,13 @@ export default function WarrantiesPage() {
                     <Button type="button" onClick={() => startEditing(asset)}>
                       Edit warranty
                     </Button>
+                    <Button
+                      type="button"
+                      onClick={() => createWarrantyReminder(asset)}
+                      disabled={savingReminderAssetId === asset.id}
+                    >
+                      {savingReminderAssetId === asset.id ? 'Saving...' : 'Add reminder'}
+                    </Button>
                     <Link href={`/assets/${asset.id}`}>
                       <Button type="button">View</Button>
                     </Link>
@@ -398,12 +460,17 @@ export default function WarrantiesPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: warranty data is read from Supabase assets.'
-              : 'Demo mode: warranty data is read from localStorage assets.'}
+              ? 'Signed-in mode: warranty data is read from Supabase assets and reminders save to Supabase.'
+              : 'Demo mode: warranty data is read from localStorage assets and reminders save to localStorage.'}
           </p>
           {error ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {error}
+            </p>
+          ) : null}
+          {notice ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#065f46', fontWeight: 700 }}>
+              {notice}
             </p>
           ) : null}
         </Card>

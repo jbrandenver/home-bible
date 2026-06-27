@@ -5,6 +5,7 @@ import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../components/trendFlags';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoCollection, getDemoRooms } from '../lib/demoStorage';
+import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { getFloorsForProperty, getRoomsForProperty } from '../lib/rooms';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
@@ -13,15 +14,6 @@ type Room = {
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type Reminder = {
-  id: string;
-  title: string;
-  due_date: string;
-  status: 'open' | 'done' | 'snoozed' | string;
-  linked_type?: string | null;
-  reminder_type: string;
 };
 
 type ServiceRecord = TrendServiceRecord & {
@@ -70,12 +62,13 @@ export default function DashboardPage() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [floorCount, setFloorCount] = useState(0);
   const [utilityError, setUtilityError] = useState('');
   const [assetError, setAssetError] = useState('');
+  const [reminderError, setReminderError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -83,13 +76,16 @@ export default function DashboardPage() {
     async function load() {
       setUtilityError('');
       setAssetError('');
+      setReminderError('');
 
-      const [utilityContext, assetContext] = await Promise.all([
+      const [utilityContext, assetContext, reminderContext] = await Promise.all([
         getUtilityDataContext(),
-        getAssetDataContext()
+        getAssetDataContext(),
+        getReminderDataContext()
       ]);
       let nextUtilities: UtilityRow[] = [];
       let nextAssets: AssetRow[] = [];
+      let nextReminders: ReminderRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForContext(utilityContext);
@@ -107,6 +103,14 @@ export default function DashboardPage() {
         }
       }
 
+      try {
+        nextReminders = await getRemindersForContext(reminderContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setReminderError(loadError instanceof Error ? loadError.message : 'Failed to load reminders.');
+        }
+      }
+
       if (!isMounted) {
         return;
       }
@@ -114,6 +118,7 @@ export default function DashboardPage() {
       setDataMode(utilityContext.mode);
       setUtilities(nextUtilities);
       setAssets(nextAssets);
+      setReminders(nextReminders);
 
       if (utilityContext.mode === 'supabase') {
         setHasProperty(Boolean(utilityContext.property));
@@ -153,7 +158,6 @@ export default function DashboardPage() {
         setFloorCount(Array.from(new Set(demoRooms.map((room) => room.floor_name))).length);
       }
 
-      setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
       setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
       setIssues(getDemoCollection<Issue>('homeBible.issues'));
     }
@@ -191,8 +195,8 @@ export default function DashboardPage() {
   const reminderSummary = useMemo(
     () => ({
       open: reminders.filter((reminder) => reminder.status === 'open').length,
-      snoozed: reminders.filter((reminder) => reminder.status === 'snoozed').length,
-      done: reminders.filter((reminder) => reminder.status === 'done').length
+      completed: reminders.filter((reminder) => reminder.status === 'completed').length,
+      dismissed: reminders.filter((reminder) => reminder.status === 'dismissed').length
     }),
     [reminders]
   );
@@ -200,9 +204,13 @@ export default function DashboardPage() {
   const upcomingReminders = useMemo(
     () =>
       reminders
-        .filter((reminder) => reminder.status !== 'done')
+        .filter((reminder) => reminder.status === 'open')
         .slice()
-        .sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime())
+        .sort((a, b) => {
+          const aDue = a.due_date ? new Date(a.due_date).getTime() : Number.POSITIVE_INFINITY;
+          const bDue = b.due_date ? new Date(b.due_date).getTime() : Number.POSITIVE_INFINITY;
+          return aDue - bDue;
+        })
         .slice(0, 4),
     [reminders]
   );
@@ -244,8 +252,8 @@ export default function DashboardPage() {
 
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, and assets are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, and assets are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, assets, and reminders are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, assets, and reminders are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -255,6 +263,11 @@ export default function DashboardPage() {
             {assetError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {assetError}
+              </p>
+            ) : null}
+            {reminderError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {reminderError}
               </p>
             ) : null}
 
@@ -350,8 +363,8 @@ export default function DashboardPage() {
             <h2 style={{ marginTop: 0 }}>Reminder summary</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
               <UtilityBadge label={`${reminderSummary.open} open`} />
-              <UtilityBadge label={`${reminderSummary.snoozed} snoozed`} />
-              <UtilityBadge label={`${reminderSummary.done} done`} />
+              <UtilityBadge label={`${reminderSummary.completed} completed`} />
+              <UtilityBadge label={`${reminderSummary.dismissed} dismissed`} />
             </div>
 
             {upcomingReminders.length === 0 ? (
@@ -370,7 +383,7 @@ export default function DashboardPage() {
                   >
                     <div style={{ fontWeight: 600 }}>{reminder.title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                      {reminder.due_date} • {formatEnumLabel(reminder.reminder_type)}
+                      {reminder.due_date || 'No due date'} • {formatEnumLabel(reminder.reminder_type)}
                     </div>
                   </div>
                 ))}
