@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { ASSET_TYPES, formatEnumLabel, VISIBILITY_OPTIONS } from '@home-bible/shared';
 import { PageHeader, Card, Button } from '@home-bible/ui';
+import {
+  createAssetForContext,
+  getAssetDataContext,
+  type AssetDataContext,
+  type AssetDataMode
+} from '../lib/assets';
+import { getSupabaseSetupMessage } from '../lib/auth';
+import { getDemoRooms } from '../lib/demoStorage';
+import { getRoomsForProperty } from '../lib/rooms';
 
 type Room = {
   id: string;
@@ -29,8 +38,11 @@ type AssetFormData = {
 export default function AddAssetPage() {
   const router = useRouter();
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [context, setContext] = useState<AssetDataContext | null>(null);
+  const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [roomsLoading, setRoomsLoading] = useState(true);
 
   const [form, setForm] = useState<AssetFormData>({
     asset_type: 'appliance',
@@ -51,25 +63,49 @@ export default function AddAssetPage() {
   });
 
   useEffect(() => {
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
+    let isMounted = true;
+
+    async function load() {
+      setRoomsLoading(true);
+      setError('');
+
+      try {
+        const nextContext = await getAssetDataContext();
+        const roomList =
+          nextContext.mode === 'supabase' && nextContext.property
+            ? await getRoomsForProperty(nextContext.property.id)
+            : getDemoRooms();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setContext(nextContext);
+        setDataMode(nextContext.mode);
+        setRooms(roomList.map((room) => ({ id: room.id, name: room.name })));
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load rooms.');
+        }
+      } finally {
+        if (isMounted) {
+          setRoomsLoading(false);
+        }
+      }
     }
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const handleInputChange = (field: keyof AssetFormData, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const generateUUID = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-      const r = (Math.random() * 16) | 0;
-      const v = c === 'x' ? r : (r & 0x3) | 0x8;
-      return v.toString(16);
-    });
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -80,14 +116,16 @@ export default function AddAssetPage() {
       return;
     }
 
-    try {
-      const storedAssets = window.localStorage.getItem('homeBible.assets');
-      const assets = storedAssets ? JSON.parse(storedAssets) : [];
+    if (!context) {
+      setError('Asset storage is still loading. Please try again.');
+      setLoading(false);
+      return;
+    }
 
-      const newAsset = {
-        id: generateUUID(),
+    try {
+      await createAssetForContext(context, {
         asset_type: form.asset_type,
-        name: form.name,
+        name: form.name.trim(),
         brand: form.brand || null,
         model: form.model || null,
         serial_number: form.serial_number || null,
@@ -100,17 +138,12 @@ export default function AddAssetPage() {
         support_url: form.support_url || null,
         notes: form.notes || null,
         room_id: form.room_id || null,
-        visibility: form.visibility,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-
-      assets.push(newAsset);
-      window.localStorage.setItem('homeBible.assets', JSON.stringify(assets));
+        visibility: form.visibility
+      });
 
       router.push('/assets');
     } catch (err) {
-      setError('Failed to save asset');
+      setError(err instanceof Error ? err.message : 'Failed to save asset');
       setLoading(false);
     }
   };
@@ -131,8 +164,27 @@ export default function AddAssetPage() {
     <>
       <PageHeader title="Add Asset" description="Track appliances, tools, and other home items" />
 
-      <Card>
-        <form onSubmit={handleSubmit}>
+      <div style={{ display: 'grid', gap: 24 }}>
+        <Card>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode: this asset will save to Supabase.'
+              : 'Demo mode: this asset will save to localStorage only.'}
+          </p>
+          {dataMode === 'demo' && !context?.supabaseConfigured ? (
+            <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
+              {getSupabaseSetupMessage()}
+            </p>
+          ) : null}
+          {dataMode === 'supabase' && context && !context.property ? (
+            <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
+              Create a property before adding assets to Supabase.
+            </p>
+          ) : null}
+        </Card>
+
+        <Card>
+          <form onSubmit={handleSubmit}>
           {error && (
             <div
               style={{
@@ -187,8 +239,9 @@ export default function AddAssetPage() {
                     value={form.room_id}
                     onChange={(e) => handleInputChange('room_id', e.target.value)}
                     style={inputStyles.input as React.CSSProperties}
+                    disabled={roomsLoading}
                   >
-                    <option value="">No room selected</option>
+                    <option value="">{roomsLoading ? 'Loading rooms...' : 'No room selected'}</option>
                     {rooms.map((room) => (
                       <option key={room.id} value={room.id}>
                         {room.name}
@@ -378,7 +431,7 @@ export default function AddAssetPage() {
 
             {/* Form Actions */}
             <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
-              <Button type="submit">
+              <Button type="submit" disabled={loading || roomsLoading}>
                 {loading ? 'Saving...' : 'Save Asset'}
               </Button>
 
@@ -399,8 +452,9 @@ export default function AddAssetPage() {
               </button>
             </div>
           </div>
-        </form>
-      </Card>
+          </form>
+        </Card>
+      </div>
     </>
   );
 }

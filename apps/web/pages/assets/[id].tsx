@@ -4,28 +4,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
-
-type Asset = {
-  id: string;
-  asset_type: string;
-  name: string;
-  brand?: string;
-  model?: string;
-  serial_number?: string;
-  purchase_date?: string;
-  purchase_price?: number;
-  retailer?: string;
-  warranty_length_months?: number;
-  warranty_expires_at?: string;
-  manual_url?: string;
-  support_url?: string;
-  notes?: string;
-  room_id?: string;
-  room_name?: string;
-  visibility?: string;
-  created_at?: string;
-  updated_at?: string;
-};
+import {
+  deleteAssetForContext,
+  getAssetByIdForContext,
+  getAssetDataContext,
+  type AssetDataContext,
+  type AssetDataMode,
+  type AssetRow
+} from '../../lib/assets';
+import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
+import { getRoomsForProperty } from '../../lib/rooms';
 
 type Reminder = {
   id: string;
@@ -61,13 +49,20 @@ type Room = {
 export default function AssetDetailPage() {
   const router = useRouter();
   const { id } = router.query;
+  const assetId = typeof id === 'string' ? id : '';
 
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [context, setContext] = useState<AssetDataContext | null>(null);
+  const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
+  const [asset, setAsset] = useState<AssetRow | null>(null);
+  const [roomName, setRoomName] = useState<string | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
-  const getWarrantyMeta = (assetItem: Asset) => {
+  const getWarrantyMeta = (assetItem: AssetRow) => {
     let expirationDate: Date | null = null;
 
     if (assetItem.warranty_expires_at) {
@@ -108,65 +103,117 @@ export default function AssetDetailPage() {
   };
 
   useEffect(() => {
-    const storedAssets = window.localStorage.getItem('homeBible.assets');
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
-    const storedReminders = window.localStorage.getItem('homeBible.reminders');
-    const storedServiceRecords = window.localStorage.getItem('homeBible.serviceRecords');
-    const storedIssues = window.localStorage.getItem('homeBible.issues');
+    let isMounted = true;
 
-    if (storedAssets) {
-      const parsedAssets = JSON.parse(storedAssets);
-      const parsedRooms = storedRooms ? JSON.parse(storedRooms) : [];
+    async function load() {
+      if (!assetId) {
+        return;
+      }
 
-      const assetsWithRoomNames = parsedAssets.map((asset: Asset) => {
-        const room = parsedRooms.find((r: Room) => r.id === asset.room_id);
-        return { ...asset, room_name: room?.name };
-      });
+      setLoading(true);
+      setError('');
 
-      setAssets(assetsWithRoomNames);
+      try {
+        const nextContext = await getAssetDataContext();
+        const nextAsset = await getAssetByIdForContext(nextContext, assetId);
+        const roomList =
+          nextContext.mode === 'supabase' && nextContext.property
+            ? await getRoomsForProperty(nextContext.property.id)
+            : getDemoRooms();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setContext(nextContext);
+        setDataMode(nextContext.mode);
+        setAsset(nextAsset);
+        setRoomName(
+          nextAsset?.room_id
+            ? roomList.find((room: Room) => room.id === nextAsset.room_id)?.name || 'Unknown room'
+            : null
+        );
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load asset.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+
+      if (isMounted) {
+        setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
+        setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
+        setIssues(getDemoCollection<Issue>('homeBible.issues'));
+      }
     }
 
-    if (storedReminders) {
-      setReminders(JSON.parse(storedReminders));
-    }
+    load();
 
-    if (storedServiceRecords) {
-      setServiceRecords(JSON.parse(storedServiceRecords));
-    }
-
-    if (storedIssues) {
-      setIssues(JSON.parse(storedIssues));
-    }
-  }, []);
-
-  const asset = useMemo(() => {
-    return assets.find((a) => a.id === id);
-  }, [assets, id]);
+    return () => {
+      isMounted = false;
+    };
+  }, [assetId]);
 
   const linkedReminders = useMemo(
-    () => reminders.filter((reminder) => reminder.linked_type === 'asset' && reminder.linked_id === id),
-    [reminders, id]
+    () => reminders.filter((reminder) => reminder.linked_type === 'asset' && reminder.linked_id === assetId),
+    [reminders, assetId]
   );
 
   const linkedServiceRecords = useMemo(
-    () => serviceRecords.filter((record) => record.asset_id === id),
-    [serviceRecords, id]
+    () => serviceRecords.filter((record) => record.asset_id === assetId),
+    [serviceRecords, assetId]
   );
 
   const linkedIssues = useMemo(
-    () => issues.filter((issue) => issue.asset_id === id),
-    [issues, id]
+    () => issues.filter((issue) => issue.asset_id === assetId),
+    [issues, assetId]
   );
 
   const trendFlags = useMemo(() => detectTrendFlags(serviceRecords, issues), [serviceRecords, issues]);
-  const assetTrendFlags = useMemo(() => trendFlagsForEntity(trendFlags, 'asset', String(id)), [trendFlags, id]);
+  const assetTrendFlags = useMemo(() => trendFlagsForEntity(trendFlags, 'asset', assetId), [trendFlags, assetId]);
 
-  const handleDelete = () => {
-    if (!asset) return;
-    const updated = assets.filter((a) => a.id !== asset.id);
-    window.localStorage.setItem('homeBible.assets', JSON.stringify(updated));
-    router.push('/assets');
+  const handleDelete = async () => {
+    if (!asset || !context) return;
+
+    setDeleting(true);
+    setError('');
+
+    try {
+      await deleteAssetForContext(context, asset.id);
+      router.push('/assets');
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete asset.');
+      setDeleting(false);
+    }
   };
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader title="Asset" />
+        <Card>
+          <p style={{ color: '#6b7280', margin: 0 }}>Loading asset...</p>
+        </Card>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <PageHeader title="Asset error" />
+        <Card>
+          <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p>
+          <Link href="/assets">
+            <Button type="button">Back to assets</Button>
+          </Link>
+        </Card>
+      </>
+    );
+  }
 
   if (!asset) {
     return (
@@ -174,7 +221,12 @@ export default function AssetDetailPage() {
         <PageHeader title="Asset not found" />
         <Card>
           <p style={{ color: '#6b7280' }}>
-            This asset may not exist yet, or your local setup data was cleared.
+            This asset may not exist yet, or your setup data was cleared.
+          </p>
+          <p style={{ color: '#6b7280', marginTop: 8 }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode is active. If this asset was removed, it will no longer appear.'
+              : 'Demo mode is active. Add assets from the asset flow to continue.'}
           </p>
           <Link href="/assets">
             <Button type="button">Back to assets</Button>
@@ -194,6 +246,14 @@ export default function AssetDetailPage() {
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
+        <Card>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode: this asset is loaded from Supabase.'
+              : 'Demo mode: this asset is loaded from localStorage.'}
+          </p>
+        </Card>
+
         {/* Summary Card */}
         <Card>
           <h2 style={{ marginTop: 0 }}>Asset Information</h2>
@@ -203,9 +263,9 @@ export default function AssetDetailPage() {
               <strong>Type:</strong> {formatEnumLabel(asset.asset_type)}
             </div>
 
-            {asset.room_name && (
+            {roomName && (
               <div>
-                <strong>Location:</strong> {asset.room_name}
+                <strong>Location:</strong> {roomName}
               </div>
             )}
 
@@ -451,17 +511,19 @@ export default function AssetDetailPage() {
 
           <button
             onClick={handleDelete}
+            disabled={deleting}
             style={{
               padding: '10px 16px',
               backgroundColor: '#fee2e2',
               color: '#dc2626',
               border: '1px solid #fecaca',
               borderRadius: 6,
-              cursor: 'pointer',
-              fontWeight: 500
+              cursor: deleting ? 'not-allowed' : 'pointer',
+              fontWeight: 500,
+              opacity: deleting ? 0.7 : 1
             }}
           >
-            Delete Asset
+            {deleting ? 'Deleting...' : 'Delete Asset'}
           </button>
         </div>
       </div>

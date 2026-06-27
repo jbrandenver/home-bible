@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
+import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
 import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
 import { getRoomById } from '../../lib/rooms';
 import { getUtilitiesForRoom, getUtilityDataContext, type UtilityRow } from '../../lib/utilities';
@@ -13,18 +14,6 @@ type Room = {
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type Asset = {
-  id: string;
-  asset_type: string;
-  name: string;
-  brand?: string;
-  model?: string;
-  serial_number?: string;
-  room_id?: string;
-  warranty_expires_at?: string;
-  notes?: string;
 };
 
 type Reminder = {
@@ -61,11 +50,12 @@ export default function RoomDetailPage() {
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<AssetRow[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [utilityError, setUtilityError] = useState('');
+  const [assetError, setAssetError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -76,15 +66,28 @@ export default function RoomDetailPage() {
       }
 
       setUtilityError('');
+      setAssetError('');
 
-      const utilityContext = await getUtilityDataContext();
+      const [utilityContext, assetContext] = await Promise.all([
+        getUtilityDataContext(),
+        getAssetDataContext()
+      ]);
       let nextUtilities: UtilityRow[] = [];
+      let nextAssets: AssetRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForRoom(utilityContext, roomId);
       } catch (loadError) {
         if (isMounted) {
           setUtilityError(loadError instanceof Error ? loadError.message : 'Failed to load room utilities.');
+        }
+      }
+
+      try {
+        nextAssets = await getAssetsForRoom(assetContext, roomId);
+      } catch (loadError) {
+        if (isMounted) {
+          setAssetError(loadError instanceof Error ? loadError.message : 'Failed to load room assets.');
         }
       }
 
@@ -118,7 +121,7 @@ export default function RoomDetailPage() {
       }
 
       setUtilities(nextUtilities);
-      setAssets(getDemoCollection<Asset>('homeBible.assets'));
+      setAssets(nextAssets);
       setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
       setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
       setIssues(getDemoCollection<Issue>('homeBible.issues'));
@@ -214,12 +217,17 @@ export default function RoomDetailPage() {
           </div>
           <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities for this room are loaded from Supabase.'
-              : 'Demo mode: utilities for this room are loaded from localStorage.'}
+              ? 'Signed-in mode: utilities and assets for this room are loaded from Supabase.'
+              : 'Demo mode: utilities and assets for this room are loaded from localStorage.'}
           </p>
           {utilityError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {utilityError}
+            </p>
+          ) : null}
+          {assetError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {assetError}
             </p>
           ) : null}
         </Card>

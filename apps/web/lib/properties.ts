@@ -23,6 +23,28 @@ export type PropertySummary = {
   created_at: string;
 };
 
+function formatPropertySetupError(step: string, message?: string) {
+  const fallback = `Failed to ${step}.`;
+  if (!message) {
+    return fallback;
+  }
+
+  const lowerMessage = message.toLowerCase();
+  const looksLikeSchemaOrRls =
+    lowerMessage.includes('row-level security') ||
+    lowerMessage.includes('violates row-level security') ||
+    lowerMessage.includes('on conflict') ||
+    lowerMessage.includes('constraint') ||
+    lowerMessage.includes('column') ||
+    lowerMessage.includes('policy');
+
+  if (!looksLikeSchemaOrRls) {
+    return message;
+  }
+
+  return `${fallback} Apply supabase/migrations/003_phase6d_household_rls_repair.sql to your Supabase project, then try again. Original error: ${message}`;
+}
+
 export async function getPrimaryPropertyForUser(userId: string): Promise<PropertySummary | null> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
@@ -75,7 +97,7 @@ async function ensureHouseholdForUser(user: User, fallbackName: string) {
     throw new Error('Supabase is not configured');
   }
 
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from('households')
     .select('id, name')
     .eq('owner_user_id', user.id)
@@ -83,33 +105,45 @@ async function ensureHouseholdForUser(user: User, fallbackName: string) {
     .order('created_at', { ascending: true })
     .limit(1);
 
+  if (existingError) {
+    throw new Error(formatPropertySetupError('load household', existingError.message));
+  }
+
   if (existing && existing.length > 0) {
     return existing[0];
   }
 
-  const { data: created, error } = await supabase
+  const householdId = crypto.randomUUID();
+
+  const { error } = await supabase
     .from('households')
     .insert({
+      id: householdId,
       owner_user_id: user.id,
       name: `${fallbackName} Household`
-    })
-    .select('id, name')
-    .single();
+    });
 
-  if (error || !created) {
-    throw new Error(error?.message || 'Failed to create household');
+  if (error) {
+    throw new Error(formatPropertySetupError('create household', error?.message));
   }
 
-  await supabase.from('household_members').upsert(
+  const { error: memberError } = await supabase.from('household_members').upsert(
     {
-      household_id: created.id,
+      household_id: householdId,
       user_id: user.id,
       role: 'owner'
     },
     { onConflict: 'household_id,user_id' }
   );
 
-  return created;
+  if (memberError) {
+    throw new Error(formatPropertySetupError('create household membership', memberError.message));
+  }
+
+  return {
+    id: householdId,
+    name: `${fallbackName} Household`
+  };
 }
 
 export async function createPropertyForUser(user: User, input: PropertyInput) {
@@ -118,13 +152,24 @@ export async function createPropertyForUser(user: User, input: PropertyInput) {
     throw new Error('Supabase is not configured');
   }
 
+  const { data: sessionData } = await supabase.auth.getSession();
+  const sessionUser = sessionData.session?.user;
+
+  if (!sessionUser || sessionUser.id !== user.id) {
+    throw new Error('Your session expired. Please sign in again before creating a property.');
+  }
+
   await ensureProfileForUser(user);
 
   const household = await ensureHouseholdForUser(user, input.nickname);
 
-  const { data: property, error: propertyError } = await supabase
+  const propertyId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+
+  const { error: propertyError } = await supabase
     .from('properties')
     .insert({
+      id: propertyId,
       household_id: household.id,
       owner_user_id: user.id,
       nickname: input.nickname,
@@ -135,23 +180,33 @@ export async function createPropertyForUser(user: User, input: PropertyInput) {
       state: input.state ?? null,
       postal_code: input.postal_code ?? null,
       country: input.country ?? null,
-      address_is_enabled: false
-    })
-    .select('id, household_id, owner_user_id, nickname, property_type, created_at')
-    .single();
+      address_is_enabled: false,
+      created_at: createdAt
+    });
 
-  if (propertyError || !property) {
-    throw new Error(propertyError?.message || 'Failed to create property');
+  if (propertyError) {
+    throw new Error(formatPropertySetupError('create property', propertyError?.message));
   }
 
-  await supabase.from('property_members').upsert(
+  const { error: propertyMemberError } = await supabase.from('property_members').upsert(
     {
-      property_id: property.id,
+      property_id: propertyId,
       user_id: user.id,
       role: 'owner'
     },
     { onConflict: 'property_id,user_id' }
   );
 
-  return property as PropertySummary;
+  if (propertyMemberError) {
+    throw new Error(formatPropertySetupError('create property membership', propertyMemberError.message));
+  }
+
+  return {
+    id: propertyId,
+    household_id: household.id,
+    owner_user_id: user.id,
+    nickname: input.nickname,
+    property_type: input.property_type,
+    created_at: createdAt
+  } as PropertySummary;
 }

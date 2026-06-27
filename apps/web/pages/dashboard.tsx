@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../components/trendFlags';
+import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoCollection, getDemoRooms } from '../lib/demoStorage';
 import { getFloorsForProperty, getRoomsForProperty } from '../lib/rooms';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
@@ -12,16 +13,6 @@ type Room = {
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type Asset = {
-  id: string;
-  asset_type: string;
-  name: string;
-  room_id?: string;
-  purchase_date?: string | null;
-  warranty_length_months?: number | null;
-  warranty_expires_at?: string | null;
 };
 
 type Reminder = {
@@ -44,7 +35,7 @@ type Issue = IssueRecord & {
   issue_type: string;
 };
 
-function getWarrantyStatus(asset: Asset): 'active' | 'expiring_soon' | 'expired' | 'unknown' {
+function getWarrantyStatus(asset: AssetRow): 'active' | 'expiring_soon' | 'expired' | 'unknown' {
   let expirationDate: Date | null = null;
 
   if (asset.warranty_expires_at) {
@@ -78,21 +69,27 @@ export default function DashboardPage() {
   const [hasProperty, setHasProperty] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<AssetRow[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [floorCount, setFloorCount] = useState(0);
   const [utilityError, setUtilityError] = useState('');
+  const [assetError, setAssetError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
 
     async function load() {
       setUtilityError('');
+      setAssetError('');
 
-      const utilityContext = await getUtilityDataContext();
+      const [utilityContext, assetContext] = await Promise.all([
+        getUtilityDataContext(),
+        getAssetDataContext()
+      ]);
       let nextUtilities: UtilityRow[] = [];
+      let nextAssets: AssetRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForContext(utilityContext);
@@ -102,12 +99,21 @@ export default function DashboardPage() {
         }
       }
 
+      try {
+        nextAssets = await getAssetsForContext(assetContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setAssetError(loadError instanceof Error ? loadError.message : 'Failed to load assets.');
+        }
+      }
+
       if (!isMounted) {
         return;
       }
 
       setDataMode(utilityContext.mode);
       setUtilities(nextUtilities);
+      setAssets(nextAssets);
 
       if (utilityContext.mode === 'supabase') {
         setHasProperty(Boolean(utilityContext.property));
@@ -147,7 +153,6 @@ export default function DashboardPage() {
         setFloorCount(Array.from(new Set(demoRooms.map((room) => room.floor_name))).length);
       }
 
-      setAssets(getDemoCollection<Asset>('homeBible.assets'));
       setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
       setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
       setIssues(getDemoCollection<Issue>('homeBible.issues'));
@@ -161,6 +166,17 @@ export default function DashboardPage() {
   }, []);
 
   const floors = floorCount || Array.from(new Set(rooms.map((room) => room.floor_name))).length;
+
+  const topAssetCategories = useMemo(() => {
+    const counts = assets.reduce<Record<string, number>>((acc, asset) => {
+      acc[asset.asset_type] = (acc[asset.asset_type] || 0) + 1;
+      return acc;
+    }, {});
+
+    return Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3);
+  }, [assets]);
 
   const warrantySummary = useMemo(
     () => ({
@@ -228,13 +244,26 @@ export default function DashboardPage() {
 
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, and utilities are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, and utilities are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, and assets are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, and assets are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {utilityError}
               </p>
+            ) : null}
+            {assetError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {assetError}
+              </p>
+            ) : null}
+
+            {topAssetCategories.length > 0 ? (
+              <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {topAssetCategories.map(([assetType, count]) => (
+                  <UtilityBadge key={assetType} label={`${formatEnumLabel(assetType)}: ${count}`} />
+                ))}
+              </div>
             ) : null}
 
             <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>

@@ -1,27 +1,17 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { formatEnumLabel, ASSET_TYPES } from '@home-bible/shared';
+import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
-
-type Asset = {
-  id: string;
-  asset_type: string;
-  name: string;
-  brand?: string;
-  model?: string;
-  serial_number?: string;
-  purchase_date?: string;
-  purchase_price?: number;
-  retailer?: string;
-  warranty_length_months?: number;
-  warranty_expires_at?: string;
-  manual_url?: string;
-  support_url?: string;
-  notes?: string;
-  room_id?: string;
-  room_name?: string;
-  visibility?: string;
-};
+import {
+  deleteAssetForContext,
+  getAssetDataContext,
+  getAssetsForContext,
+  type AssetDataContext,
+  type AssetDataMode,
+  type AssetRow
+} from '../lib/assets';
+import { getDemoRooms } from '../lib/demoStorage';
+import { getRoomsForProperty } from '../lib/rooms';
 
 type Room = {
   id: string;
@@ -29,57 +19,79 @@ type Room = {
 };
 
 export default function AssetsPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
+  const [context, setContext] = useState<AssetDataContext | null>(null);
+  const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
+  const [assets, setAssets] = useState<AssetRow[]>([]);
+  const [rooms, setRooms] = useState<Map<string, string>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedAssets = window.localStorage.getItem('homeBible.assets');
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
+    let isMounted = true;
 
-    if (storedAssets) {
-      const parsedAssets = JSON.parse(storedAssets);
-      const parsedRooms = storedRooms ? JSON.parse(storedRooms) : [];
+    async function load() {
+      setLoading(true);
+      setError('');
 
-      const assetsWithRoomNames = parsedAssets.map((asset: Asset) => {
-        const room = parsedRooms.find((r: Room) => r.id === asset.room_id);
-        return { ...asset, room_name: room?.name };
-      });
+      try {
+        const nextContext = await getAssetDataContext();
+        const [nextAssets, roomList] =
+          nextContext.mode === 'supabase' && nextContext.property
+            ? await Promise.all([
+                getAssetsForContext(nextContext),
+                getRoomsForProperty(nextContext.property.id)
+              ])
+            : [await getAssetsForContext(nextContext), getDemoRooms()];
 
-      setAssets(assetsWithRoomNames);
+        if (!isMounted) {
+          return;
+        }
+
+        setContext(nextContext);
+        setDataMode(nextContext.mode);
+        setAssets(nextAssets);
+        setRooms(new Map(roomList.map((room: Room) => [room.id, room.name])));
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load assets.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
     }
 
-    if (storedRooms) {
-      setRooms(JSON.parse(storedRooms));
-    }
+    load();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const handleDelete = (id: string) => {
-    const updated = assets.filter((a) => a.id !== id);
-    setAssets(updated);
-    window.localStorage.setItem('homeBible.assets', JSON.stringify(updated));
+  const handleDelete = async (id: string) => {
+    if (!context) {
+      return;
+    }
+
+    setDeletingId(id);
+    setError('');
+
+    try {
+      await deleteAssetForContext(context, id);
+      setAssets((currentAssets) => currentAssets.filter((asset) => asset.id !== id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete asset.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
-  if (assets.length === 0) {
-    return (
-      <>
-        <PageHeader
-          title="Assets"
-          description="Appliances, accessories, smart devices, tools, and more"
-        />
-        <Card>
-          <div style={{ textAlign: 'center', padding: 24 }}>
-            <h2>No assets yet</h2>
-            <p style={{ color: '#6b7280', marginBottom: 16 }}>
-              Start tracking your home items by adding your first asset.
-            </p>
-            <Link href="/add-asset">
-              <Button type="button">Add your first asset</Button>
-            </Link>
-          </div>
-        </Card>
-      </>
-    );
-  }
+  const getRoomName = (roomId?: string | null) => {
+    if (!roomId) return null;
+    return rooms.get(roomId) || 'Unknown room';
+  };
 
   return (
     <>
@@ -88,86 +100,130 @@ export default function AssetsPage() {
         description="Appliances, accessories, smart devices, tools, and more"
       />
 
-      <div style={{ marginBottom: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <Link href="/add-asset">
-          <Button type="button">Add asset</Button>
-        </Link>
-      </div>
+      <div style={{ display: 'grid', gap: 24 }}>
+        <Card>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode: assets are loaded from Supabase.'
+              : 'Demo mode: assets are stored in localStorage only.'}
+          </p>
+        </Card>
 
-      <div style={{ display: 'grid', gap: 12 }}>
-        {assets.map((asset) => (
-          <Card key={asset.id}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 16, alignItems: 'start' }}>
-              <div>
-                <h3 style={{ margin: '0 0 8px 0' }}>{asset.name}</h3>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                  <UtilityBadge label={formatEnumLabel(asset.asset_type)} />
-                  {asset.room_name && <UtilityBadge label={asset.room_name} />}
-                  {asset.brand && <UtilityBadge label={asset.brand} />}
-                </div>
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h2 style={{ margin: 0 }}>All Assets ({assets.length})</h2>
+            <Link href="/add-asset">
+              <Button type="button">Add asset</Button>
+            </Link>
+          </div>
 
-                <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.6 }}>
-                  {asset.model && (
-                    <div>
-                      <strong>Model:</strong> {asset.model}
-                    </div>
-                  )}
-                  {asset.serial_number && (
-                    <div>
-                      <strong>Serial:</strong> {asset.serial_number}
-                    </div>
-                  )}
-                  {asset.purchase_date && (
-                    <div>
-                      <strong>Purchased:</strong> {asset.purchase_date}
-                    </div>
-                  )}
-                  {asset.purchase_price && (
-                    <div>
-                      <strong>Price:</strong> ${asset.purchase_price}
-                    </div>
-                  )}
-                  {asset.retailer && (
-                    <div>
-                      <strong>From:</strong> {asset.retailer}
-                    </div>
-                  )}
-                  {asset.warranty_expires_at && (
-                    <div>
-                      <strong>Warranty expires:</strong> {asset.warranty_expires_at}
-                    </div>
-                  )}
-                  {asset.notes && (
-                    <div style={{ marginTop: 8 }}>
-                      <strong>Notes:</strong> {asset.notes}
-                    </div>
-                  )}
-                </div>
-              </div>
+          {loading ? (
+            <p style={{ color: '#6b7280', margin: 0 }}>Loading assets...</p>
+          ) : error ? (
+            <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>{error}</p>
+          ) : dataMode === 'supabase' && context && !context.property ? (
+            <EmptyState
+              title="No property found"
+              description="Create a property before adding Supabase assets."
+            />
+          ) : assets.length === 0 ? (
+            <EmptyState
+              title="No assets yet"
+              description="Start tracking appliances, smart devices, tools, and other home items."
+            />
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {assets.map((asset) => {
+                const roomName = getRoomName(asset.room_id);
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <Link href={`/assets/${asset.id}`}>
-                  <Button type="button">View</Button>
-                </Link>
-                <button
-                  onClick={() => handleDelete(asset.id)}
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: '0.875rem',
-                    backgroundColor: '#fee2e2',
-                    color: '#dc2626',
-                    border: '1px solid #fecaca',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    fontWeight: 500
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
+                return (
+                  <div
+                    key={asset.id}
+                    style={{
+                      padding: 12,
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 8,
+                      display: 'grid',
+                      gridTemplateColumns: '1fr auto',
+                      gap: 16,
+                      alignItems: 'start'
+                    }}
+                  >
+                    <div>
+                      <h3 style={{ margin: '0 0 8px 0' }}>{asset.name}</h3>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                        <UtilityBadge label={formatEnumLabel(asset.asset_type)} />
+                        {roomName && <UtilityBadge label={roomName} />}
+                        {asset.brand && <UtilityBadge label={asset.brand} />}
+                      </div>
+
+                      <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.6 }}>
+                        {asset.model && (
+                          <div>
+                            <strong>Model:</strong> {asset.model}
+                          </div>
+                        )}
+                        {asset.serial_number && (
+                          <div>
+                            <strong>Serial:</strong> {asset.serial_number}
+                          </div>
+                        )}
+                        {asset.purchase_date && (
+                          <div>
+                            <strong>Purchased:</strong> {asset.purchase_date}
+                          </div>
+                        )}
+                        {asset.purchase_price && (
+                          <div>
+                            <strong>Price:</strong> ${asset.purchase_price.toFixed(2)}
+                          </div>
+                        )}
+                        {asset.retailer && (
+                          <div>
+                            <strong>From:</strong> {asset.retailer}
+                          </div>
+                        )}
+                        {asset.warranty_expires_at && (
+                          <div>
+                            <strong>Warranty expires:</strong> {asset.warranty_expires_at}
+                          </div>
+                        )}
+                        {asset.notes && (
+                          <div style={{ marginTop: 8 }}>
+                            <strong>Notes:</strong> {asset.notes}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <Link href={`/assets/${asset.id}`}>
+                        <Button type="button">View</Button>
+                      </Link>
+                      <button
+                        onClick={() => handleDelete(asset.id)}
+                        disabled={deletingId === asset.id}
+                        style={{
+                          padding: '8px 12px',
+                          fontSize: '0.875rem',
+                          backgroundColor: '#fee2e2',
+                          color: '#dc2626',
+                          border: '1px solid #fecaca',
+                          borderRadius: 6,
+                          cursor: deletingId === asset.id ? 'not-allowed' : 'pointer',
+                          fontWeight: 500,
+                          opacity: deletingId === asset.id ? 0.7 : 1
+                        }}
+                      >
+                        {deletingId === asset.id ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </Card>
-        ))}
+          )}
+        </Card>
       </div>
     </>
   );

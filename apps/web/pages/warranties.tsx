@@ -2,23 +2,16 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import {
+  getAssetDataContext,
+  getAssetsForContext,
+  updateAssetForContext,
+  type AssetDataContext,
+  type AssetDataMode,
+  type AssetRow
+} from '../lib/assets';
 
-type Asset = {
-  id: string;
-  name: string;
-  brand?: string | null;
-  asset_type: string;
-  room_id?: string | null;
-  room_name?: string | null;
-  purchase_date?: string | null;
-  warranty_length_months?: number | null;
-  warranty_expires_at?: string | null;
-  manual_url?: string | null;
-  support_url?: string | null;
-  updated_at?: string | null;
-};
-
-function getWarrantyMeta(asset: Asset): {
+function getWarrantyMeta(asset: AssetRow): {
   status: 'active' | 'expiring_soon' | 'expired' | 'unknown';
   daysRemaining: number | null;
   expirationDate: string | null;
@@ -91,8 +84,13 @@ function getStatusTextColor(status: string): string {
 }
 
 export default function WarrantiesPage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [context, setContext] = useState<AssetDataContext | null>(null);
+  const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
+  const [assets, setAssets] = useState<AssetRow[]>([]);
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [savingAssetId, setSavingAssetId] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     purchase_date: '',
     warranty_length_months: '',
@@ -102,10 +100,39 @@ export default function WarrantiesPage() {
   });
 
   useEffect(() => {
-    const storedAssets = window.localStorage.getItem('homeBible.assets');
-    if (storedAssets) {
-      setAssets(JSON.parse(storedAssets));
+    let isMounted = true;
+
+    async function load() {
+      setLoading(true);
+      setError('');
+
+      try {
+        const nextContext = await getAssetDataContext();
+        const nextAssets = await getAssetsForContext(nextContext);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setContext(nextContext);
+        setDataMode(nextContext.mode);
+        setAssets(nextAssets);
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load warranties.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
     }
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const assetsByStatus = useMemo(
@@ -118,7 +145,7 @@ export default function WarrantiesPage() {
     [assets]
   );
 
-  const startEditing = (asset: Asset) => {
+  const startEditing = (asset: AssetRow) => {
     setEditingAssetId(asset.id);
     setDraft({
       purchase_date: asset.purchase_date || '',
@@ -132,29 +159,39 @@ export default function WarrantiesPage() {
     });
   };
 
-  const saveWarrantyChanges = (assetId: string) => {
-    const updatedAssets = assets.map((asset) => {
-      if (asset.id !== assetId) {
-        return asset;
-      }
+  const saveWarrantyChanges = async (assetId: string) => {
+    if (!context) {
+      setError('Asset storage is still loading. Please try again.');
+      return;
+    }
 
-      return {
-        ...asset,
+    setSavingAssetId(assetId);
+    setError('');
+
+    try {
+      const updatedAsset = await updateAssetForContext(context, assetId, {
         purchase_date: draft.purchase_date || null,
         warranty_length_months: draft.warranty_length_months ? Number(draft.warranty_length_months) : null,
         warranty_expires_at: draft.warranty_expires_at || null,
         support_url: draft.support_url || null,
-        manual_url: draft.manual_url || null,
-        updated_at: new Date().toISOString()
-      };
-    });
+        manual_url: draft.manual_url || null
+      });
 
-    setAssets(updatedAssets);
-    window.localStorage.setItem('homeBible.assets', JSON.stringify(updatedAssets));
-    setEditingAssetId(null);
+      if (updatedAsset) {
+        setAssets((currentAssets) =>
+          currentAssets.map((asset) => (asset.id === updatedAsset.id ? updatedAsset : asset))
+        );
+      }
+
+      setEditingAssetId(null);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to save warranty changes.');
+    } finally {
+      setSavingAssetId(null);
+    }
   };
 
-  const renderAssetGroup = (status: string, statusAssets: Asset[]) => {
+  const renderAssetGroup = (status: string, statusAssets: AssetRow[]) => {
     if (statusAssets.length === 0) return null;
 
     return (
@@ -291,8 +328,12 @@ export default function WarrantiesPage() {
                             />
                           </label>
                           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                            <Button type="button" onClick={() => saveWarrantyChanges(asset.id)}>
-                              Save
+                            <Button
+                              type="button"
+                              onClick={() => saveWarrantyChanges(asset.id)}
+                              disabled={savingAssetId === asset.id}
+                            >
+                              {savingAssetId === asset.id ? 'Saving...' : 'Save'}
                             </Button>
                             <button
                               type="button"
@@ -332,7 +373,7 @@ export default function WarrantiesPage() {
     );
   };
 
-  if (assets.length === 0) {
+  if (loading) {
     return (
       <>
         <PageHeader
@@ -340,15 +381,7 @@ export default function WarrantiesPage() {
           description="Track warranty coverage for your appliances and tools"
         />
         <Card>
-          <div style={{ textAlign: 'center', padding: 24 }}>
-            <h2>No assets with warranty info yet</h2>
-            <p style={{ color: '#6b7280', marginBottom: 16 }}>
-              Add assets and enter warranty information to track coverage here.
-            </p>
-            <Link href="/add-asset">
-              <Button type="button">Add your first asset</Button>
-            </Link>
-          </div>
+          <p style={{ color: '#6b7280', margin: 0 }}>Loading warranties...</p>
         </Card>
       </>
     );
@@ -361,21 +394,52 @@ export default function WarrantiesPage() {
         description="Track warranty coverage for your appliances and tools"
       />
 
-      <Card>
-        <h2 style={{ marginTop: 0 }}>Warranty Summary</h2>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <UtilityBadge label={`${assetsByStatus.active.length} active`} />
-          <UtilityBadge label={`${assetsByStatus.expiring_soon.length} expiring soon`} />
-          <UtilityBadge label={`${assetsByStatus.expired.length} expired`} />
-          <UtilityBadge label={`${assetsByStatus.unknown.length} unknown`} />
-        </div>
-      </Card>
+      <div style={{ display: 'grid', gap: 24 }}>
+        <Card>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode: warranty data is read from Supabase assets.'
+              : 'Demo mode: warranty data is read from localStorage assets.'}
+          </p>
+          {error ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {error}
+            </p>
+          ) : null}
+        </Card>
 
-      <div style={{ marginTop: 24 }}>
-        {renderAssetGroup('active', assetsByStatus.active)}
-        {renderAssetGroup('expiring_soon', assetsByStatus.expiring_soon)}
-        {renderAssetGroup('expired', assetsByStatus.expired)}
-        {renderAssetGroup('unknown', assetsByStatus.unknown)}
+        {assets.length === 0 ? (
+          <Card>
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <h2>No assets with warranty info yet</h2>
+              <p style={{ color: '#6b7280', marginBottom: 16 }}>
+                Add assets and enter warranty information to track coverage here.
+              </p>
+              <Link href="/add-asset">
+                <Button type="button">Add your first asset</Button>
+              </Link>
+            </div>
+          </Card>
+        ) : (
+          <>
+            <Card>
+              <h2 style={{ marginTop: 0 }}>Warranty Summary</h2>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <UtilityBadge label={`${assetsByStatus.active.length} active`} />
+                <UtilityBadge label={`${assetsByStatus.expiring_soon.length} expiring soon`} />
+                <UtilityBadge label={`${assetsByStatus.expired.length} expired`} />
+                <UtilityBadge label={`${assetsByStatus.unknown.length} unknown`} />
+              </div>
+            </Card>
+
+            <div>
+              {renderAssetGroup('active', assetsByStatus.active)}
+              {renderAssetGroup('expiring_soon', assetsByStatus.expiring_soon)}
+              {renderAssetGroup('expired', assetsByStatus.expired)}
+              {renderAssetGroup('unknown', assetsByStatus.unknown)}
+            </div>
+          </>
+        )}
       </div>
     </>
   );

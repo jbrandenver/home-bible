@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, FloorSection, RoomCard, UtilityBadge } from '@home-bible/ui';
-import { getDemoActiveProperty, getDemoCollection, getDemoRooms } from '../lib/demoStorage';
+import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
+import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import { getRoomsForProperty } from '../lib/rooms';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
@@ -13,30 +14,29 @@ type Room = {
   floor_name: string;
 };
 
-type Asset = {
-  id: string;
-  asset_type: string;
-  name: string;
-  room_id?: string;
-};
-
 export default function HomeMapPage() {
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   const [hasProperty, setHasProperty] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<AssetRow[]>([]);
   const [utilityError, setUtilityError] = useState('');
+  const [assetError, setAssetError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
 
     async function load() {
       setUtilityError('');
+      setAssetError('');
 
-      const utilityContext = await getUtilityDataContext();
+      const [utilityContext, assetContext] = await Promise.all([
+        getUtilityDataContext(),
+        getAssetDataContext()
+      ]);
       let nextUtilities: UtilityRow[] = [];
+      let nextAssets: AssetRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForContext(utilityContext);
@@ -46,12 +46,21 @@ export default function HomeMapPage() {
         }
       }
 
+      try {
+        nextAssets = await getAssetsForContext(assetContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setAssetError(loadError instanceof Error ? loadError.message : 'Failed to load assets.');
+        }
+      }
+
       if (!isMounted) {
         return;
       }
 
       setDataMode(utilityContext.mode);
       setUtilities(nextUtilities);
+      setAssets(nextAssets);
 
       if (utilityContext.mode === 'supabase') {
         setHasProperty(Boolean(utilityContext.property));
@@ -82,7 +91,6 @@ export default function HomeMapPage() {
         setRooms(getDemoRooms());
       }
 
-      setAssets(getDemoCollection<Asset>('homeBible.assets'));
     }
 
     load();
@@ -105,6 +113,17 @@ export default function HomeMapPage() {
 
   const floorNames = Object.keys(roomsByFloor);
 
+  const assetCountsByRoom = useMemo(() => {
+    return assets.reduce<Record<string, number>>((acc, asset) => {
+      if (!asset.room_id) {
+        return acc;
+      }
+
+      acc[asset.room_id] = (acc[asset.room_id] || 0) + 1;
+      return acc;
+    }, {});
+  }, [assets]);
+
   return (
     <>
       <PageHeader
@@ -123,12 +142,17 @@ export default function HomeMapPage() {
             </div>
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, and utilities are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, and utilities are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, and assets are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, and assets are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {utilityError}
+              </p>
+            ) : null}
+            {assetError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {assetError}
               </p>
             ) : null}
           </Card>
@@ -162,7 +186,7 @@ export default function HomeMapPage() {
                   >
                     <RoomCard
                       name={room.name}
-                      type={formatEnumLabel(room.room_type)}
+                      type={`${formatEnumLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'}`}
                     />
                   </Link>
                 ))}
