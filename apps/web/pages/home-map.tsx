@@ -2,23 +2,15 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, FloorSection, RoomCard, UtilityBadge } from '@home-bible/ui';
-import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
 import { getDemoActiveProperty, getDemoCollection, getDemoRooms } from '../lib/demoStorage';
-import { getPrimaryPropertyForUser } from '../lib/properties';
 import { getRoomsForProperty } from '../lib/rooms';
+import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
 type Room = {
   id: string;
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type Utility = {
-  id: string;
-  utility_type: string;
-  name: string;
-  room_id?: string;
 };
 
 type Asset = {
@@ -33,36 +25,24 @@ export default function HomeMapPage() {
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   const [hasProperty, setHasProperty] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [utilities, setUtilities] = useState<Utility[]>([]);
+  const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [utilityError, setUtilityError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
 
     async function load() {
-      const supabaseReady = isSupabaseConfigured();
-      const user = await getCurrentUser();
-      let foundSupabaseProperty = false;
+      setUtilityError('');
 
-      if (user && supabaseReady) {
-        const property = await getPrimaryPropertyForUser(user.id);
-        if (property && isMounted) {
-          foundSupabaseProperty = true;
-          setDataMode('supabase');
-          setHasProperty(true);
-          setPropertyNickname(property.nickname || 'Your property');
+      const utilityContext = await getUtilityDataContext();
+      let nextUtilities: UtilityRow[] = [];
 
-          const remoteRooms = await getRoomsForProperty(property.id);
-          if (isMounted) {
-            setRooms(
-              remoteRooms.map((room) => ({
-                id: room.id,
-                name: room.name,
-                room_type: room.room_type,
-                floor_name: room.floor_name
-              }))
-            );
-          }
+      try {
+        nextUtilities = await getUtilitiesForContext(utilityContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setUtilityError(loadError instanceof Error ? loadError.message : 'Failed to load utilities.');
         }
       }
 
@@ -70,7 +50,31 @@ export default function HomeMapPage() {
         return;
       }
 
-      if (!user || !supabaseReady || !foundSupabaseProperty) {
+      setDataMode(utilityContext.mode);
+      setUtilities(nextUtilities);
+
+      if (utilityContext.mode === 'supabase') {
+        setHasProperty(Boolean(utilityContext.property));
+        setPropertyNickname(utilityContext.property?.nickname || 'Your property');
+
+        if (utilityContext.property) {
+          const remoteRooms = await getRoomsForProperty(utilityContext.property.id);
+          if (!isMounted) {
+            return;
+          }
+
+          setRooms(
+            remoteRooms.map((room) => ({
+              id: room.id,
+              name: room.name,
+              room_type: room.room_type,
+              floor_name: room.floor_name
+            }))
+          );
+        } else {
+          setRooms([]);
+        }
+      } else {
         const demoProperty = getDemoActiveProperty();
         setDataMode('demo');
         setHasProperty(Boolean(demoProperty));
@@ -78,7 +82,6 @@ export default function HomeMapPage() {
         setRooms(getDemoRooms());
       }
 
-      setUtilities(getDemoCollection<Utility>('homeBible.utilities'));
       setAssets(getDemoCollection<Asset>('homeBible.assets'));
     }
 
@@ -120,9 +123,14 @@ export default function HomeMapPage() {
             </div>
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, and rooms are loaded from Supabase.'
-                : 'Demo mode: property, floors, and rooms are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, and utilities are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, and utilities are loaded from localStorage.'}
             </p>
+            {utilityError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {utilityError}
+              </p>
+            ) : null}
           </Card>
 
           {!hasProperty ? (

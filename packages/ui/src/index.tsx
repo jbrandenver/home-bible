@@ -1,16 +1,20 @@
-import type { ReactNode } from 'react';
+import type {
+  ButtonHTMLAttributes,
+  InputHTMLAttributes,
+  ReactNode,
+  SelectHTMLAttributes
+} from 'react';
 
-type ButtonProps = {
+type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
-  onClick?: () => void;
-  type?: 'button' | 'submit' | 'reset';
 };
 
-export function Button({ children, onClick, type = 'button' }: ButtonProps) {
+export function Button({ children, type = 'button', style, disabled, ...rest }: ButtonProps) {
   return (
     <button
       type={type}
-      onClick={onClick}
+      disabled={disabled}
+      {...rest}
       style={{
         border: '0',
         borderRadius: 14,
@@ -18,7 +22,9 @@ export function Button({ children, onClick, type = 'button' }: ButtonProps) {
         background: '#1f2937',
         color: '#fff',
         fontWeight: 700,
-        cursor: 'pointer'
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.65 : 1,
+        ...style
       }}
     >
       {children}
@@ -63,7 +69,7 @@ export function PageHeader({
   );
 }
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
@@ -79,7 +85,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}

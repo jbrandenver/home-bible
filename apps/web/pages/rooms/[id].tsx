@@ -4,24 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
-import { getCurrentUser, isSupabaseConfigured } from '../../lib/auth';
 import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
 import { getRoomById } from '../../lib/rooms';
+import { getUtilitiesForRoom, getUtilityDataContext, type UtilityRow } from '../../lib/utilities';
 
 type Room = {
   id: string;
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type Utility = {
-  id: string;
-  utility_type: string;
-  name: string;
-  room_id?: string;
-  location_notes?: string;
-  emergency_notes?: string;
 };
 
 type Asset = {
@@ -69,11 +60,12 @@ export default function RoomDetailPage() {
 
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [utilities, setUtilities] = useState<Utility[]>([]);
+  const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
+  const [utilityError, setUtilityError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -83,14 +75,27 @@ export default function RoomDetailPage() {
         return;
       }
 
-      const supabaseReady = isSupabaseConfigured();
-      const user = await getCurrentUser();
-      let loadedFromSupabase = false;
+      setUtilityError('');
 
-      if (user && supabaseReady) {
+      const utilityContext = await getUtilityDataContext();
+      let nextUtilities: UtilityRow[] = [];
+
+      try {
+        nextUtilities = await getUtilitiesForRoom(utilityContext, roomId);
+      } catch (loadError) {
+        if (isMounted) {
+          setUtilityError(loadError instanceof Error ? loadError.message : 'Failed to load room utilities.');
+        }
+      }
+
+      if (utilityContext.mode === 'supabase') {
         const remoteRoom = await getRoomById(roomId);
-        if (remoteRoom && isMounted) {
-          loadedFromSupabase = true;
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (remoteRoom) {
           setDataMode('supabase');
           setRooms([
             {
@@ -100,19 +105,19 @@ export default function RoomDetailPage() {
               floor_name: remoteRoom.floor_name
             }
           ]);
+        } else {
+          setDataMode('supabase');
+          setRooms([]);
         }
-      }
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (!loadedFromSupabase) {
+      } else {
+        if (!isMounted) {
+          return;
+        }
         setDataMode('demo');
         setRooms(getDemoRooms());
       }
 
-      setUtilities(getDemoCollection<Utility>('homeBible.utilities'));
+      setUtilities(nextUtilities);
       setAssets(getDemoCollection<Asset>('homeBible.assets'));
       setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
       setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
@@ -207,6 +212,16 @@ export default function RoomDetailPage() {
             <UtilityBadge label={`${roomServiceRecords.length} service record${roomServiceRecords.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomIssues.length} issue${roomIssues.length === 1 ? '' : 's'}`} />
           </div>
+          <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode: utilities for this room are loaded from Supabase.'
+              : 'Demo mode: utilities for this room are loaded from localStorage.'}
+          </p>
+          {utilityError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {utilityError}
+            </p>
+          ) : null}
         </Card>
 
         <Card>

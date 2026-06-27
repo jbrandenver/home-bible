@@ -1,50 +1,89 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
+import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
-
-type Utility = {
-  id: string;
-  utility_type: string;
-  name: string;
-  room_id?: string;
-  room_name?: string;
-  location_notes?: string;
-  emergency_notes?: string;
-};
-
-type Room = {
-  id: string;
-  name: string;
-};
+import { getDemoRooms } from '../lib/demoStorage';
+import { getRoomsForProperty } from '../lib/rooms';
+import {
+  deleteUtilityForContext,
+  getUtilitiesForContext,
+  getUtilityDataContext,
+  type UtilityDataContext,
+  type UtilityDataMode,
+  type UtilityRow
+} from '../lib/utilities';
 
 export default function UtilitiesPage() {
-  const [utilities, setUtilities] = useState<Utility[]>([]);
+  const [context, setContext] = useState<UtilityDataContext | null>(null);
+  const [dataMode, setDataMode] = useState<UtilityDataMode>('demo');
+  const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [rooms, setRooms] = useState<Map<string, string>>(new Map());
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
-    const storedUtilities = window.localStorage.getItem('homeBible.utilities');
-    const storedRooms = window.localStorage.getItem('homeBible.rooms');
+    let isMounted = true;
 
-    if (storedUtilities) {
-      const parsed = JSON.parse(storedUtilities);
-      setUtilities(Array.isArray(parsed) ? parsed : []);
+    async function load() {
+      setLoading(true);
+      setError('');
+
+      try {
+        const nextContext = await getUtilityDataContext();
+        const [nextUtilities, roomList] =
+          nextContext.mode === 'supabase' && nextContext.property
+            ? await Promise.all([
+                getUtilitiesForContext(nextContext),
+                getRoomsForProperty(nextContext.property.id)
+              ])
+            : [await getUtilitiesForContext(nextContext), getDemoRooms()];
+
+        if (!isMounted) {
+          return;
+        }
+
+        setContext(nextContext);
+        setDataMode(nextContext.mode);
+        setUtilities(nextUtilities);
+        setRooms(new Map(roomList.map((room) => [room.id, room.name])));
+      } catch (loadError) {
+        if (isMounted) {
+          setError(loadError instanceof Error ? loadError.message : 'Failed to load utilities.');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
     }
 
-    if (storedRooms) {
-      const roomList = JSON.parse(storedRooms) as Room[];
-      const roomMap = new Map(roomList.map((r) => [r.id, r.name]));
-      setRooms(roomMap);
-    }
+    load();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  const handleDelete = (id: string) => {
-    const updated = utilities.filter((u) => u.id !== id);
-    setUtilities(updated);
-    window.localStorage.setItem('homeBible.utilities', JSON.stringify(updated));
+  const handleDelete = async (id: string) => {
+    if (!context) {
+      return;
+    }
+
+    setDeletingId(id);
+    setError('');
+
+    try {
+      await deleteUtilityForContext(context, id);
+      setUtilities((currentUtilities) => currentUtilities.filter((utility) => utility.id !== id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete utility.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
-  const getRoomName = (roomId?: string) => {
+  const getRoomName = (roomId?: string | null) => {
     if (!roomId) return 'Not assigned';
     return rooms.get(roomId) || 'Unknown room';
   };
@@ -58,6 +97,14 @@ export default function UtilitiesPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+            {dataMode === 'supabase'
+              ? 'Signed-in mode: utilities are loaded from Supabase.'
+              : 'Demo mode: utilities are stored in localStorage only.'}
+          </p>
+        </Card>
+
+        <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ margin: 0 }}>All Utilities ({utilities.length})</h2>
             <Link href="/add-utility">
@@ -65,7 +112,16 @@ export default function UtilitiesPage() {
             </Link>
           </div>
 
-          {utilities.length === 0 ? (
+          {loading ? (
+            <p style={{ color: '#6b7280', margin: 0 }}>Loading utilities...</p>
+          ) : error ? (
+            <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>{error}</p>
+          ) : dataMode === 'supabase' && context && !context.property ? (
+            <EmptyState
+              title="No property found"
+              description="Create a property before adding Supabase utilities."
+            />
+          ) : utilities.length === 0 ? (
             <EmptyState
               title="No utilities yet"
               description="Add key utility locations like water shutoff, electrical panel, and HVAC to get started."
@@ -105,6 +161,7 @@ export default function UtilitiesPage() {
                   </div>
                   <button
                     onClick={() => handleDelete(utility.id)}
+                    disabled={deletingId === utility.id}
                     style={{
                       background: '#fee2e2',
                       color: '#991b1b',
@@ -113,10 +170,11 @@ export default function UtilitiesPage() {
                       padding: '4px 8px',
                       cursor: 'pointer',
                       fontSize: '0.875rem',
-                      whiteSpace: 'nowrap'
+                      whiteSpace: 'nowrap',
+                      opacity: deletingId === utility.id ? 0.7 : 1
                     }}
                   >
-                    Delete
+                    {deletingId === utility.id ? 'Deleting...' : 'Delete'}
                   </button>
                 </div>
               ))}

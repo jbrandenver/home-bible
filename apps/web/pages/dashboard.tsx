@@ -3,23 +3,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { detectTrendFlags, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../components/trendFlags';
-import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
 import { getDemoActiveProperty, getDemoCollection, getDemoRooms } from '../lib/demoStorage';
-import { getPrimaryPropertyForUser } from '../lib/properties';
 import { getFloorsForProperty, getRoomsForProperty } from '../lib/rooms';
+import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
 type Room = {
   id: string;
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type Utility = {
-  id: string;
-  utility_type: string;
-  name: string;
-  room_id?: string;
 };
 
 type Asset = {
@@ -85,45 +77,28 @@ export default function DashboardPage() {
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   const [hasProperty, setHasProperty] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [utilities, setUtilities] = useState<Utility[]>([]);
+  const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [floorCount, setFloorCount] = useState(0);
+  const [utilityError, setUtilityError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
 
     async function load() {
-      const supabaseReady = isSupabaseConfigured();
-      const user = await getCurrentUser();
-      let foundSupabaseProperty = false;
+      setUtilityError('');
 
-      if (user && supabaseReady) {
-        const property = await getPrimaryPropertyForUser(user.id);
-        if (property && isMounted) {
-          foundSupabaseProperty = true;
-          setDataMode('supabase');
-          setHasProperty(true);
-          setPropertyNickname(property.nickname || 'Your property');
+      const utilityContext = await getUtilityDataContext();
+      let nextUtilities: UtilityRow[] = [];
 
-          const [floors, remoteRooms] = await Promise.all([
-            getFloorsForProperty(property.id),
-            getRoomsForProperty(property.id)
-          ]);
-
-          if (isMounted) {
-            setFloorCount(floors.length);
-            setRooms(
-              remoteRooms.map((room) => ({
-                id: room.id,
-                name: room.name,
-                room_type: room.room_type,
-                floor_name: room.floor_name
-              }))
-            );
-          }
+      try {
+        nextUtilities = await getUtilitiesForContext(utilityContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setUtilityError(loadError instanceof Error ? loadError.message : 'Failed to load utilities.');
         }
       }
 
@@ -131,7 +106,37 @@ export default function DashboardPage() {
         return;
       }
 
-      if (!user || !supabaseReady || !foundSupabaseProperty) {
+      setDataMode(utilityContext.mode);
+      setUtilities(nextUtilities);
+
+      if (utilityContext.mode === 'supabase') {
+        setHasProperty(Boolean(utilityContext.property));
+        setPropertyNickname(utilityContext.property?.nickname || 'Your property');
+
+        if (utilityContext.property) {
+          const [floors, remoteRooms] = await Promise.all([
+            getFloorsForProperty(utilityContext.property.id),
+            getRoomsForProperty(utilityContext.property.id)
+          ]);
+
+          if (!isMounted) {
+            return;
+          }
+
+          setFloorCount(floors.length);
+          setRooms(
+            remoteRooms.map((room) => ({
+              id: room.id,
+              name: room.name,
+              room_type: room.room_type,
+              floor_name: room.floor_name
+            }))
+          );
+        } else {
+          setFloorCount(0);
+          setRooms([]);
+        }
+      } else {
         const demoProperty = getDemoActiveProperty();
         const demoRooms = getDemoRooms();
 
@@ -142,7 +147,6 @@ export default function DashboardPage() {
         setFloorCount(Array.from(new Set(demoRooms.map((room) => room.floor_name))).length);
       }
 
-      setUtilities(getDemoCollection<Utility>('homeBible.utilities'));
       setAssets(getDemoCollection<Asset>('homeBible.assets'));
       setReminders(getDemoCollection<Reminder>('homeBible.reminders'));
       setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
@@ -224,9 +228,14 @@ export default function DashboardPage() {
 
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: profile, property, floors, and rooms are loaded from Supabase.'
-                : 'Demo mode: property, floors, and rooms are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, and utilities are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, and utilities are loaded from localStorage.'}
             </p>
+            {utilityError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {utilityError}
+              </p>
+            ) : null}
 
             <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Link href="/home-map">
