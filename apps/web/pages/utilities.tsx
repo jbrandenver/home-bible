@@ -4,7 +4,9 @@ import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
+import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getRoomsForProperty } from '../lib/rooms';
+import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import {
   deleteUtilityForContext,
   getUtilitiesForContext,
@@ -19,10 +21,14 @@ export default function UtilitiesPage() {
   const [dataMode, setDataMode] = useState<UtilityDataMode>('demo');
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
+  const [repairs, setRepairs] = useState<RepairRow[]>([]);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [rooms, setRooms] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reminderError, setReminderError] = useState('');
+  const [repairError, setRepairError] = useState('');
+  const [serviceRecordError, setServiceRecordError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,11 +38,15 @@ export default function UtilitiesPage() {
       setLoading(true);
       setError('');
       setReminderError('');
+      setRepairError('');
+      setServiceRecordError('');
 
       try {
-        const [nextContext, reminderContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, serviceRecordContext] = await Promise.all([
           getUtilityDataContext(),
-          getReminderDataContext()
+          getReminderDataContext(),
+          getRepairDataContext(),
+          getServiceRecordDataContext()
         ]);
         const [nextUtilities, roomList] =
           nextContext.mode === 'supabase' && nextContext.property
@@ -46,12 +56,30 @@ export default function UtilitiesPage() {
               ])
             : [await getUtilitiesForContext(nextContext), getDemoRooms()];
         let nextReminders: ReminderRow[] = [];
+        let nextRepairs: RepairRow[] = [];
+        let nextServiceRecords: ServiceRecordRow[] = [];
 
         try {
           nextReminders = await getRemindersForContext(reminderContext);
         } catch (loadError) {
           if (isMounted) {
             setReminderError(loadError instanceof Error ? loadError.message : 'Failed to load utility reminders.');
+          }
+        }
+
+        try {
+          nextRepairs = await getRepairsForContext(repairContext);
+        } catch (loadError) {
+          if (isMounted) {
+            setRepairError(loadError instanceof Error ? loadError.message : 'Failed to load utility repairs.');
+          }
+        }
+
+        try {
+          nextServiceRecords = await getServiceRecordsForContext(serviceRecordContext);
+        } catch (loadError) {
+          if (isMounted) {
+            setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load utility service records.');
           }
         }
 
@@ -63,6 +91,8 @@ export default function UtilitiesPage() {
         setDataMode(nextContext.mode);
         setUtilities(nextUtilities);
         setReminders(nextReminders);
+        setRepairs(nextRepairs);
+        setServiceRecords(nextServiceRecords);
         setRooms(new Map(roomList.map((room) => [room.id, room.name])));
       } catch (loadError) {
         if (isMounted) {
@@ -112,6 +142,12 @@ export default function UtilitiesPage() {
         (reminder.linked_type === 'utility' && reminder.linked_id === utilityId)
     ).length;
 
+  const getRepairCount = (utilityId: string) =>
+    repairs.filter((repair) => repair.utility_id === utilityId).length;
+
+  const getServiceRecordCount = (utilityId: string) =>
+    serviceRecords.filter((record) => record.utility_id === utilityId).length;
+
   return (
     <>
       <PageHeader
@@ -123,12 +159,22 @@ export default function UtilitiesPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities and utility-linked reminders are loaded from Supabase.'
-              : 'Demo mode: utilities and utility-linked reminders are stored in localStorage.'}
+              ? 'Signed-in mode: utilities, utility-linked reminders, repairs, and service records are loaded from Supabase.'
+              : 'Demo mode: utilities, utility-linked reminders, repairs, and service records are stored in localStorage.'}
           </p>
           {reminderError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {reminderError}
+            </p>
+          ) : null}
+          {repairError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {repairError}
+            </p>
+          ) : null}
+          {serviceRecordError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {serviceRecordError}
             </p>
           ) : null}
         </Card>
@@ -176,6 +222,12 @@ export default function UtilitiesPage() {
                       <UtilityBadge label={formatEnumLabel(utility.utility_type)} />
                       <span style={{ marginLeft: 8 }}>
                         <UtilityBadge label={`${getReminderCount(utility.id)} reminder${getReminderCount(utility.id) === 1 ? '' : 's'}`} />
+                      </span>
+                      <span style={{ marginLeft: 8 }}>
+                        <UtilityBadge label={`${getRepairCount(utility.id)} repair${getRepairCount(utility.id) === 1 ? '' : 's'}`} />
+                      </span>
+                      <span style={{ marginLeft: 8 }}>
+                        <UtilityBadge label={`${getServiceRecordCount(utility.id)} service${getServiceRecordCount(utility.id) === 1 ? '' : 's'}`} />
                       </span>
                       <span style={{ marginLeft: 8 }}>•</span>
                       <span style={{ marginLeft: 8 }}>{getRoomName(utility.room_id)}</span>

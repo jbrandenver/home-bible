@@ -129,15 +129,46 @@ export const REMINDER_SOURCES = [
   'system_suggestion'
 ] as const;
 
+export const REPAIR_TYPES = [
+  'general',
+  'plumbing',
+  'electrical',
+  'hvac',
+  'appliance',
+  'roof',
+  'exterior',
+  'interior',
+  'smart_home',
+  'utility',
+  'other'
+] as const;
+
+export const REPAIR_STATUSES = [
+  'open',
+  'scheduled',
+  'in_progress',
+  'completed',
+  'deferred',
+  'cancelled'
+] as const;
+
+export const REPAIR_PRIORITIES = [
+  'low',
+  'normal',
+  'high',
+  'urgent'
+] as const;
+
 export const SERVICE_TYPES = [
+  'maintenance',
   'repair',
   'inspection',
-  'replacement',
   'installation',
-  'remodel',
+  'replacement',
   'cleaning',
-  'maintenance',
-  'emergency_issue'
+  'tune_up',
+  'warranty_service',
+  'other'
 ] as const;
 
 export const ISSUE_TYPES = [
@@ -274,22 +305,41 @@ export const createReminderSchema = z.object({
   source: z.enum(REMINDER_SOURCES).default('manual')
 });
 
+export const createRepairSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  room_id: z.string().uuid().optional().nullable(),
+  asset_id: z.string().uuid().optional().nullable(),
+  utility_id: z.string().uuid().optional().nullable(),
+  title: z.string().min(1, 'Repair title is required'),
+  description: z.string().optional().nullable(),
+  repair_type: z.enum(REPAIR_TYPES).default('general'),
+  status: z.enum(REPAIR_STATUSES).default('open'),
+  priority: z.enum(REPAIR_PRIORITIES).default('normal'),
+  reported_date: z.string().optional().nullable(),
+  completed_date: z.string().optional().nullable(),
+  contractor_name: z.string().optional().nullable(),
+  contractor_phone: z.string().optional().nullable(),
+  contractor_email: z.string().email().optional().nullable(),
+  estimated_cost: z.coerce.number().optional().nullable(),
+  actual_cost: z.coerce.number().optional().nullable(),
+  notes: z.string().optional().nullable()
+});
+
 export const createServiceRecordSchema = z.object({
   property_id: z.string().uuid().optional(),
   room_id: z.string().uuid().optional().nullable(),
   asset_id: z.string().uuid().optional().nullable(),
   utility_id: z.string().uuid().optional().nullable(),
   service_type: z.enum(SERVICE_TYPES),
-  title: z.string().min(1, 'Service title is required'),
-  description: z.string().optional().nullable(),
-  service_date: z.string(),
+  service_title: z.string().min(1, 'Service title is required'),
+  service_date: z.string().optional().nullable(),
+  provider_name: z.string().optional().nullable(),
+  provider_phone: z.string().optional().nullable(),
+  provider_email: z.string().email().optional().nullable(),
   cost: z.coerce.number().optional().nullable(),
-  vendor_name: z.string().optional().nullable(),
-  vendor_phone: z.string().optional().nullable(),
-  vendor_email: z.string().email().optional().nullable(),
-  follow_up_needed: z.boolean().default(false),
-  follow_up_date: z.string().optional().nullable(),
-  visibility: z.enum(VISIBILITY_OPTIONS).default('private')
+  summary: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  next_service_date: z.string().optional().nullable()
 });
 
 export const createIssueSchema = z.object({
@@ -321,6 +371,9 @@ export type ReminderStatus = typeof REMINDER_STATUSES[number];
 export type ReminderFrequency = typeof REMINDER_FREQUENCIES[number];
 export type ReminderPriority = typeof REMINDER_PRIORITIES[number];
 export type ReminderSource = typeof REMINDER_SOURCES[number];
+export type RepairType = typeof REPAIR_TYPES[number];
+export type RepairStatus = typeof REPAIR_STATUSES[number];
+export type RepairPriority = typeof REPAIR_PRIORITIES[number];
 export type ServiceType = typeof SERVICE_TYPES[number];
 export type IssueType = typeof ISSUE_TYPES[number];
 export type IssueStatus = typeof ISSUE_STATUSES[number];
@@ -334,6 +387,7 @@ export type CreateRoomInput = z.infer<typeof createRoomSchema>;
 export type CreateUtilityInput = z.infer<typeof createUtilitySchema>;
 export type CreateAssetInput = z.infer<typeof createAssetSchema>;
 export type CreateReminderInput = z.infer<typeof createReminderSchema>;
+export type CreateRepairInput = z.infer<typeof createRepairSchema>;
 export type CreateServiceRecordInput = z.infer<typeof createServiceRecordSchema>;
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 
@@ -428,6 +482,30 @@ export interface ReminderRow {
   deleted_at: string | null;
 }
 
+export interface RepairRow {
+  id: string;
+  property_id: string;
+  room_id: string | null;
+  utility_id: string | null;
+  asset_id: string | null;
+  title: string;
+  description: string | null;
+  repair_type: RepairType;
+  status: RepairStatus;
+  priority: RepairPriority;
+  reported_date: string | null;
+  completed_date: string | null;
+  contractor_name: string | null;
+  contractor_phone: string | null;
+  contractor_email: string | null;
+  estimated_cost: number | null;
+  actual_cost: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
 export interface ServiceRecordRow {
   id: string;
   property_id: string;
@@ -435,11 +513,15 @@ export interface ServiceRecordRow {
   utility_id: string | null;
   asset_id: string | null;
   service_type: ServiceType;
-  title: string;
-  service_date: string;
-  follow_up_needed: boolean;
-  follow_up_date: string | null;
-  visibility: VisibilityOption;
+  service_title: string;
+  service_date: string | null;
+  provider_name: string | null;
+  provider_phone: string | null;
+  provider_email: string | null;
+  cost: number | null;
+  summary: string | null;
+  notes: string | null;
+  next_service_date: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

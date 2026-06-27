@@ -2,11 +2,13 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
-import { detectTrendFlags, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../components/trendFlags';
+import { detectTrendFlags, type IssueRecord } from '../components/trendFlags';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoCollection, getDemoRooms } from '../lib/demoStorage';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
+import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getFloorsForProperty, getRoomsForProperty } from '../lib/rooms';
+import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
 type Room = {
@@ -14,12 +16,6 @@ type Room = {
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type ServiceRecord = TrendServiceRecord & {
-  title: string;
-  service_type: string;
-  service_date: string;
 };
 
 type Issue = IssueRecord & {
@@ -63,12 +59,15 @@ export default function DashboardPage() {
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
-  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  const [repairs, setRepairs] = useState<RepairRow[]>([]);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [floorCount, setFloorCount] = useState(0);
   const [utilityError, setUtilityError] = useState('');
   const [assetError, setAssetError] = useState('');
   const [reminderError, setReminderError] = useState('');
+  const [repairError, setRepairError] = useState('');
+  const [serviceRecordError, setServiceRecordError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -77,15 +76,21 @@ export default function DashboardPage() {
       setUtilityError('');
       setAssetError('');
       setReminderError('');
+      setRepairError('');
+      setServiceRecordError('');
 
-      const [utilityContext, assetContext, reminderContext] = await Promise.all([
+      const [utilityContext, assetContext, reminderContext, repairContext, serviceRecordContext] = await Promise.all([
         getUtilityDataContext(),
         getAssetDataContext(),
-        getReminderDataContext()
+        getReminderDataContext(),
+        getRepairDataContext(),
+        getServiceRecordDataContext()
       ]);
       let nextUtilities: UtilityRow[] = [];
       let nextAssets: AssetRow[] = [];
       let nextReminders: ReminderRow[] = [];
+      let nextRepairs: RepairRow[] = [];
+      let nextServiceRecords: ServiceRecordRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForContext(utilityContext);
@@ -111,6 +116,22 @@ export default function DashboardPage() {
         }
       }
 
+      try {
+        nextRepairs = await getRepairsForContext(repairContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setRepairError(loadError instanceof Error ? loadError.message : 'Failed to load repairs.');
+        }
+      }
+
+      try {
+        nextServiceRecords = await getServiceRecordsForContext(serviceRecordContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load service records.');
+        }
+      }
+
       if (!isMounted) {
         return;
       }
@@ -119,6 +140,8 @@ export default function DashboardPage() {
       setUtilities(nextUtilities);
       setAssets(nextAssets);
       setReminders(nextReminders);
+      setRepairs(nextRepairs);
+      setServiceRecords(nextServiceRecords);
 
       if (utilityContext.mode === 'supabase') {
         setHasProperty(Boolean(utilityContext.property));
@@ -158,7 +181,6 @@ export default function DashboardPage() {
         setFloorCount(Array.from(new Set(demoRooms.map((room) => room.floor_name))).length);
       }
 
-      setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
       setIssues(getDemoCollection<Issue>('homeBible.issues'));
     }
 
@@ -231,6 +253,11 @@ export default function DashboardPage() {
     [issues]
   );
 
+  const openRepairCount = useMemo(
+    () => repairs.filter((repair) => repair.status === 'open').length,
+    [repairs]
+  );
+
   return (
     <>
       <PageHeader
@@ -246,14 +273,15 @@ export default function DashboardPage() {
               <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${openRepairCount} open repair${openRepairCount === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
             </div>
 
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, assets, and reminders are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, assets, and reminders are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, and service records are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, and service records are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -268,6 +296,16 @@ export default function DashboardPage() {
             {reminderError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {reminderError}
+              </p>
+            ) : null}
+            {repairError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {repairError}
+              </p>
+            ) : null}
+            {serviceRecordError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {serviceRecordError}
               </p>
             ) : null}
 
@@ -323,7 +361,7 @@ export default function DashboardPage() {
                       background: '#fff'
                     }}
                   >
-                    <div style={{ fontWeight: 600 }}>{record.title}</div>
+                    <div style={{ fontWeight: 600 }}>{record.service_title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                       {record.service_date} • {formatEnumLabel(record.service_type)}
                     </div>

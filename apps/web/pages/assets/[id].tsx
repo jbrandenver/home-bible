@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
-import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
+import { detectTrendFlags, trendFlagsForEntity, type IssueRecord } from '../../components/trendFlags';
 import {
   deleteAssetForContext,
   getAssetByIdForContext,
@@ -14,16 +14,9 @@ import {
 } from '../../lib/assets';
 import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
 import { getReminderDataContext, getRemindersForAsset, type ReminderRow } from '../../lib/reminders';
+import { getRepairDataContext, getRepairsForAsset, type RepairRow } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
-
-type ServiceRecord = TrendServiceRecord & {
-  id: string;
-  title: string;
-  service_type: string;
-  service_date: string;
-  follow_up_needed?: boolean;
-  follow_up_date?: string | null;
-};
+import { getServiceRecordDataContext, getServiceRecordsForAsset, type ServiceRecordRow } from '../../lib/serviceRecords';
 
 type Issue = IssueRecord & {
   id: string;
@@ -47,11 +40,14 @@ export default function AssetDetailPage() {
   const [asset, setAsset] = useState<AssetRow | null>(null);
   const [roomName, setRoomName] = useState<string | null>(null);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
-  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  const [repairs, setRepairs] = useState<RepairRow[]>([]);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reminderError, setReminderError] = useState('');
+  const [repairError, setRepairError] = useState('');
+  const [serviceRecordError, setServiceRecordError] = useState('');
   const [deleting, setDeleting] = useState(false);
 
   const getWarrantyMeta = (assetItem: AssetRow) => {
@@ -105,20 +101,42 @@ export default function AssetDetailPage() {
       setLoading(true);
       setError('');
       setReminderError('');
+      setRepairError('');
+      setServiceRecordError('');
 
       try {
-        const [nextContext, reminderContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, serviceRecordContext] = await Promise.all([
           getAssetDataContext(),
-          getReminderDataContext()
+          getReminderDataContext(),
+          getRepairDataContext(),
+          getServiceRecordDataContext()
         ]);
         const nextAsset = await getAssetByIdForContext(nextContext, assetId);
         let nextReminders: ReminderRow[] = [];
+        let nextRepairs: RepairRow[] = [];
+        let nextServiceRecords: ServiceRecordRow[] = [];
 
         try {
           nextReminders = await getRemindersForAsset(reminderContext, assetId);
         } catch (loadError) {
           if (isMounted) {
             setReminderError(loadError instanceof Error ? loadError.message : 'Failed to load asset reminders.');
+          }
+        }
+
+        try {
+          nextRepairs = await getRepairsForAsset(repairContext, assetId);
+        } catch (loadError) {
+          if (isMounted) {
+            setRepairError(loadError instanceof Error ? loadError.message : 'Failed to load asset repairs.');
+          }
+        }
+
+        try {
+          nextServiceRecords = await getServiceRecordsForAsset(serviceRecordContext, assetId);
+        } catch (loadError) {
+          if (isMounted) {
+            setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load asset service records.');
           }
         }
 
@@ -135,6 +153,8 @@ export default function AssetDetailPage() {
         setDataMode(nextContext.mode);
         setAsset(nextAsset);
         setReminders(nextReminders);
+        setRepairs(nextRepairs);
+        setServiceRecords(nextServiceRecords);
         setRoomName(
           nextAsset?.room_id
             ? roomList.find((room: Room) => room.id === nextAsset.room_id)?.name || 'Unknown room'
@@ -151,7 +171,6 @@ export default function AssetDetailPage() {
       }
 
       if (isMounted) {
-        setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
         setIssues(getDemoCollection<Issue>('homeBible.issues'));
       }
     }
@@ -176,6 +195,11 @@ export default function AssetDetailPage() {
   const linkedServiceRecords = useMemo(
     () => serviceRecords.filter((record) => record.asset_id === assetId),
     [serviceRecords, assetId]
+  );
+
+  const linkedRepairs = useMemo(
+    () => repairs.filter((repair) => repair.asset_id === assetId),
+    [repairs, assetId]
   );
 
   const linkedIssues = useMemo(
@@ -260,12 +284,22 @@ export default function AssetDetailPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: this asset and its reminders are loaded from Supabase.'
-              : 'Demo mode: this asset and its reminders are loaded from localStorage.'}
+              ? 'Signed-in mode: this asset, reminders, repairs, and service records are loaded from Supabase.'
+              : 'Demo mode: this asset, reminders, repairs, and service records are loaded from localStorage.'}
           </p>
           {reminderError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {reminderError}
+            </p>
+          ) : null}
+          {repairError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {repairError}
+            </p>
+          ) : null}
+          {serviceRecordError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {serviceRecordError}
             </p>
           ) : null}
         </Card>
@@ -432,6 +466,32 @@ export default function AssetDetailPage() {
         </Card>
 
         <Card>
+          <h2 style={{ marginTop: 0 }}>Repairs for this asset</h2>
+          {linkedRepairs.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No repairs linked to this asset.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {linkedRepairs
+                .slice()
+                .sort((a, b) => new Date(b.reported_date || b.created_at).getTime() - new Date(a.reported_date || a.created_at).getTime())
+                .map((repair) => (
+                  <div key={repair.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                    <div style={{ fontWeight: 600 }}>{repair.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {repair.reported_date || 'No reported date'} • {formatEnumLabel(repair.repair_type)} • {formatEnumLabel(repair.status)}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Link href="/repairs">
+              <Button type="button">Open repairs</Button>
+            </Link>
+          </div>
+        </Card>
+
+        <Card>
           <h2 style={{ marginTop: 0 }}>Service records for this asset</h2>
           {linkedServiceRecords.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No service records linked to this asset.</p>
@@ -442,13 +502,13 @@ export default function AssetDetailPage() {
                 .sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
                 .map((record) => (
                   <div key={record.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
-                    <div style={{ fontWeight: 600 }}>{record.title}</div>
+                    <div style={{ fontWeight: 600 }}>{record.service_title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                       {record.service_date} • {formatEnumLabel(record.service_type)}
                     </div>
-                    {record.follow_up_needed && (
+                    {record.next_service_date && (
                       <div style={{ color: '#92400e', fontSize: '0.875rem' }}>
-                        Follow-up: {record.follow_up_date || 'Needed'}
+                        Next service: {record.next_service_date}
                       </div>
                     )}
                   </div>

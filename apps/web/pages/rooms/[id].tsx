@@ -3,11 +3,13 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
-import { detectTrendFlags, trendFlagsForEntity, type IssueRecord, type ServiceRecord as TrendServiceRecord } from '../../components/trendFlags';
+import { detectTrendFlags, trendFlagsForEntity, type IssueRecord } from '../../components/trendFlags';
 import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
 import { getDemoCollection, getDemoRooms } from '../../lib/demoStorage';
 import { getReminderDataContext, getRemindersForRoom, type ReminderRow } from '../../lib/reminders';
+import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../../lib/repairs';
 import { getRoomById } from '../../lib/rooms';
+import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../../lib/serviceRecords';
 import { getUtilitiesForRoom, getUtilityDataContext, type UtilityRow } from '../../lib/utilities';
 
 type Room = {
@@ -15,15 +17,6 @@ type Room = {
   name: string;
   room_type: string;
   floor_name: string;
-};
-
-type ServiceRecord = TrendServiceRecord & {
-  id: string;
-  title: string;
-  service_type: string;
-  service_date: string;
-  follow_up_date?: string | null;
-  follow_up_needed?: boolean;
 };
 
 type Issue = IssueRecord & {
@@ -43,11 +36,14 @@ export default function RoomDetailPage() {
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
-  const [serviceRecords, setServiceRecords] = useState<ServiceRecord[]>([]);
+  const [repairs, setRepairs] = useState<RepairRow[]>([]);
+  const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [utilityError, setUtilityError] = useState('');
   const [assetError, setAssetError] = useState('');
   const [reminderError, setReminderError] = useState('');
+  const [repairError, setRepairError] = useState('');
+  const [serviceRecordError, setServiceRecordError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -60,15 +56,21 @@ export default function RoomDetailPage() {
       setUtilityError('');
       setAssetError('');
       setReminderError('');
+      setRepairError('');
+      setServiceRecordError('');
 
-      const [utilityContext, assetContext, reminderContext] = await Promise.all([
+      const [utilityContext, assetContext, reminderContext, repairContext, serviceRecordContext] = await Promise.all([
         getUtilityDataContext(),
         getAssetDataContext(),
-        getReminderDataContext()
+        getReminderDataContext(),
+        getRepairDataContext(),
+        getServiceRecordDataContext()
       ]);
       let nextUtilities: UtilityRow[] = [];
       let nextAssets: AssetRow[] = [];
       let nextReminders: ReminderRow[] = [];
+      let nextRepairs: RepairRow[] = [];
+      let nextServiceRecords: ServiceRecordRow[] = [];
 
       try {
         nextUtilities = await getUtilitiesForRoom(utilityContext, roomId);
@@ -91,6 +93,22 @@ export default function RoomDetailPage() {
       } catch (loadError) {
         if (isMounted) {
           setReminderError(loadError instanceof Error ? loadError.message : 'Failed to load room reminders.');
+        }
+      }
+
+      try {
+        nextRepairs = await getRepairsForContext(repairContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setRepairError(loadError instanceof Error ? loadError.message : 'Failed to load room repairs.');
+        }
+      }
+
+      try {
+        nextServiceRecords = await getServiceRecordsForContext(serviceRecordContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load room service records.');
         }
       }
 
@@ -126,7 +144,8 @@ export default function RoomDetailPage() {
       setUtilities(nextUtilities);
       setAssets(nextAssets);
       setReminders(nextReminders);
-      setServiceRecords(getDemoCollection<ServiceRecord>('homeBible.serviceRecords'));
+      setRepairs(nextRepairs);
+      setServiceRecords(nextServiceRecords);
       setIssues(getDemoCollection<Issue>('homeBible.issues'));
     }
 
@@ -170,6 +189,14 @@ export default function RoomDetailPage() {
         (record) => record.room_id === roomId || (!!record.utility_id && utilityIdsInRoom.has(record.utility_id))
       ),
     [serviceRecords, roomId, utilityIdsInRoom]
+  );
+
+  const roomRepairs = useMemo(
+    () =>
+      repairs.filter(
+        (repair) => repair.room_id === roomId || (!!repair.utility_id && utilityIdsInRoom.has(repair.utility_id))
+      ),
+    [repairs, roomId, utilityIdsInRoom]
   );
 
   const roomIssues = useMemo(
@@ -220,13 +247,14 @@ export default function RoomDetailPage() {
             <UtilityBadge label={`${roomUtilities.length} utilit${roomUtilities.length === 1 ? 'y' : 'ies'}`} />
             <UtilityBadge label={`${roomAssets.length} asset${roomAssets.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomReminders.length} reminder${roomReminders.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${roomRepairs.length} repair${roomRepairs.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomServiceRecords.length} service record${roomServiceRecords.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomIssues.length} issue${roomIssues.length === 1 ? '' : 's'}`} />
           </div>
           <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities, assets, and reminders for this room are loaded from Supabase.'
-              : 'Demo mode: utilities, assets, and reminders for this room are loaded from localStorage.'}
+              ? 'Signed-in mode: utilities, assets, reminders, repairs, and service records for this room are loaded from Supabase.'
+              : 'Demo mode: utilities, assets, reminders, repairs, and service records for this room are loaded from localStorage.'}
           </p>
           {utilityError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -241,6 +269,16 @@ export default function RoomDetailPage() {
           {reminderError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {reminderError}
+            </p>
+          ) : null}
+          {repairError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {repairError}
+            </p>
+          ) : null}
+          {serviceRecordError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {serviceRecordError}
             </p>
           ) : null}
         </Card>
@@ -340,6 +378,32 @@ export default function RoomDetailPage() {
         )}
 
         <Card>
+          <h2 style={{ marginTop: 0 }}>Repairs for this room</h2>
+          {roomRepairs.length === 0 ? (
+            <p style={{ color: '#6b7280' }}>No repairs linked to this room.</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {roomRepairs
+                .slice()
+                .sort((a, b) => new Date(b.reported_date || b.created_at).getTime() - new Date(a.reported_date || a.created_at).getTime())
+                .map((repair) => (
+                  <div key={repair.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                    <div style={{ fontWeight: 600 }}>{repair.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {repair.reported_date || 'No reported date'} • {formatEnumLabel(repair.repair_type)} • {formatEnumLabel(repair.status)}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <Link href="/repairs">
+              <Button type="button">Manage repairs</Button>
+            </Link>
+          </div>
+        </Card>
+
+        <Card>
           <h2 style={{ marginTop: 0 }}>Service records for this room</h2>
           {roomServiceRecords.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No service records linked to this room.</p>
@@ -350,13 +414,13 @@ export default function RoomDetailPage() {
                 .sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
                 .map((record) => (
                   <div key={record.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
-                    <div style={{ fontWeight: 600 }}>{record.title}</div>
+                    <div style={{ fontWeight: 600 }}>{record.service_title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                       {record.service_date} • {formatEnumLabel(record.service_type)}
                     </div>
-                    {record.follow_up_needed && (
+                    {record.next_service_date && (
                       <div style={{ color: '#92400e', fontSize: '0.875rem' }}>
-                        Follow-up: {record.follow_up_date || 'Needed'}
+                        Next service: {record.next_service_date}
                       </div>
                     )}
                   </div>
