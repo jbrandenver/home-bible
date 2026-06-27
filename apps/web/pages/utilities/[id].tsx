@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
+import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getDemoRooms } from '../../lib/demoStorage';
 import {
   getDocumentDataContext,
@@ -13,6 +14,7 @@ import {
 } from '../../lib/documents';
 import { getIssueDataContext, getIssuesForUtility, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForUtility, type ReminderRow } from '../../lib/reminders';
+import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import { getRepairDataContext, getRepairsForUtility, type RepairRow } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForUtility, type ServiceRecordRow } from '../../lib/serviceRecords';
@@ -53,6 +55,8 @@ export default function UtilityDetailPage() {
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [receiptContext, setReceiptContext] = useState<ReceiptDataContext | null>(null);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,17 +84,18 @@ export default function UtilityDetailPage() {
       setFormError('');
 
       try {
-        const [nextContext, reminderContext, repairContext, serviceRecordContext, nextDocumentContext, issueContext, trendFlagContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, serviceRecordContext, nextDocumentContext, nextReceiptContext, issueContext, trendFlagContext] = await Promise.all([
           getUtilityDataContext(),
           getReminderDataContext(),
           getRepairDataContext(),
           getServiceRecordDataContext(),
           getDocumentDataContext(),
+          getReceiptDataContext(),
           getIssueDataContext(),
           getTrendFlagDataContext()
         ]);
 
-        const [nextUtility, roomRows, nextReminders, nextRepairs, nextServiceRecords, nextDocuments, nextIssues, nextTrendFlags] = await Promise.all([
+        const [nextUtility, roomRows, nextReminders, nextRepairs, nextServiceRecords, nextDocuments, nextReceipts, nextIssues, nextTrendFlags] = await Promise.all([
           getUtilityByIdForContext(nextContext, utilityId),
           nextContext.mode === 'supabase' && nextContext.property
             ? getRoomsForProperty(nextContext.property.id)
@@ -99,6 +104,7 @@ export default function UtilityDetailPage() {
           getRepairsForUtility(repairContext, utilityId),
           getServiceRecordsForUtility(serviceRecordContext, utilityId),
           getDocumentsForLink(nextDocumentContext, { field: 'utility_id', id: utilityId }),
+          getReceiptsForLink(nextReceiptContext, { field: 'utility_id', id: utilityId }),
           getIssuesForUtility(issueContext, utilityId),
           getTrendFlagsForUtility(trendFlagContext, utilityId)
         ]);
@@ -116,6 +122,8 @@ export default function UtilityDetailPage() {
         setServiceRecords(nextServiceRecords);
         setDocumentContext(nextDocumentContext);
         setDocuments(nextDocuments);
+        setReceiptContext(nextReceiptContext);
+        setReceipts(nextReceipts);
         setIssues(nextIssues);
         setTrendFlags(nextTrendFlags);
 
@@ -260,6 +268,7 @@ export default function UtilityDetailPage() {
             <UtilityBadge label={`${repairs.length} repair${repairs.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${issues.length} issue${issues.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${trendFlags.length} trend flag${trendFlags.length === 1 ? '' : 's'}`} />
           </div>
@@ -347,6 +356,13 @@ export default function UtilityDetailPage() {
           context={documentContext}
           uploadHref={`/documents?utilityId=${utility.id}`}
           empty="No documents linked to this utility."
+        />
+
+        <RelatedReceipts
+          receipts={receipts}
+          context={receiptContext}
+          uploadHref={`/receipts?utilityId=${utility.id}`}
+          empty="No receipts linked to this utility."
         />
 
         <RelatedList title="Issues" empty="No issues linked to this utility.">

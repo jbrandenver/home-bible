@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ASSET_TYPES, formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
+import { RelatedReceipts } from '../../components/RelatedReceipts';
 import {
   deleteAssetForContext,
   getAssetByIdForContext,
@@ -23,6 +24,7 @@ import {
 } from '../../lib/documents';
 import { getIssueDataContext, getIssuesForAsset, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForAsset, type ReminderRow } from '../../lib/reminders';
+import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import { getRepairDataContext, getRepairsForAsset, type RepairRow } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForAsset, type ServiceRecordRow } from '../../lib/serviceRecords';
@@ -54,6 +56,8 @@ export default function AssetDetailPage() {
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [receiptContext, setReceiptContext] = useState<ReceiptDataContext | null>(null);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +67,7 @@ export default function AssetDetailPage() {
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
   const [documentError, setDocumentError] = useState('');
+  const [receiptError, setReceiptError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -133,16 +138,18 @@ export default function AssetDetailPage() {
       setRepairError('');
       setServiceRecordError('');
       setDocumentError('');
+      setReceiptError('');
       setIssueError('');
       setTrendFlagError('');
 
       try {
-        const [nextContext, reminderContext, repairContext, serviceRecordContext, nextDocumentContext, issueContext, trendFlagContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, serviceRecordContext, nextDocumentContext, nextReceiptContext, issueContext, trendFlagContext] = await Promise.all([
           getAssetDataContext(),
           getReminderDataContext(),
           getRepairDataContext(),
           getServiceRecordDataContext(),
           getDocumentDataContext(),
+          getReceiptDataContext(),
           getIssueDataContext(),
           getTrendFlagDataContext()
         ]);
@@ -151,6 +158,7 @@ export default function AssetDetailPage() {
         let nextRepairs: RepairRow[] = [];
         let nextServiceRecords: ServiceRecordRow[] = [];
         let nextDocuments: DocumentRow[] = [];
+        let nextReceipts: ReceiptRow[] = [];
         let nextIssues: IssueRow[] = [];
         let nextTrendFlags: TrendFlagRow[] = [];
 
@@ -183,6 +191,14 @@ export default function AssetDetailPage() {
         } catch (loadError) {
           if (isMounted) {
             setDocumentError(loadError instanceof Error ? loadError.message : 'Failed to load asset documents.');
+          }
+        }
+
+        try {
+          nextReceipts = await getReceiptsForLink(nextReceiptContext, { field: 'asset_id', id: assetId });
+        } catch (loadError) {
+          if (isMounted) {
+            setReceiptError(loadError instanceof Error ? loadError.message : 'Failed to load asset receipts.');
           }
         }
 
@@ -220,6 +236,8 @@ export default function AssetDetailPage() {
         setServiceRecords(nextServiceRecords);
         setDocumentContext(nextDocumentContext);
         setDocuments(nextDocuments);
+        setReceiptContext(nextReceiptContext);
+        setReceipts(nextReceipts);
         setIssues(nextIssues);
         setTrendFlags(nextTrendFlags);
         setRoomName(
@@ -425,6 +443,11 @@ export default function AssetDetailPage() {
               {documentError}
             </p>
           ) : null}
+          {receiptError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {receiptError}
+            </p>
+          ) : null}
           {issueError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {issueError}
@@ -462,6 +485,9 @@ export default function AssetDetailPage() {
                 <strong>Brand:</strong> {asset.brand}
               </div>
             )}
+            <div>
+              <strong>Receipts:</strong> {receipts.length}
+            </div>
 
             {asset.model && (
               <div>
@@ -553,6 +579,13 @@ export default function AssetDetailPage() {
           context={documentContext}
           uploadHref={`/documents?assetId=${asset.id}`}
           empty="No documents linked to this asset."
+        />
+
+        <RelatedReceipts
+          receipts={receipts}
+          context={receiptContext}
+          uploadHref={`/receipts?assetId=${asset.id}`}
+          empty="No receipts linked to this asset."
         />
 
         {/* Documentation Card */}

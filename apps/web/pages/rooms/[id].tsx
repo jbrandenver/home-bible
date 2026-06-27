@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
+import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
 import {
@@ -14,6 +15,7 @@ import {
 } from '../../lib/documents';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForRoom, type ReminderRow } from '../../lib/reminders';
+import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../../lib/repairs';
 import { getRoomById } from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../../lib/serviceRecords';
@@ -41,6 +43,8 @@ export default function RoomDetailPage() {
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [receiptContext, setReceiptContext] = useState<ReceiptDataContext | null>(null);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [utilityError, setUtilityError] = useState('');
@@ -49,6 +53,7 @@ export default function RoomDetailPage() {
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
   const [documentError, setDocumentError] = useState('');
+  const [receiptError, setReceiptError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
 
@@ -66,6 +71,7 @@ export default function RoomDetailPage() {
       setRepairError('');
       setServiceRecordError('');
       setDocumentError('');
+      setReceiptError('');
       setIssueError('');
       setTrendFlagError('');
 
@@ -76,6 +82,7 @@ export default function RoomDetailPage() {
         repairContext,
         serviceRecordContext,
         nextDocumentContext,
+        nextReceiptContext,
         issueContext,
         trendFlagContext
       ] = await Promise.all([
@@ -85,6 +92,7 @@ export default function RoomDetailPage() {
         getRepairDataContext(),
         getServiceRecordDataContext(),
         getDocumentDataContext(),
+        getReceiptDataContext(),
         getIssueDataContext(),
         getTrendFlagDataContext()
       ]);
@@ -94,6 +102,7 @@ export default function RoomDetailPage() {
       let nextRepairs: RepairRow[] = [];
       let nextServiceRecords: ServiceRecordRow[] = [];
       let nextDocuments: DocumentRow[] = [];
+      let nextReceipts: ReceiptRow[] = [];
       let nextIssues: IssueRow[] = [];
       let nextTrendFlags: TrendFlagRow[] = [];
 
@@ -142,6 +151,14 @@ export default function RoomDetailPage() {
       } catch (loadError) {
         if (isMounted) {
           setDocumentError(loadError instanceof Error ? loadError.message : 'Failed to load room documents.');
+        }
+      }
+
+      try {
+        nextReceipts = await getReceiptsForLink(nextReceiptContext, { field: 'room_id', id: roomId });
+      } catch (loadError) {
+        if (isMounted) {
+          setReceiptError(loadError instanceof Error ? loadError.message : 'Failed to load room receipts.');
         }
       }
 
@@ -197,6 +214,8 @@ export default function RoomDetailPage() {
       setServiceRecords(nextServiceRecords);
       setDocumentContext(nextDocumentContext);
       setDocuments(nextDocuments);
+      setReceiptContext(nextReceiptContext);
+      setReceipts(nextReceipts);
       setIssues(nextIssues);
       setTrendFlags(nextTrendFlags);
     }
@@ -307,13 +326,14 @@ export default function RoomDetailPage() {
             <UtilityBadge label={`${roomRepairs.length} repair${roomRepairs.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomServiceRecords.length} service record${roomServiceRecords.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomIssues.length} issue${roomIssues.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomTrendFlags.length} trend flag${roomTrendFlags.length === 1 ? '' : 's'}`} />
           </div>
           <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities, assets, reminders, repairs, service records, documents, issues, and trend flags for this room are loaded from Supabase.'
-              : 'Demo mode: utilities, assets, reminders, repairs, service records, documents, issues, and trend flags for this room are loaded from localStorage.'}
+              ? 'Signed-in mode: utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags for this room are loaded from Supabase.'
+              : 'Demo mode: utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags for this room are loaded from localStorage.'}
           </p>
           {utilityError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -345,6 +365,11 @@ export default function RoomDetailPage() {
               {documentError}
             </p>
           ) : null}
+          {receiptError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {receiptError}
+            </p>
+          ) : null}
           {issueError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {issueError}
@@ -362,6 +387,13 @@ export default function RoomDetailPage() {
           context={documentContext}
           uploadHref={`/documents?roomId=${roomId}`}
           empty="No documents linked to this room."
+        />
+
+        <RelatedReceipts
+          receipts={receipts}
+          context={receiptContext}
+          uploadHref={`/receipts?roomId=${roomId}`}
+          empty="No receipts linked to this room."
         />
 
         <Card>

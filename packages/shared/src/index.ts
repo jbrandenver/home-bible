@@ -267,6 +267,37 @@ export const DOCUMENT_SOURCES = [
   'system'
 ] as const;
 
+export const RECEIPT_CATEGORIES = [
+  'appliance',
+  'tool',
+  'utility',
+  'repair',
+  'maintenance',
+  'warranty',
+  'home_improvement',
+  'furniture',
+  'electronics',
+  'supplies',
+  'inspection',
+  'permit',
+  'insurance',
+  'other'
+] as const;
+
+export const RECEIPT_APPROVAL_STATUSES = [
+  'draft',
+  'needs_review',
+  'approved',
+  'rejected'
+] as const;
+
+export const RECEIPT_SOURCES = [
+  'manual_entry',
+  'manual_review',
+  'future_ai_parse',
+  'future_ocr_parse'
+] as const;
+
 export const MEMBER_ROLES = [
   'owner',
   'co_owner',
@@ -462,6 +493,27 @@ export const createDocumentSchema = z.object({
   source: z.enum(DOCUMENT_SOURCES).default('manual_upload')
 });
 
+export const createReceiptSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  document_id: z.string().uuid().optional().nullable(),
+  room_id: z.string().uuid().optional().nullable(),
+  utility_id: z.string().uuid().optional().nullable(),
+  asset_id: z.string().uuid().optional().nullable(),
+  repair_id: z.string().uuid().optional().nullable(),
+  service_record_id: z.string().uuid().optional().nullable(),
+  vendor_name: z.string().optional().nullable(),
+  purchase_date: z.string().optional().nullable(),
+  total_amount: z.coerce.number().optional().nullable(),
+  tax_amount: z.coerce.number().optional().nullable(),
+  currency: z.string().length(3).default('USD'),
+  payment_method: z.string().optional().nullable(),
+  category: z.enum(RECEIPT_CATEGORIES).default('other'),
+  description: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  approval_status: z.enum(RECEIPT_APPROVAL_STATUSES).default('approved'),
+  source: z.enum(RECEIPT_SOURCES).default('manual_review')
+});
+
 export type PropertyType = typeof PROPERTY_TYPES[number];
 export type RoomType = typeof ROOM_TYPES[number];
 export type UtilityType = typeof UTILITY_TYPES[number];
@@ -487,6 +539,9 @@ export type TrendFlagDetectedFrom = typeof TREND_FLAG_DETECTED_FROM[number];
 export type DocumentType = typeof DOCUMENT_TYPES[number];
 export type DocumentVisibility = typeof DOCUMENT_VISIBILITIES[number];
 export type DocumentSource = typeof DOCUMENT_SOURCES[number];
+export type ReceiptCategory = typeof RECEIPT_CATEGORIES[number];
+export type ReceiptApprovalStatus = typeof RECEIPT_APPROVAL_STATUSES[number];
+export type ReceiptSource = typeof RECEIPT_SOURCES[number];
 export type MemberRole = typeof MEMBER_ROLES[number];
 export type PlanName = typeof PLAN_NAMES[number];
 
@@ -501,6 +556,7 @@ export type CreateServiceRecordInput = z.infer<typeof createServiceRecordSchema>
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 export type CreateTrendFlagInput = z.infer<typeof createTrendFlagSchema>;
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
+export type CreateReceiptInput = z.infer<typeof createReceiptSchema>;
 
 export type DbRole = MemberRole;
 export type DbVisibility = VisibilityOption;
@@ -702,6 +758,34 @@ export interface DocumentRow {
   visibility: DocumentVisibility;
   source: DocumentSource;
   created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface ReceiptRow {
+  id: string;
+  property_id: string;
+  document_id: string | null;
+  room_id: string | null;
+  utility_id: string | null;
+  asset_id: string | null;
+  repair_id: string | null;
+  service_record_id: string | null;
+  vendor_name: string | null;
+  purchase_date: string | null;
+  total_amount: number | null;
+  tax_amount: number | null;
+  currency: string;
+  payment_method: string | null;
+  category: ReceiptCategory;
+  description: string | null;
+  notes: string | null;
+  approval_status: ReceiptApprovalStatus;
+  source: ReceiptSource;
+  created_by: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

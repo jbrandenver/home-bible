@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatEnumLabel, REPAIR_STATUSES } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
+import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
 import {
@@ -14,6 +15,7 @@ import {
 } from '../../lib/documents';
 import { getIssueDataContext, getIssuesForRepair, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../../lib/reminders';
+import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import {
   deleteRepairForContext,
   getRepairByIdForContext,
@@ -79,6 +81,8 @@ export default function RepairDetailPage() {
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [receiptContext, setReceiptContext] = useState<ReceiptDataContext | null>(null);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
@@ -96,10 +100,11 @@ export default function RepairDetailPage() {
       setError('');
 
       try {
-        const [nextContext, serviceContext, documentContextForLoad, reminderContext, issueContext, trendFlagContext] = await Promise.all([
+        const [nextContext, serviceContext, documentContextForLoad, receiptContextForLoad, reminderContext, issueContext, trendFlagContext] = await Promise.all([
           getRepairDataContext(),
           getServiceRecordDataContext(),
           getDocumentDataContext(),
+          getReceiptDataContext(),
           getReminderDataContext(),
           getIssueDataContext(),
           getTrendFlagDataContext()
@@ -115,9 +120,10 @@ export default function RepairDetailPage() {
               ])
             : [getDemoRooms(), getDemoAssets(), getDemoUtilities()];
 
-        const [allServiceRecords, repairDocuments, allReminders, repairIssues, allTrendFlags] = await Promise.all([
+        const [allServiceRecords, repairDocuments, repairReceipts, allReminders, repairIssues, allTrendFlags] = await Promise.all([
           getServiceRecordsForContext(serviceContext),
           getDocumentsForLink(documentContextForLoad, { field: 'repair_id', id: repairId }),
+          getReceiptsForLink(receiptContextForLoad, { field: 'repair_id', id: repairId }),
           getRemindersForContext(reminderContext),
           getIssuesForRepair(issueContext, repairId),
           getTrendFlagsForContext(trendFlagContext)
@@ -133,6 +139,8 @@ export default function RepairDetailPage() {
         setUtilities(utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name })));
         setDocumentContext(documentContextForLoad);
         setDocuments(repairDocuments);
+        setReceiptContext(receiptContextForLoad);
+        setReceipts(repairReceipts);
         setIssues(repairIssues);
 
         if (nextRepair) {
@@ -248,6 +256,7 @@ export default function RepairDetailPage() {
             {repair.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, repair.asset_id) || 'Unknown'}`} />}
             {repair.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, repair.utility_id) || 'Unknown'}`} />}
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
           </div>
           <div style={{ color: '#4b5563', display: 'grid', gap: 6 }}>
             <div><strong>Reported:</strong> {repair.reported_date || 'Not set'}</div>
@@ -299,6 +308,13 @@ export default function RepairDetailPage() {
           context={documentContext}
           uploadHref={`/documents?repairId=${repair.id}`}
           empty="No documents linked to this repair."
+        />
+
+        <RelatedReceipts
+          receipts={receipts}
+          context={receiptContext}
+          uploadHref={`/receipts?repairId=${repair.id}`}
+          empty="No receipts linked to this repair."
         />
 
         <RelatedList title="Reminders" empty="No related reminders found.">

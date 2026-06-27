@@ -7,6 +7,7 @@ import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
+import { formatReceiptAmount, getReceiptDataContext, getReceiptsForContext, type ReceiptRow } from '../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getFloorsForProperty, getRoomsForProperty } from '../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
@@ -59,6 +60,7 @@ export default function DashboardPage() {
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [floorCount, setFloorCount] = useState(0);
@@ -68,6 +70,7 @@ export default function DashboardPage() {
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
   const [documentError, setDocumentError] = useState('');
+  const [receiptError, setReceiptError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
 
@@ -81,6 +84,7 @@ export default function DashboardPage() {
       setRepairError('');
       setServiceRecordError('');
       setDocumentError('');
+      setReceiptError('');
       setIssueError('');
       setTrendFlagError('');
 
@@ -91,6 +95,7 @@ export default function DashboardPage() {
         repairContext,
         serviceRecordContext,
         documentContext,
+        receiptContext,
         issueContext,
         trendFlagContext
       ] = await Promise.all([
@@ -100,6 +105,7 @@ export default function DashboardPage() {
         getRepairDataContext(),
         getServiceRecordDataContext(),
         getDocumentDataContext(),
+        getReceiptDataContext(),
         getIssueDataContext(),
         getTrendFlagDataContext()
       ]);
@@ -109,6 +115,7 @@ export default function DashboardPage() {
       let nextRepairs: RepairRow[] = [];
       let nextServiceRecords: ServiceRecordRow[] = [];
       let nextDocuments: DocumentRow[] = [];
+      let nextReceipts: ReceiptRow[] = [];
       let nextIssues: IssueRow[] = [];
       let nextTrendFlags: TrendFlagRow[] = [];
 
@@ -161,6 +168,14 @@ export default function DashboardPage() {
       }
 
       try {
+        nextReceipts = await getReceiptsForContext(receiptContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setReceiptError(loadError instanceof Error ? loadError.message : 'Failed to load receipts.');
+        }
+      }
+
+      try {
         nextIssues = await getIssuesForContext(issueContext);
       } catch (loadError) {
         if (isMounted) {
@@ -187,6 +202,7 @@ export default function DashboardPage() {
       setRepairs(nextRepairs);
       setServiceRecords(nextServiceRecords);
       setDocuments(nextDocuments);
+      setReceipts(nextReceipts);
       setIssues(nextIssues);
       setTrendFlags(nextTrendFlags);
 
@@ -301,6 +317,19 @@ export default function DashboardPage() {
     [documents]
   );
 
+  const recentReceipts = useMemo(
+    () =>
+      receipts
+        .slice()
+        .sort((a, b) => {
+          const aDate = a.purchase_date || a.created_at;
+          const bDate = b.purchase_date || b.created_at;
+          return new Date(bDate).getTime() - new Date(aDate).getTime();
+        })
+        .slice(0, 4),
+    [receipts]
+  );
+
   const openIssueCount = useMemo(
     () => issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length,
     [issues]
@@ -345,6 +374,7 @@ export default function DashboardPage() {
               <UtilityBadge label={`${openRepairCount} open repair${openRepairCount === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${highUrgentIssueCount} high or urgent issue${highUrgentIssueCount === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${activeTrendFlagCount} active trend flag${activeTrendFlagCount === 1 ? '' : 's'}`} />
@@ -352,8 +382,8 @@ export default function DashboardPage() {
 
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, issues, and trend flags are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, issues, and trend flags are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -383,6 +413,11 @@ export default function DashboardPage() {
             {documentError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {documentError}
+              </p>
+            ) : null}
+            {receiptError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {receiptError}
               </p>
             ) : null}
             {issueError ? (
@@ -419,6 +454,9 @@ export default function DashboardPage() {
               </Link>
               <Link href="/documents">
                 <Button type="button">View documents</Button>
+              </Link>
+              <Link href="/receipts">
+                <Button type="button">View receipts</Button>
               </Link>
               <Link href="/reminders">
                 <Button type="button">View reminders</Button>
@@ -488,6 +526,37 @@ export default function DashboardPage() {
             <div style={{ marginTop: 12 }}>
               <Link href="/documents">
                 <Button type="button">Open documents</Button>
+              </Link>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Recent receipts</h2>
+            {recentReceipts.length === 0 ? (
+              <p style={{ color: '#6b7280' }}>No approved receipts yet.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {recentReceipts.map((receipt) => (
+                  <div
+                    key={receipt.id}
+                    style={{
+                      padding: 12,
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 10,
+                      background: '#fff'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{receipt.vendor_name || receipt.description || 'Receipt'}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {receipt.purchase_date || 'No date'} • {formatReceiptAmount(receipt)} • {formatEnumLabel(receipt.category)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <Link href="/receipts">
+                <Button type="button">Open receipts</Button>
               </Link>
             </div>
           </Card>

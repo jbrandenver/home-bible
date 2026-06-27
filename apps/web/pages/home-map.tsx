@@ -7,6 +7,7 @@ import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
+import { getReceiptDataContext, getReceiptsForContext, type ReceiptRow } from '../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getRoomsForProperty } from '../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
@@ -31,6 +32,7 @@ export default function HomeMapPage() {
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [utilityError, setUtilityError] = useState('');
@@ -39,6 +41,7 @@ export default function HomeMapPage() {
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
   const [documentError, setDocumentError] = useState('');
+  const [receiptError, setReceiptError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
 
@@ -52,6 +55,7 @@ export default function HomeMapPage() {
       setRepairError('');
       setServiceRecordError('');
       setDocumentError('');
+      setReceiptError('');
       setIssueError('');
       setTrendFlagError('');
 
@@ -62,6 +66,7 @@ export default function HomeMapPage() {
         repairContext,
         serviceRecordContext,
         documentContext,
+        receiptContext,
         issueContext,
         trendFlagContext
       ] = await Promise.all([
@@ -71,6 +76,7 @@ export default function HomeMapPage() {
         getRepairDataContext(),
         getServiceRecordDataContext(),
         getDocumentDataContext(),
+        getReceiptDataContext(),
         getIssueDataContext(),
         getTrendFlagDataContext()
       ]);
@@ -80,6 +86,7 @@ export default function HomeMapPage() {
       let nextRepairs: RepairRow[] = [];
       let nextServiceRecords: ServiceRecordRow[] = [];
       let nextDocuments: DocumentRow[] = [];
+      let nextReceipts: ReceiptRow[] = [];
       let nextIssues: IssueRow[] = [];
       let nextTrendFlags: TrendFlagRow[] = [];
 
@@ -132,6 +139,14 @@ export default function HomeMapPage() {
       }
 
       try {
+        nextReceipts = await getReceiptsForContext(receiptContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setReceiptError(loadError instanceof Error ? loadError.message : 'Failed to load receipts.');
+        }
+      }
+
+      try {
         nextIssues = await getIssuesForContext(issueContext);
       } catch (loadError) {
         if (isMounted) {
@@ -158,6 +173,7 @@ export default function HomeMapPage() {
       setRepairs(nextRepairs);
       setServiceRecords(nextServiceRecords);
       setDocuments(nextDocuments);
+      setReceipts(nextReceipts);
       setIssues(nextIssues);
       setTrendFlags(nextTrendFlags);
 
@@ -268,6 +284,17 @@ export default function HomeMapPage() {
     }, {});
   }, [documents]);
 
+  const receiptCountsByRoom = useMemo(() => {
+    return receipts.reduce<Record<string, number>>((acc, receipt) => {
+      if (!receipt.room_id) {
+        return acc;
+      }
+
+      acc[receipt.room_id] = (acc[receipt.room_id] || 0) + 1;
+      return acc;
+    }, {});
+  }, [receipts]);
+
   const issueCountsByRoom = useMemo(() => {
     return issues.reduce<Record<string, number>>((acc, issue) => {
       if (!issue.room_id || issue.status === 'resolved' || issue.status === 'dismissed') {
@@ -309,13 +336,14 @@ export default function HomeMapPage() {
               <UtilityBadge label={`${repairs.length} repair${repairs.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length} open issue${issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${trendFlags.filter((flag) => flag.status === 'active').length} active trend flag${trendFlags.filter((flag) => flag.status === 'active').length === 1 ? '' : 's'}`} />
             </div>
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, issues, and trend flags are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, issues, and trend flags are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -345,6 +373,11 @@ export default function HomeMapPage() {
             {documentError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {documentError}
+              </p>
+            ) : null}
+            {receiptError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {receiptError}
               </p>
             ) : null}
             {issueError ? (
@@ -388,7 +421,7 @@ export default function HomeMapPage() {
                   >
                     <RoomCard
                       name={room.name}
-                      type={`${formatEnumLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'} • ${repairCountsByRoom[room.id] || 0} repair${repairCountsByRoom[room.id] === 1 ? '' : 's'} • ${serviceRecordCountsByRoom[room.id] || 0} service${serviceRecordCountsByRoom[room.id] === 1 ? '' : 's'} • ${documentCountsByRoom[room.id] || 0} doc${documentCountsByRoom[room.id] === 1 ? '' : 's'} • ${reminderCountsByRoom[room.id] || 0} reminder${reminderCountsByRoom[room.id] === 1 ? '' : 's'} • ${issueCountsByRoom[room.id] || 0} issue${issueCountsByRoom[room.id] === 1 ? '' : 's'} • ${trendFlagCountsByRoom[room.id] || 0} trend${trendFlagCountsByRoom[room.id] === 1 ? '' : 's'}`}
+                      type={`${formatEnumLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'} • ${repairCountsByRoom[room.id] || 0} repair${repairCountsByRoom[room.id] === 1 ? '' : 's'} • ${serviceRecordCountsByRoom[room.id] || 0} service${serviceRecordCountsByRoom[room.id] === 1 ? '' : 's'} • ${documentCountsByRoom[room.id] || 0} doc${documentCountsByRoom[room.id] === 1 ? '' : 's'} • ${receiptCountsByRoom[room.id] || 0} receipt${receiptCountsByRoom[room.id] === 1 ? '' : 's'} • ${reminderCountsByRoom[room.id] || 0} reminder${reminderCountsByRoom[room.id] === 1 ? '' : 's'} • ${issueCountsByRoom[room.id] || 0} issue${issueCountsByRoom[room.id] === 1 ? '' : 's'} • ${trendFlagCountsByRoom[room.id] || 0} trend${trendFlagCountsByRoom[room.id] === 1 ? '' : 's'}`}
                     />
                   </Link>
                 ))}

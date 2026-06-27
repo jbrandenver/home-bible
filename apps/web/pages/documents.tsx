@@ -575,6 +575,13 @@ export default function DocumentsPage() {
                           <Button type="button" onClick={() => startEditing(document)} style={{ background: '#4b5563' }}>
                             Edit metadata
                           </Button>
+                          {document.document_type === 'receipt' ? (
+                            <Link href={`/receipts?documentId=${document.id}`}>
+                              <Button type="button" style={{ background: '#065f46' }}>
+                                Review receipt
+                              </Button>
+                            </Link>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => deleteDocument(document.id)}
