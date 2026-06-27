@@ -4,6 +4,7 @@ import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, FloorSection, RoomCard, UtilityBadge } from '@home-bible/ui';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
+import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
@@ -29,6 +30,7 @@ export default function HomeMapPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [utilityError, setUtilityError] = useState('');
@@ -36,6 +38,7 @@ export default function HomeMapPage() {
   const [reminderError, setReminderError] = useState('');
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
+  const [documentError, setDocumentError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
 
@@ -48,6 +51,7 @@ export default function HomeMapPage() {
       setReminderError('');
       setRepairError('');
       setServiceRecordError('');
+      setDocumentError('');
       setIssueError('');
       setTrendFlagError('');
 
@@ -57,6 +61,7 @@ export default function HomeMapPage() {
         reminderContext,
         repairContext,
         serviceRecordContext,
+        documentContext,
         issueContext,
         trendFlagContext
       ] = await Promise.all([
@@ -65,6 +70,7 @@ export default function HomeMapPage() {
         getReminderDataContext(),
         getRepairDataContext(),
         getServiceRecordDataContext(),
+        getDocumentDataContext(),
         getIssueDataContext(),
         getTrendFlagDataContext()
       ]);
@@ -73,6 +79,7 @@ export default function HomeMapPage() {
       let nextReminders: ReminderRow[] = [];
       let nextRepairs: RepairRow[] = [];
       let nextServiceRecords: ServiceRecordRow[] = [];
+      let nextDocuments: DocumentRow[] = [];
       let nextIssues: IssueRow[] = [];
       let nextTrendFlags: TrendFlagRow[] = [];
 
@@ -117,6 +124,14 @@ export default function HomeMapPage() {
       }
 
       try {
+        nextDocuments = await getDocumentsForContext(documentContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setDocumentError(loadError instanceof Error ? loadError.message : 'Failed to load documents.');
+        }
+      }
+
+      try {
         nextIssues = await getIssuesForContext(issueContext);
       } catch (loadError) {
         if (isMounted) {
@@ -142,6 +157,7 @@ export default function HomeMapPage() {
       setReminders(nextReminders);
       setRepairs(nextRepairs);
       setServiceRecords(nextServiceRecords);
+      setDocuments(nextDocuments);
       setIssues(nextIssues);
       setTrendFlags(nextTrendFlags);
 
@@ -241,6 +257,17 @@ export default function HomeMapPage() {
     }, {});
   }, [serviceRecords]);
 
+  const documentCountsByRoom = useMemo(() => {
+    return documents.reduce<Record<string, number>>((acc, document) => {
+      if (!document.room_id) {
+        return acc;
+      }
+
+      acc[document.room_id] = (acc[document.room_id] || 0) + 1;
+      return acc;
+    }, {});
+  }, [documents]);
+
   const issueCountsByRoom = useMemo(() => {
     return issues.reduce<Record<string, number>>((acc, issue) => {
       if (!issue.room_id || issue.status === 'resolved' || issue.status === 'dismissed') {
@@ -281,13 +308,14 @@ export default function HomeMapPage() {
               <UtilityBadge label={`${reminders.length} reminder${reminders.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${repairs.length} repair${repairs.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length} open issue${issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${trendFlags.filter((flag) => flag.status === 'active').length} active trend flag${trendFlags.filter((flag) => flag.status === 'active').length === 1 ? '' : 's'}`} />
             </div>
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, issues, and trend flags are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, issues, and trend flags are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, issues, and trend flags are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, issues, and trend flags are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -312,6 +340,11 @@ export default function HomeMapPage() {
             {serviceRecordError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {serviceRecordError}
+              </p>
+            ) : null}
+            {documentError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {documentError}
               </p>
             ) : null}
             {issueError ? (
@@ -355,7 +388,7 @@ export default function HomeMapPage() {
                   >
                     <RoomCard
                       name={room.name}
-                      type={`${formatEnumLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'} • ${repairCountsByRoom[room.id] || 0} repair${repairCountsByRoom[room.id] === 1 ? '' : 's'} • ${serviceRecordCountsByRoom[room.id] || 0} service${serviceRecordCountsByRoom[room.id] === 1 ? '' : 's'} • ${reminderCountsByRoom[room.id] || 0} reminder${reminderCountsByRoom[room.id] === 1 ? '' : 's'} • ${issueCountsByRoom[room.id] || 0} issue${issueCountsByRoom[room.id] === 1 ? '' : 's'} • ${trendFlagCountsByRoom[room.id] || 0} trend${trendFlagCountsByRoom[room.id] === 1 ? '' : 's'}`}
+                      type={`${formatEnumLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'} • ${repairCountsByRoom[room.id] || 0} repair${repairCountsByRoom[room.id] === 1 ? '' : 's'} • ${serviceRecordCountsByRoom[room.id] || 0} service${serviceRecordCountsByRoom[room.id] === 1 ? '' : 's'} • ${documentCountsByRoom[room.id] || 0} doc${documentCountsByRoom[room.id] === 1 ? '' : 's'} • ${reminderCountsByRoom[room.id] || 0} reminder${reminderCountsByRoom[room.id] === 1 ? '' : 's'} • ${issueCountsByRoom[room.id] || 0} issue${issueCountsByRoom[room.id] === 1 ? '' : 's'} • ${trendFlagCountsByRoom[room.id] || 0} trend${trendFlagCountsByRoom[room.id] === 1 ? '' : 's'}`}
                     />
                   </Link>
                 ))}

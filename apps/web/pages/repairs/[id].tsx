@@ -3,8 +3,15 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatEnumLabel, REPAIR_STATUSES } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
+import {
+  getDocumentDataContext,
+  getDocumentsForLink,
+  type DocumentDataContext,
+  type DocumentRow
+} from '../../lib/documents';
 import { getIssueDataContext, getIssuesForRepair, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../../lib/reminders';
 import {
@@ -70,6 +77,8 @@ export default function RepairDetailPage() {
   const [assets, setAssets] = useState<LinkOption[]>([]);
   const [utilities, setUtilities] = useState<LinkOption[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
+  const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
@@ -87,9 +96,10 @@ export default function RepairDetailPage() {
       setError('');
 
       try {
-        const [nextContext, serviceContext, reminderContext, issueContext, trendFlagContext] = await Promise.all([
+        const [nextContext, serviceContext, documentContextForLoad, reminderContext, issueContext, trendFlagContext] = await Promise.all([
           getRepairDataContext(),
           getServiceRecordDataContext(),
+          getDocumentDataContext(),
           getReminderDataContext(),
           getIssueDataContext(),
           getTrendFlagDataContext()
@@ -105,8 +115,9 @@ export default function RepairDetailPage() {
               ])
             : [getDemoRooms(), getDemoAssets(), getDemoUtilities()];
 
-        const [allServiceRecords, allReminders, repairIssues, allTrendFlags] = await Promise.all([
+        const [allServiceRecords, repairDocuments, allReminders, repairIssues, allTrendFlags] = await Promise.all([
           getServiceRecordsForContext(serviceContext),
+          getDocumentsForLink(documentContextForLoad, { field: 'repair_id', id: repairId }),
           getRemindersForContext(reminderContext),
           getIssuesForRepair(issueContext, repairId),
           getTrendFlagsForContext(trendFlagContext)
@@ -120,6 +131,8 @@ export default function RepairDetailPage() {
         setRooms(roomRows.map((room) => ({ id: room.id, name: room.name })));
         setAssets(assetRows.map((asset: AssetRow) => ({ id: asset.id, name: asset.name })));
         setUtilities(utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name })));
+        setDocumentContext(documentContextForLoad);
+        setDocuments(repairDocuments);
         setIssues(repairIssues);
 
         if (nextRepair) {
@@ -234,6 +247,7 @@ export default function RepairDetailPage() {
             {repair.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, repair.room_id) || 'Unknown'}`} />}
             {repair.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, repair.asset_id) || 'Unknown'}`} />}
             {repair.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, repair.utility_id) || 'Unknown'}`} />}
+            <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
           </div>
           <div style={{ color: '#4b5563', display: 'grid', gap: 6 }}>
             <div><strong>Reported:</strong> {repair.reported_date || 'Not set'}</div>
@@ -279,6 +293,13 @@ export default function RepairDetailPage() {
             <RelatedItem key={record.id} title={record.service_title} detail={`${record.service_date} • ${formatEnumLabel(record.service_type)}`} />
           ))}
         </RelatedList>
+
+        <RelatedDocuments
+          documents={documents}
+          context={documentContext}
+          uploadHref={`/documents?repairId=${repair.id}`}
+          empty="No documents linked to this repair."
+        />
 
         <RelatedList title="Reminders" empty="No related reminders found.">
           {reminders.map((reminder) => (

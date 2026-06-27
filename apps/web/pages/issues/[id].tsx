@@ -3,8 +3,15 @@ import { useRouter } from 'next/router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { formatEnumLabel, ISSUE_STATUSES } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
+import {
+  getDocumentDataContext,
+  getDocumentsForLink,
+  type DocumentDataContext,
+  type DocumentRow
+} from '../../lib/documents';
 import {
   deleteIssueForContext,
   getIssueByIdForContext,
@@ -57,6 +64,8 @@ export default function IssueDetailPage() {
   const [assets, setAssets] = useState<LinkOption[]>([]);
   const [utilities, setUtilities] = useState<LinkOption[]>([]);
   const [repairs, setRepairs] = useState<LinkOption[]>([]);
+  const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,8 +82,9 @@ export default function IssueDetailPage() {
       setError('');
 
       try {
-        const [nextContext, reminderContext, trendFlagContext] = await Promise.all([
+        const [nextContext, documentContextForLoad, reminderContext, trendFlagContext] = await Promise.all([
           getIssueDataContext(),
+          getDocumentDataContext(),
           getReminderDataContext(),
           getTrendFlagDataContext()
         ]);
@@ -90,7 +100,8 @@ export default function IssueDetailPage() {
               ])
             : [getDemoRooms(), getDemoAssets(), getDemoUtilities(), getDemoRepairs()];
 
-        const [issueTrendFlags, allReminders] = await Promise.all([
+        const [issueDocuments, issueTrendFlags, allReminders] = await Promise.all([
+          getDocumentsForLink(documentContextForLoad, { field: 'issue_id', id: issueId }),
           getTrendFlagsForIssue(trendFlagContext, issueId),
           getRemindersForContext(reminderContext)
         ]);
@@ -104,6 +115,8 @@ export default function IssueDetailPage() {
         setAssets(assetRows.map((asset: AssetRow) => ({ id: asset.id, name: asset.name })));
         setUtilities(utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name })));
         setRepairs(repairRows.map((repair: RepairRow) => ({ id: repair.id, name: repair.title })));
+        setDocumentContext(documentContextForLoad);
+        setDocuments(issueDocuments);
         setTrendFlags(issueTrendFlags);
         setReminders(nextIssue ? allReminders.filter((reminder) => reminderRelatesToIssue(nextIssue, reminder)) : []);
       } catch (loadError) {
@@ -205,6 +218,7 @@ export default function IssueDetailPage() {
             {issue.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, issue.asset_id) || 'Unknown'}`} />}
             {issue.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, issue.utility_id) || 'Unknown'}`} />}
             {issue.repair_id && <UtilityBadge label={`Repair: ${nameFromId(repairs, issue.repair_id) || 'Unknown'}`} />}
+            <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
           </div>
           <div style={{ color: '#4b5563', display: 'grid', gap: 6 }}>
             <div><strong>First seen:</strong> {issue.first_seen_date || 'Not set'}</div>
@@ -260,6 +274,13 @@ export default function IssueDetailPage() {
             <RelatedItem key={flag.id} title={flag.title} detail={`${formatEnumLabel(flag.status)} • ${formatEnumLabel(flag.severity)}`} />
           ))}
         </RelatedList>
+
+        <RelatedDocuments
+          documents={documents}
+          context={documentContext}
+          uploadHref={`/documents?issueId=${issue.id}`}
+          empty="No documents linked to this issue."
+        />
 
         <RelatedList title="Related reminders" empty="No reminders are related to this issue's linked room, asset, or utility.">
           {reminders.map((reminder) => (

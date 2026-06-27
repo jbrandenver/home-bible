@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { ASSET_TYPES, formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { RelatedDocuments } from '../../components/RelatedDocuments';
 import {
   deleteAssetForContext,
   getAssetByIdForContext,
@@ -14,6 +15,12 @@ import {
   type AssetRow
 } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
+import {
+  getDocumentDataContext,
+  getDocumentsForLink,
+  type DocumentDataContext,
+  type DocumentRow
+} from '../../lib/documents';
 import { getIssueDataContext, getIssuesForAsset, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForAsset, type ReminderRow } from '../../lib/reminders';
 import { getRepairDataContext, getRepairsForAsset, type RepairRow } from '../../lib/repairs';
@@ -45,6 +52,8 @@ export default function AssetDetailPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
+  const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +62,7 @@ export default function AssetDetailPage() {
   const [reminderError, setReminderError] = useState('');
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
+  const [documentError, setDocumentError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -122,15 +132,17 @@ export default function AssetDetailPage() {
       setReminderError('');
       setRepairError('');
       setServiceRecordError('');
+      setDocumentError('');
       setIssueError('');
       setTrendFlagError('');
 
       try {
-        const [nextContext, reminderContext, repairContext, serviceRecordContext, issueContext, trendFlagContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, serviceRecordContext, nextDocumentContext, issueContext, trendFlagContext] = await Promise.all([
           getAssetDataContext(),
           getReminderDataContext(),
           getRepairDataContext(),
           getServiceRecordDataContext(),
+          getDocumentDataContext(),
           getIssueDataContext(),
           getTrendFlagDataContext()
         ]);
@@ -138,6 +150,7 @@ export default function AssetDetailPage() {
         let nextReminders: ReminderRow[] = [];
         let nextRepairs: RepairRow[] = [];
         let nextServiceRecords: ServiceRecordRow[] = [];
+        let nextDocuments: DocumentRow[] = [];
         let nextIssues: IssueRow[] = [];
         let nextTrendFlags: TrendFlagRow[] = [];
 
@@ -162,6 +175,14 @@ export default function AssetDetailPage() {
         } catch (loadError) {
           if (isMounted) {
             setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load asset service records.');
+          }
+        }
+
+        try {
+          nextDocuments = await getDocumentsForLink(nextDocumentContext, { field: 'asset_id', id: assetId });
+        } catch (loadError) {
+          if (isMounted) {
+            setDocumentError(loadError instanceof Error ? loadError.message : 'Failed to load asset documents.');
           }
         }
 
@@ -197,6 +218,8 @@ export default function AssetDetailPage() {
         setReminders(nextReminders);
         setRepairs(nextRepairs);
         setServiceRecords(nextServiceRecords);
+        setDocumentContext(nextDocumentContext);
+        setDocuments(nextDocuments);
         setIssues(nextIssues);
         setTrendFlags(nextTrendFlags);
         setRoomName(
@@ -248,6 +271,14 @@ export default function AssetDetailPage() {
   const linkedServiceRecords = useMemo(
     () => serviceRecords.filter((record) => record.asset_id === assetId),
     [serviceRecords, assetId]
+  );
+
+  const warrantyDocuments = useMemo(
+    () =>
+      documents.filter((document) =>
+        ['warranty', 'receipt', 'invoice', 'manual', 'asset_document'].includes(document.document_type)
+      ),
+    [documents]
   );
 
   const linkedRepairs = useMemo(
@@ -389,6 +420,11 @@ export default function AssetDetailPage() {
               {serviceRecordError}
             </p>
           ) : null}
+          {documentError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {documentError}
+            </p>
+          ) : null}
           {issueError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {issueError}
@@ -483,6 +519,7 @@ export default function AssetDetailPage() {
             {warrantyMeta.daysRemaining !== null && (
               <UtilityBadge label={`${warrantyMeta.daysRemaining} days`} />
             )}
+            <UtilityBadge label={`${warrantyDocuments.length} warranty doc${warrantyDocuments.length === 1 ? '' : 's'}`} />
           </div>
 
           <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: '#4b5563' }}>
@@ -505,8 +542,18 @@ export default function AssetDetailPage() {
             <Link href="/warranties">
               <Button type="button">Manage warranties</Button>
             </Link>
+            <Link href={`/documents?assetId=${asset.id}`}>
+              <Button type="button">Add warranty document</Button>
+            </Link>
           </div>
         </Card>
+
+        <RelatedDocuments
+          documents={documents}
+          context={documentContext}
+          uploadHref={`/documents?assetId=${asset.id}`}
+          empty="No documents linked to this asset."
+        />
 
         {/* Documentation Card */}
         {(asset.manual_url || asset.support_url) && (

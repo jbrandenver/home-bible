@@ -234,6 +234,39 @@ export const TREND_FLAG_DETECTED_FROM = [
   'system_suggestion'
 ] as const;
 
+export const DOCUMENT_TYPES = [
+  'manual',
+  'warranty',
+  'receipt',
+  'invoice',
+  'quote',
+  'inspection_report',
+  'service_report',
+  'permit',
+  'photo',
+  'insurance',
+  'property_document',
+  'utility_document',
+  'asset_document',
+  'repair_document',
+  'issue_document',
+  'other'
+] as const;
+
+export const DOCUMENT_VISIBILITIES = [
+  'private',
+  'family',
+  'maintenance',
+  'buyer_report'
+] as const;
+
+export const DOCUMENT_SOURCES = [
+  'manual_upload',
+  'future_receipt_upload',
+  'future_ai_import',
+  'system'
+] as const;
+
 export const MEMBER_ROLES = [
   'owner',
   'co_owner',
@@ -407,6 +440,28 @@ export const createTrendFlagSchema = z.object({
   resolved_at: z.string().optional().nullable()
 });
 
+export const createDocumentSchema = z.object({
+  property_id: z.string().uuid().optional(),
+  room_id: z.string().uuid().optional().nullable(),
+  utility_id: z.string().uuid().optional().nullable(),
+  asset_id: z.string().uuid().optional().nullable(),
+  reminder_id: z.string().uuid().optional().nullable(),
+  repair_id: z.string().uuid().optional().nullable(),
+  service_record_id: z.string().uuid().optional().nullable(),
+  issue_id: z.string().uuid().optional().nullable(),
+  trend_flag_id: z.string().uuid().optional().nullable(),
+  document_type: z.enum(DOCUMENT_TYPES).default('other'),
+  title: z.string().min(1, 'Document title is required'),
+  description: z.string().optional().nullable(),
+  file_name: z.string().min(1),
+  file_path: z.string().min(1),
+  bucket_name: z.literal('home-documents').default('home-documents'),
+  mime_type: z.string().optional().nullable(),
+  file_size_bytes: z.coerce.number().nonnegative().optional().nullable(),
+  visibility: z.enum(DOCUMENT_VISIBILITIES).default('private'),
+  source: z.enum(DOCUMENT_SOURCES).default('manual_upload')
+});
+
 export type PropertyType = typeof PROPERTY_TYPES[number];
 export type RoomType = typeof ROOM_TYPES[number];
 export type UtilityType = typeof UTILITY_TYPES[number];
@@ -429,6 +484,9 @@ export type IssueSeverity = typeof ISSUE_SEVERITIES[number];
 export type TrendFlagType = typeof TREND_FLAG_TYPES[number];
 export type TrendFlagStatus = typeof TREND_FLAG_STATUSES[number];
 export type TrendFlagDetectedFrom = typeof TREND_FLAG_DETECTED_FROM[number];
+export type DocumentType = typeof DOCUMENT_TYPES[number];
+export type DocumentVisibility = typeof DOCUMENT_VISIBILITIES[number];
+export type DocumentSource = typeof DOCUMENT_SOURCES[number];
 export type MemberRole = typeof MEMBER_ROLES[number];
 export type PlanName = typeof PLAN_NAMES[number];
 
@@ -442,6 +500,7 @@ export type CreateRepairInput = z.infer<typeof createRepairSchema>;
 export type CreateServiceRecordInput = z.infer<typeof createServiceRecordSchema>;
 export type CreateIssueInput = z.infer<typeof createIssueSchema>;
 export type CreateTrendFlagInput = z.infer<typeof createTrendFlagSchema>;
+export type CreateDocumentInput = z.infer<typeof createDocumentSchema>;
 
 export type DbRole = MemberRole;
 export type DbVisibility = VisibilityOption;
@@ -616,6 +675,33 @@ export interface TrendFlagRow {
   first_detected_at: string;
   last_detected_at: string | null;
   resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export interface DocumentRow {
+  id: string;
+  property_id: string;
+  room_id: string | null;
+  utility_id: string | null;
+  asset_id: string | null;
+  reminder_id: string | null;
+  repair_id: string | null;
+  service_record_id: string | null;
+  issue_id: string | null;
+  trend_flag_id: string | null;
+  document_type: DocumentType;
+  title: string;
+  description: string | null;
+  file_name: string;
+  file_path: string;
+  bucket_name: 'home-documents';
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  visibility: DocumentVisibility;
+  source: DocumentSource;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

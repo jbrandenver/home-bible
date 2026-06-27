@@ -10,6 +10,7 @@ import {
   type AssetDataMode,
   type AssetRow
 } from '../lib/assets';
+import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
 import {
   createReminderForContext,
   getReminderDataContext,
@@ -93,6 +94,7 @@ export default function WarrantiesPage() {
   const [reminderContext, setReminderContext] = useState<ReminderDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
   const [assets, setAssets] = useState<AssetRow[]>([]);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -116,11 +118,15 @@ export default function WarrantiesPage() {
       setNotice('');
 
       try {
-        const [nextContext, nextReminderContext] = await Promise.all([
+        const [nextContext, nextReminderContext, nextDocumentContext] = await Promise.all([
           getAssetDataContext(),
-          getReminderDataContext()
+          getReminderDataContext(),
+          getDocumentDataContext()
         ]);
-        const nextAssets = await getAssetsForContext(nextContext);
+        const [nextAssets, nextDocuments] = await Promise.all([
+          getAssetsForContext(nextContext),
+          getDocumentsForContext(nextDocumentContext)
+        ]);
 
         if (!isMounted) {
           return;
@@ -130,6 +136,7 @@ export default function WarrantiesPage() {
         setReminderContext(nextReminderContext);
         setDataMode(nextContext.mode);
         setAssets(nextAssets);
+        setDocuments(nextDocuments);
       } catch (loadError) {
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load warranties.');
@@ -157,6 +164,19 @@ export default function WarrantiesPage() {
     }),
     [assets]
   );
+
+  const warrantyDocumentCountsByAsset = useMemo(() => {
+    return documents.reduce<Record<string, number>>((acc, document) => {
+      if (
+        document.asset_id &&
+        ['warranty', 'receipt', 'invoice', 'manual', 'asset_document'].includes(document.document_type)
+      ) {
+        acc[document.asset_id] = (acc[document.asset_id] || 0) + 1;
+      }
+
+      return acc;
+    }, {});
+  }, [documents]);
 
   const startEditing = (asset: AssetRow) => {
     setEditingAssetId(asset.id);
@@ -280,6 +300,7 @@ export default function WarrantiesPage() {
                         {daysRemaining !== null && ` (${daysRemaining}d)`}
                       </div>
                       {asset.brand && <UtilityBadge label={asset.brand} />}
+                      <UtilityBadge label={`${warrantyDocumentCountsByAsset[asset.id] || 0} doc${warrantyDocumentCountsByAsset[asset.id] === 1 ? '' : 's'}`} />
                     </div>
 
                     <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.6 }}>
@@ -424,6 +445,9 @@ export default function WarrantiesPage() {
                     </Button>
                     <Link href={`/assets/${asset.id}`}>
                       <Button type="button">View</Button>
+                    </Link>
+                    <Link href={`/documents?assetId=${asset.id}`}>
+                      <Button type="button">Documents</Button>
                     </Link>
                   </div>
                 </div>

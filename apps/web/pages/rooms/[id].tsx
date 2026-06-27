@@ -3,8 +3,15 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
+import {
+  getDocumentDataContext,
+  getDocumentsForLink,
+  type DocumentDataContext,
+  type DocumentRow
+} from '../../lib/documents';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForRoom, type ReminderRow } from '../../lib/reminders';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../../lib/repairs';
@@ -32,6 +39,8 @@ export default function RoomDetailPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
+  const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [utilityError, setUtilityError] = useState('');
@@ -39,6 +48,7 @@ export default function RoomDetailPage() {
   const [reminderError, setReminderError] = useState('');
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
+  const [documentError, setDocumentError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
 
@@ -55,6 +65,7 @@ export default function RoomDetailPage() {
       setReminderError('');
       setRepairError('');
       setServiceRecordError('');
+      setDocumentError('');
       setIssueError('');
       setTrendFlagError('');
 
@@ -64,6 +75,7 @@ export default function RoomDetailPage() {
         reminderContext,
         repairContext,
         serviceRecordContext,
+        nextDocumentContext,
         issueContext,
         trendFlagContext
       ] = await Promise.all([
@@ -72,6 +84,7 @@ export default function RoomDetailPage() {
         getReminderDataContext(),
         getRepairDataContext(),
         getServiceRecordDataContext(),
+        getDocumentDataContext(),
         getIssueDataContext(),
         getTrendFlagDataContext()
       ]);
@@ -80,6 +93,7 @@ export default function RoomDetailPage() {
       let nextReminders: ReminderRow[] = [];
       let nextRepairs: RepairRow[] = [];
       let nextServiceRecords: ServiceRecordRow[] = [];
+      let nextDocuments: DocumentRow[] = [];
       let nextIssues: IssueRow[] = [];
       let nextTrendFlags: TrendFlagRow[] = [];
 
@@ -120,6 +134,14 @@ export default function RoomDetailPage() {
       } catch (loadError) {
         if (isMounted) {
           setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load room service records.');
+        }
+      }
+
+      try {
+        nextDocuments = await getDocumentsForLink(nextDocumentContext, { field: 'room_id', id: roomId });
+      } catch (loadError) {
+        if (isMounted) {
+          setDocumentError(loadError instanceof Error ? loadError.message : 'Failed to load room documents.');
         }
       }
 
@@ -173,6 +195,8 @@ export default function RoomDetailPage() {
       setReminders(nextReminders);
       setRepairs(nextRepairs);
       setServiceRecords(nextServiceRecords);
+      setDocumentContext(nextDocumentContext);
+      setDocuments(nextDocuments);
       setIssues(nextIssues);
       setTrendFlags(nextTrendFlags);
     }
@@ -282,13 +306,14 @@ export default function RoomDetailPage() {
             <UtilityBadge label={`${roomReminders.length} reminder${roomReminders.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomRepairs.length} repair${roomRepairs.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomServiceRecords.length} service record${roomServiceRecords.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomIssues.length} issue${roomIssues.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomTrendFlags.length} trend flag${roomTrendFlags.length === 1 ? '' : 's'}`} />
           </div>
           <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities, assets, reminders, repairs, service records, issues, and trend flags for this room are loaded from Supabase.'
-              : 'Demo mode: utilities, assets, reminders, repairs, service records, issues, and trend flags for this room are loaded from localStorage.'}
+              ? 'Signed-in mode: utilities, assets, reminders, repairs, service records, documents, issues, and trend flags for this room are loaded from Supabase.'
+              : 'Demo mode: utilities, assets, reminders, repairs, service records, documents, issues, and trend flags for this room are loaded from localStorage.'}
           </p>
           {utilityError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -315,6 +340,11 @@ export default function RoomDetailPage() {
               {serviceRecordError}
             </p>
           ) : null}
+          {documentError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {documentError}
+            </p>
+          ) : null}
           {issueError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {issueError}
@@ -326,6 +356,13 @@ export default function RoomDetailPage() {
             </p>
           ) : null}
         </Card>
+
+        <RelatedDocuments
+          documents={documents}
+          context={documentContext}
+          uploadHref={`/documents?roomId=${roomId}`}
+          empty="No documents linked to this room."
+        />
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Trend flags</h2>

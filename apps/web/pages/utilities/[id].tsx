@@ -3,7 +3,14 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { getDemoRooms } from '../../lib/demoStorage';
+import {
+  getDocumentDataContext,
+  getDocumentsForLink,
+  type DocumentDataContext,
+  type DocumentRow
+} from '../../lib/documents';
 import { getIssueDataContext, getIssuesForUtility, type IssueRow } from '../../lib/issues';
 import { getReminderDataContext, getRemindersForUtility, type ReminderRow } from '../../lib/reminders';
 import { getRepairDataContext, getRepairsForUtility, type RepairRow } from '../../lib/repairs';
@@ -44,6 +51,8 @@ export default function UtilityDetailPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
+  const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,16 +80,17 @@ export default function UtilityDetailPage() {
       setFormError('');
 
       try {
-        const [nextContext, reminderContext, repairContext, serviceRecordContext, issueContext, trendFlagContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, serviceRecordContext, nextDocumentContext, issueContext, trendFlagContext] = await Promise.all([
           getUtilityDataContext(),
           getReminderDataContext(),
           getRepairDataContext(),
           getServiceRecordDataContext(),
+          getDocumentDataContext(),
           getIssueDataContext(),
           getTrendFlagDataContext()
         ]);
 
-        const [nextUtility, roomRows, nextReminders, nextRepairs, nextServiceRecords, nextIssues, nextTrendFlags] = await Promise.all([
+        const [nextUtility, roomRows, nextReminders, nextRepairs, nextServiceRecords, nextDocuments, nextIssues, nextTrendFlags] = await Promise.all([
           getUtilityByIdForContext(nextContext, utilityId),
           nextContext.mode === 'supabase' && nextContext.property
             ? getRoomsForProperty(nextContext.property.id)
@@ -88,6 +98,7 @@ export default function UtilityDetailPage() {
           getRemindersForUtility(reminderContext, utilityId),
           getRepairsForUtility(repairContext, utilityId),
           getServiceRecordsForUtility(serviceRecordContext, utilityId),
+          getDocumentsForLink(nextDocumentContext, { field: 'utility_id', id: utilityId }),
           getIssuesForUtility(issueContext, utilityId),
           getTrendFlagsForUtility(trendFlagContext, utilityId)
         ]);
@@ -103,6 +114,8 @@ export default function UtilityDetailPage() {
         setReminders(nextReminders);
         setRepairs(nextRepairs);
         setServiceRecords(nextServiceRecords);
+        setDocumentContext(nextDocumentContext);
+        setDocuments(nextDocuments);
         setIssues(nextIssues);
         setTrendFlags(nextTrendFlags);
 
@@ -246,6 +259,7 @@ export default function UtilityDetailPage() {
             <UtilityBadge label={`${reminders.length} reminder${reminders.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${repairs.length} repair${repairs.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${issues.length} issue${issues.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${trendFlags.length} trend flag${trendFlags.length === 1 ? '' : 's'}`} />
           </div>
@@ -327,6 +341,13 @@ export default function UtilityDetailPage() {
             <RelatedItem key={record.id} title={record.service_title} detail={`${record.service_date} • ${formatEnumLabel(record.service_type)}`} />
           ))}
         </RelatedList>
+
+        <RelatedDocuments
+          documents={documents}
+          context={documentContext}
+          uploadHref={`/documents?utilityId=${utility.id}`}
+          empty="No documents linked to this utility."
+        />
 
         <RelatedList title="Issues" empty="No issues linked to this utility.">
           {issues.map((issue) => (

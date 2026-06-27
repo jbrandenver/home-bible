@@ -4,6 +4,7 @@ import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
+import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
@@ -57,6 +58,7 @@ export default function DashboardPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
+  const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [floorCount, setFloorCount] = useState(0);
@@ -65,6 +67,7 @@ export default function DashboardPage() {
   const [reminderError, setReminderError] = useState('');
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
+  const [documentError, setDocumentError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
 
@@ -77,6 +80,7 @@ export default function DashboardPage() {
       setReminderError('');
       setRepairError('');
       setServiceRecordError('');
+      setDocumentError('');
       setIssueError('');
       setTrendFlagError('');
 
@@ -86,6 +90,7 @@ export default function DashboardPage() {
         reminderContext,
         repairContext,
         serviceRecordContext,
+        documentContext,
         issueContext,
         trendFlagContext
       ] = await Promise.all([
@@ -94,6 +99,7 @@ export default function DashboardPage() {
         getReminderDataContext(),
         getRepairDataContext(),
         getServiceRecordDataContext(),
+        getDocumentDataContext(),
         getIssueDataContext(),
         getTrendFlagDataContext()
       ]);
@@ -102,6 +108,7 @@ export default function DashboardPage() {
       let nextReminders: ReminderRow[] = [];
       let nextRepairs: RepairRow[] = [];
       let nextServiceRecords: ServiceRecordRow[] = [];
+      let nextDocuments: DocumentRow[] = [];
       let nextIssues: IssueRow[] = [];
       let nextTrendFlags: TrendFlagRow[] = [];
 
@@ -146,6 +153,14 @@ export default function DashboardPage() {
       }
 
       try {
+        nextDocuments = await getDocumentsForContext(documentContext);
+      } catch (loadError) {
+        if (isMounted) {
+          setDocumentError(loadError instanceof Error ? loadError.message : 'Failed to load documents.');
+        }
+      }
+
+      try {
         nextIssues = await getIssuesForContext(issueContext);
       } catch (loadError) {
         if (isMounted) {
@@ -171,6 +186,7 @@ export default function DashboardPage() {
       setReminders(nextReminders);
       setRepairs(nextRepairs);
       setServiceRecords(nextServiceRecords);
+      setDocuments(nextDocuments);
       setIssues(nextIssues);
       setTrendFlags(nextTrendFlags);
 
@@ -276,6 +292,15 @@ export default function DashboardPage() {
     [serviceRecords]
   );
 
+  const recentDocuments = useMemo(
+    () =>
+      documents
+        .slice()
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 4),
+    [documents]
+  );
+
   const openIssueCount = useMemo(
     () => issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length,
     [issues]
@@ -319,6 +344,7 @@ export default function DashboardPage() {
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${openRepairCount} open repair${openRepairCount === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${highUrgentIssueCount} high or urgent issue${highUrgentIssueCount === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${activeTrendFlagCount} active trend flag${activeTrendFlagCount === 1 ? '' : 's'}`} />
@@ -326,8 +352,8 @@ export default function DashboardPage() {
 
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, issues, and trend flags are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, issues, and trend flags are loaded from localStorage.'}
+                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, issues, and trend flags are loaded from Supabase.'
+                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, issues, and trend flags are loaded from localStorage.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -352,6 +378,11 @@ export default function DashboardPage() {
             {serviceRecordError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
                 {serviceRecordError}
+              </p>
+            ) : null}
+            {documentError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+                {documentError}
               </p>
             ) : null}
             {issueError ? (
@@ -385,6 +416,9 @@ export default function DashboardPage() {
               </Link>
               <Link href="/warranties">
                 <Button type="button">View warranties</Button>
+              </Link>
+              <Link href="/documents">
+                <Button type="button">View documents</Button>
               </Link>
               <Link href="/reminders">
                 <Button type="button">View reminders</Button>
@@ -425,6 +459,37 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Recent documents</h2>
+            {recentDocuments.length === 0 ? (
+              <p style={{ color: '#6b7280' }}>No documents uploaded yet.</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {recentDocuments.map((document) => (
+                  <div
+                    key={document.id}
+                    style={{
+                      padding: 12,
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 10,
+                      background: '#fff'
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{document.title}</div>
+                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      {document.file_name} • {formatEnumLabel(document.document_type)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <Link href="/documents">
+                <Button type="button">Open documents</Button>
+              </Link>
+            </div>
           </Card>
 
           <Card>
