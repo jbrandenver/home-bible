@@ -38,6 +38,9 @@ export type UtilityDataContext = {
   property: PropertySummary | null;
 };
 
+const UTILITY_SELECT =
+  'id, property_id, room_id, utility_type, name, location_notes, emergency_notes, created_at, updated_at, deleted_at';
+
 function normalizeUtility(raw: Partial<UtilityRow>): UtilityRow {
   const createdAt = raw.created_at || new Date().toISOString();
   const utilityType = UTILITY_TYPES.includes(raw.utility_type as UtilityType)
@@ -111,7 +114,7 @@ export async function getUtilitiesForProperty(propertyId: string) {
 
   const { data, error } = await supabase
     .from('utilities')
-    .select('id, property_id, room_id, utility_type, name, location_notes, emergency_notes, created_at, updated_at, deleted_at')
+    .select(UTILITY_SELECT)
     .eq('property_id', propertyId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
@@ -147,7 +150,7 @@ export async function getUtilitiesForRoom(context: UtilityDataContext, roomId: s
 
   const { data, error } = await supabase
     .from('utilities')
-    .select('id, property_id, room_id, utility_type, name, location_notes, emergency_notes, created_at, updated_at, deleted_at')
+    .select(UTILITY_SELECT)
     .eq('room_id', roomId)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
@@ -157,6 +160,35 @@ export async function getUtilitiesForRoom(context: UtilityDataContext, roomId: s
   }
 
   return ((data ?? []) as Partial<UtilityRow>[]).map(normalizeUtility);
+}
+
+export async function getUtilityByIdForContext(context: UtilityDataContext, utilityId: string) {
+  if (context.mode === 'demo') {
+    return getDemoUtilities().find((utility) => utility.id === utilityId) || null;
+  }
+
+  if (!context.property) {
+    return null;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('utilities')
+    .select(UTILITY_SELECT)
+    .eq('id', utilityId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || 'Failed to load utility.');
+  }
+
+  return data ? normalizeUtility(data as Partial<UtilityRow>) : null;
 }
 
 export async function createUtilityForContext(context: UtilityDataContext, input: UtilityInput) {
@@ -200,7 +232,7 @@ export async function createUtilityForContext(context: UtilityDataContext, input
       location_notes: input.location_notes?.trim() || null,
       emergency_notes: input.emergency_notes?.trim() || null
     })
-    .select('id, property_id, room_id, utility_type, name, location_notes, emergency_notes, created_at, updated_at, deleted_at')
+    .select(UTILITY_SELECT)
     .single();
 
   if (error || !data) {
@@ -255,7 +287,7 @@ export async function updateUtilityForContext(
     .eq('id', utilityId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)
-    .select('id, property_id, room_id, utility_type, name, location_notes, emergency_notes, created_at, updated_at, deleted_at')
+    .select(UTILITY_SELECT)
     .single();
 
   if (error || !data) {

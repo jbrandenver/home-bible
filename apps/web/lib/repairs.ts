@@ -249,6 +249,35 @@ export async function getRepairsForContext(context: RepairDataContext) {
   return getRepairsForProperty(context.property.id);
 }
 
+export async function getRepairByIdForContext(context: RepairDataContext, repairId: string) {
+  if (context.mode === 'demo') {
+    return getDemoRepairs().find((repair) => repair.id === repairId) || null;
+  }
+
+  if (!context.property) {
+    return null;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('repairs')
+    .select(REPAIR_SELECT)
+    .eq('id', repairId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(formatRepairError('load repair', error.message));
+  }
+
+  return data ? normalizeRepair(data as Partial<RepairRow>) : null;
+}
+
 export async function getRepairsForRoom(context: RepairDataContext, roomId: string) {
   if (context.mode === 'demo' || !context.property) {
     return getDemoRepairs().filter((repair) => repair.room_id === roomId);

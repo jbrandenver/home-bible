@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { formatEnumLabel } from '@home-bible/shared';
+import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
 import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
@@ -36,6 +36,10 @@ export default function UtilitiesPage() {
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [roomFilter, setRoomFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'utility_type'>('name');
 
   useEffect(() => {
     let isMounted = true;
@@ -189,6 +193,33 @@ export default function UtilitiesPage() {
   const getTrendFlagCount = (utilityId: string) =>
     trendFlags.filter((flag) => flag.utility_id === utilityId && flag.status === 'active').length;
 
+  const roomOptions = useMemo(
+    () => Array.from(rooms.entries()).map(([id, name]) => ({ id, name })),
+    [rooms]
+  );
+
+  const filteredUtilities = useMemo(() => {
+    const searchTerm = search.trim().toLowerCase();
+
+    return utilities
+      .filter((utility) => {
+        const matchesSearch = !searchTerm || utility.name.toLowerCase().includes(searchTerm);
+        const matchesType = !typeFilter || utility.utility_type === typeFilter;
+        const matchesRoom = !roomFilter || utility.room_id === roomFilter;
+
+        return matchesSearch && matchesType && matchesRoom;
+      })
+      .slice()
+      .sort((a, b) => {
+        if (sortBy === 'utility_type') {
+          const typeCompare = a.utility_type.localeCompare(b.utility_type);
+          return typeCompare || a.name.localeCompare(b.name);
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+  }, [utilities, search, typeFilter, roomFilter, sortBy]);
+
   return (
     <>
       <PageHeader
@@ -232,10 +263,47 @@ export default function UtilitiesPage() {
 
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h2 style={{ margin: 0 }}>All Utilities ({utilities.length})</h2>
+            <h2 style={{ margin: 0 }}>All Utilities ({filteredUtilities.length})</h2>
             <Link href="/add-utility">
               <Button>Add Utility</Button>
             </Link>
+          </div>
+
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 16 }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Search</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Utility name"
+                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Type</span>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+                <option value="">All types</option>
+                {UTILITY_TYPES.map((type) => (
+                  <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Room</span>
+              <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+                <option value="">All rooms</option>
+                {roomOptions.map((room) => (
+                  <option key={room.id} value={room.id}>{room.name}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Sort</span>
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'name' | 'utility_type')} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+                <option value="name">Name</option>
+                <option value="utility_type">Utility type</option>
+              </select>
+            </label>
           </div>
 
           {loading ? (
@@ -252,9 +320,14 @@ export default function UtilitiesPage() {
               title="No utilities yet"
               description="Add key utility locations like water shutoff, electrical panel, and HVAC to get started."
             />
+          ) : filteredUtilities.length === 0 ? (
+            <EmptyState
+              title="No utilities match"
+              description="Adjust the search or filters to see more utility records."
+            />
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
-              {utilities.map((utility) => (
+              {filteredUtilities.map((utility) => (
                 <div
                   key={utility.id}
                   style={{
@@ -300,28 +373,39 @@ export default function UtilitiesPage() {
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleDelete(utility.id)}
-                    disabled={deletingId === utility.id}
-                    style={{
-                      background: '#fee2e2',
-                      color: '#991b1b',
-                      border: 'none',
-                      borderRadius: 4,
-                      padding: '4px 8px',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      whiteSpace: 'nowrap',
-                      opacity: deletingId === utility.id ? 0.7 : 1
-                    }}
-                  >
-                    {deletingId === utility.id ? 'Deleting...' : 'Delete'}
-                  </button>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    <Link href={`/utilities/${utility.id}`}>
+                      <Button type="button">View</Button>
+                    </Link>
+                    <button
+                      onClick={() => handleDelete(utility.id)}
+                      disabled={deletingId === utility.id}
+                      style={{
+                        background: '#fee2e2',
+                        color: '#991b1b',
+                        border: 'none',
+                        borderRadius: 4,
+                        padding: '8px 10px',
+                        cursor: deletingId === utility.id ? 'not-allowed' : 'pointer',
+                        fontSize: '0.875rem',
+                        whiteSpace: 'nowrap',
+                        opacity: deletingId === utility.id ? 0.7 : 1
+                      }}
+                    >
+                      {deletingId === utility.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </Card>
+
+        <div>
+          <Link href="/dashboard">
+            <Button type="button">Back to dashboard</Button>
+          </Link>
+        </div>
       </div>
     </>
   );

@@ -266,6 +266,35 @@ export async function getIssuesForContext(context: IssueDataContext) {
   return getIssuesForProperty(context.property.id);
 }
 
+export async function getIssueByIdForContext(context: IssueDataContext, issueId: string) {
+  if (context.mode === 'demo') {
+    return getDemoIssues().find((issue) => issue.id === issueId) || null;
+  }
+
+  if (!context.property) {
+    return null;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('issues')
+    .select(ISSUE_SELECT)
+    .eq('id', issueId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(formatIssueError('load issue', error.message));
+  }
+
+  return data ? normalizeIssue(data as RawIssue) : null;
+}
+
 async function getIssuesByColumn(
   context: IssueDataContext,
   column: 'room_id' | 'asset_id' | 'utility_id' | 'repair_id',

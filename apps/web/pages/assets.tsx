@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { formatEnumLabel } from '@home-bible/shared';
+import { ASSET_TYPES, formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
 import {
   deleteAssetForContext,
@@ -26,6 +26,10 @@ export default function AssetsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [roomFilter, setRoomFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'name' | 'category' | 'purchase_date' | 'warranty'>('name');
 
   useEffect(() => {
     let isMounted = true;
@@ -93,6 +97,55 @@ export default function AssetsPage() {
     return rooms.get(roomId) || 'Unknown room';
   };
 
+  const roomOptions = useMemo(
+    () => Array.from(rooms.entries()).map(([id, name]) => ({ id, name })),
+    [rooms]
+  );
+
+  const filteredAssets = useMemo(() => {
+    const searchTerm = search.trim().toLowerCase();
+
+    return assets
+      .filter((asset) => {
+        const haystack = [
+          asset.name,
+          asset.brand,
+          asset.model,
+          asset.retailer
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        const matchesSearch = !searchTerm || haystack.includes(searchTerm);
+        const matchesCategory = !categoryFilter || asset.asset_type === categoryFilter;
+        const matchesRoom = !roomFilter || asset.room_id === roomFilter;
+
+        return matchesSearch && matchesCategory && matchesRoom;
+      })
+      .slice()
+      .sort((a, b) => {
+        if (sortBy === 'category') {
+          const typeCompare = a.asset_type.localeCompare(b.asset_type);
+          return typeCompare || a.name.localeCompare(b.name);
+        }
+
+        if (sortBy === 'purchase_date') {
+          const aDate = a.purchase_date ? new Date(a.purchase_date).getTime() : 0;
+          const bDate = b.purchase_date ? new Date(b.purchase_date).getTime() : 0;
+          return bDate - aDate || a.name.localeCompare(b.name);
+        }
+
+        if (sortBy === 'warranty') {
+          const aDate = a.warranty_expires_at ? new Date(a.warranty_expires_at).getTime() : Number.POSITIVE_INFINITY;
+          const bDate = b.warranty_expires_at ? new Date(b.warranty_expires_at).getTime() : Number.POSITIVE_INFINITY;
+          return aDate - bDate || a.name.localeCompare(b.name);
+        }
+
+        return a.name.localeCompare(b.name);
+      });
+  }, [assets, search, categoryFilter, roomFilter, sortBy]);
+
   return (
     <>
       <PageHeader
@@ -111,10 +164,49 @@ export default function AssetsPage() {
 
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h2 style={{ margin: 0 }}>All Assets ({assets.length})</h2>
+            <h2 style={{ margin: 0 }}>All Assets ({filteredAssets.length})</h2>
             <Link href="/add-asset">
               <Button type="button">Add asset</Button>
             </Link>
+          </div>
+
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 16 }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Search</span>
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Name, brand, model, retailer"
+                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Category</span>
+              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+                <option value="">All categories</option>
+                {ASSET_TYPES.map((type) => (
+                  <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Room</span>
+              <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+                <option value="">All rooms</option>
+                {roomOptions.map((room) => (
+                  <option key={room.id} value={room.id}>{room.name}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Sort</span>
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'name' | 'category' | 'purchase_date' | 'warranty')} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+                <option value="name">Name</option>
+                <option value="category">Category</option>
+                <option value="purchase_date">Purchase date</option>
+                <option value="warranty">Warranty expiration</option>
+              </select>
+            </label>
           </div>
 
           {loading ? (
@@ -131,9 +223,14 @@ export default function AssetsPage() {
               title="No assets yet"
               description="Start tracking appliances, smart devices, tools, and other home items."
             />
+          ) : filteredAssets.length === 0 ? (
+            <EmptyState
+              title="No assets match"
+              description="Adjust the search or filters to see more assets."
+            />
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
-              {assets.map((asset) => {
+              {filteredAssets.map((asset) => {
                 const roomName = getRoomName(asset.room_id);
 
                 return (
@@ -224,6 +321,11 @@ export default function AssetsPage() {
             </div>
           )}
         </Card>
+        <div>
+          <Link href="/dashboard">
+            <Button type="button">Back to dashboard</Button>
+          </Link>
+        </div>
       </div>
     </>
   );

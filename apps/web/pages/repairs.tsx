@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   formatEnumLabel,
   REPAIR_PRIORITIES,
@@ -79,6 +80,16 @@ export default function RepairsPage() {
   const [savingServiceRecord, setSavingServiceRecord] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [repairStatusFilter, setRepairStatusFilter] = useState('');
+  const [repairPriorityFilter, setRepairPriorityFilter] = useState('');
+  const [repairTypeFilter, setRepairTypeFilter] = useState('');
+  const [repairLinkFilter, setRepairLinkFilter] = useState('');
+  const [repairSearch, setRepairSearch] = useState('');
+  const [repairSortBy, setRepairSortBy] = useState<'reported_date' | 'completed_date' | 'priority' | 'status'>('reported_date');
+  const [serviceTypeFilter, setServiceTypeFilter] = useState('');
+  const [serviceLinkFilter, setServiceLinkFilter] = useState('');
+  const [serviceSearch, setServiceSearch] = useState('');
+  const [serviceSortBy, setServiceSortBy] = useState<'service_date' | 'next_service_date'>('service_date');
 
   const [repairTitle, setRepairTitle] = useState('');
   const [repairDescription, setRepairDescription] = useState('');
@@ -223,6 +234,94 @@ export default function RepairsPage() {
         issue.status !== 'resolved' &&
         issue.status !== 'dismissed'
     ).length;
+
+  const filteredRepairs = useMemo(() => {
+    const searchTerm = repairSearch.trim().toLowerCase();
+    const priorityRank = new Map(REPAIR_PRIORITIES.map((value, index) => [value, index]));
+    const statusRank = new Map(REPAIR_STATUSES.map((value, index) => [value, index]));
+
+    return repairs
+      .filter((repair) => {
+        const haystack = [
+          repair.title,
+          repair.contractor_name,
+          repair.notes,
+          repair.description
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        const matchesSearch = !searchTerm || haystack.includes(searchTerm);
+        const matchesStatus = !repairStatusFilter || repair.status === repairStatusFilter;
+        const matchesPriority = !repairPriorityFilter || repair.priority === repairPriorityFilter;
+        const matchesType = !repairTypeFilter || repair.repair_type === repairTypeFilter;
+        const matchesLink =
+          !repairLinkFilter ||
+          (repairLinkFilter === 'room' && Boolean(repair.room_id)) ||
+          (repairLinkFilter === 'asset' && Boolean(repair.asset_id)) ||
+          (repairLinkFilter === 'utility' && Boolean(repair.utility_id));
+
+        return matchesSearch && matchesStatus && matchesPriority && matchesType && matchesLink;
+      })
+      .slice()
+      .sort((a, b) => {
+        if (repairSortBy === 'completed_date') {
+          const aDate = a.completed_date ? new Date(a.completed_date).getTime() : 0;
+          const bDate = b.completed_date ? new Date(b.completed_date).getTime() : 0;
+          return bDate - aDate || a.title.localeCompare(b.title);
+        }
+
+        if (repairSortBy === 'priority') {
+          return (priorityRank.get(b.priority) ?? 0) - (priorityRank.get(a.priority) ?? 0);
+        }
+
+        if (repairSortBy === 'status') {
+          return (statusRank.get(a.status) ?? 0) - (statusRank.get(b.status) ?? 0);
+        }
+
+        const aDate = a.reported_date ? new Date(a.reported_date).getTime() : 0;
+        const bDate = b.reported_date ? new Date(b.reported_date).getTime() : 0;
+        return bDate - aDate || a.title.localeCompare(b.title);
+      });
+  }, [repairs, repairSearch, repairStatusFilter, repairPriorityFilter, repairTypeFilter, repairLinkFilter, repairSortBy]);
+
+  const filteredServiceRecords = useMemo(() => {
+    const searchTerm = serviceSearch.trim().toLowerCase();
+
+    return serviceRecords
+      .filter((record) => {
+        const haystack = [
+          record.service_title,
+          record.provider_name,
+          record.summary,
+          record.notes
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        const matchesSearch = !searchTerm || haystack.includes(searchTerm);
+        const matchesType = !serviceTypeFilter || record.service_type === serviceTypeFilter;
+        const matchesLink =
+          !serviceLinkFilter ||
+          (serviceLinkFilter === 'room' && Boolean(record.room_id)) ||
+          (serviceLinkFilter === 'asset' && Boolean(record.asset_id)) ||
+          (serviceLinkFilter === 'utility' && Boolean(record.utility_id));
+
+        return matchesSearch && matchesType && matchesLink;
+      })
+      .slice()
+      .sort((a, b) => {
+        if (serviceSortBy === 'next_service_date') {
+          const aDate = a.next_service_date ? new Date(a.next_service_date).getTime() : Number.POSITIVE_INFINITY;
+          const bDate = b.next_service_date ? new Date(b.next_service_date).getTime() : Number.POSITIVE_INFINITY;
+          return aDate - bDate || a.service_title.localeCompare(b.service_title);
+        }
+
+        return new Date(b.service_date).getTime() - new Date(a.service_date).getTime();
+      });
+  }, [serviceRecords, serviceSearch, serviceTypeFilter, serviceLinkFilter, serviceSortBy]);
 
   const resetRepairForm = () => {
     setRepairTitle('');
@@ -677,6 +776,96 @@ export default function RepairsPage() {
         </Card>
 
         <Card>
+          <h2 style={{ marginTop: 0 }}>Find repairs</h2>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Search</span>
+              <input value={repairSearch} onChange={(event) => setRepairSearch(event.target.value)} placeholder="Title, contractor, notes" style={fieldStyle} />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Status</span>
+              <select value={repairStatusFilter} onChange={(event) => setRepairStatusFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All statuses</option>
+                {REPAIR_STATUSES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Priority</span>
+              <select value={repairPriorityFilter} onChange={(event) => setRepairPriorityFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All priorities</option>
+                {REPAIR_PRIORITIES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Type</span>
+              <select value={repairTypeFilter} onChange={(event) => setRepairTypeFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All types</option>
+                {REPAIR_TYPES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Linked to</span>
+              <select value={repairLinkFilter} onChange={(event) => setRepairLinkFilter(event.target.value)} style={fieldStyle}>
+                <option value="">Any item</option>
+                <option value="room">Room</option>
+                <option value="asset">Asset</option>
+                <option value="utility">Utility</option>
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Sort</span>
+              <select value={repairSortBy} onChange={(event) => setRepairSortBy(event.target.value as 'reported_date' | 'completed_date' | 'priority' | 'status')} style={fieldStyle}>
+                <option value="reported_date">Reported date</option>
+                <option value="completed_date">Completed date</option>
+                <option value="priority">Priority</option>
+                <option value="status">Status</option>
+              </select>
+            </label>
+          </div>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Find service records</h2>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Search</span>
+              <input value={serviceSearch} onChange={(event) => setServiceSearch(event.target.value)} placeholder="Title, provider, summary, notes" style={fieldStyle} />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Service type</span>
+              <select value={serviceTypeFilter} onChange={(event) => setServiceTypeFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All service types</option>
+                {SERVICE_TYPES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Linked to</span>
+              <select value={serviceLinkFilter} onChange={(event) => setServiceLinkFilter(event.target.value)} style={fieldStyle}>
+                <option value="">Any item</option>
+                <option value="room">Room</option>
+                <option value="asset">Asset</option>
+                <option value="utility">Utility</option>
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Sort</span>
+              <select value={serviceSortBy} onChange={(event) => setServiceSortBy(event.target.value as 'service_date' | 'next_service_date')} style={fieldStyle}>
+                <option value="service_date">Service date</option>
+                <option value="next_service_date">Next service date</option>
+              </select>
+            </label>
+          </div>
+        </Card>
+
+        <Card>
           <h2 style={{ marginTop: 0 }}>Trend flags</h2>
           {trendFlags.length === 0 ? (
             <p style={{ color: '#6b7280', margin: 0 }}>No trend flags currently. Keep logging service records for better trend insight.</p>
@@ -703,9 +892,12 @@ export default function RepairsPage() {
 
         {repairs.length > 0 ? (
           <Card>
-            <h2 style={{ marginTop: 0 }}>Repairs</h2>
+            <h2 style={{ marginTop: 0 }}>Repairs ({filteredRepairs.length})</h2>
+            {filteredRepairs.length === 0 ? (
+              <p style={{ color: '#6b7280', margin: 0 }}>No repairs match the current filters.</p>
+            ) : (
             <div style={{ display: 'grid', gap: 12 }}>
-              {repairs.map((repair) => (
+              {filteredRepairs.map((repair) => (
                 <div key={repair.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
                     <div>
@@ -730,6 +922,9 @@ export default function RepairsPage() {
                     </div>
 
                     <div style={{ display: 'grid', gap: 8, minWidth: 140 }}>
+                      <Link href={`/repairs/${repair.id}`}>
+                        <Button type="button">View</Button>
+                      </Link>
                       <select
                         value={repair.status}
                         onChange={(event) => changeRepairStatus(repair.id, event.target.value as RepairStatus)}
@@ -761,14 +956,18 @@ export default function RepairsPage() {
                 </div>
               ))}
             </div>
+            )}
           </Card>
         ) : null}
 
         {serviceRecords.length > 0 ? (
           <Card>
-            <h2 style={{ marginTop: 0 }}>Service Records</h2>
+            <h2 style={{ marginTop: 0 }}>Service Records ({filteredServiceRecords.length})</h2>
+            {filteredServiceRecords.length === 0 ? (
+              <p style={{ color: '#6b7280', margin: 0 }}>No service records match the current filters.</p>
+            ) : (
             <div style={{ display: 'grid', gap: 12 }}>
-              {serviceRecords.map((record) => (
+              {filteredServiceRecords.map((record) => (
                 <div key={record.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
                     <div>
@@ -810,6 +1009,7 @@ export default function RepairsPage() {
                 </div>
               ))}
             </div>
+            )}
           </Card>
         ) : null}
       </div>

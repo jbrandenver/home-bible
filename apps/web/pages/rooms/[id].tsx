@@ -375,6 +375,11 @@ export default function RoomDetailPage() {
                       <strong>Emergency:</strong> {utility.emergency_notes}
                     </div>
                   )}
+                  <div style={{ marginTop: 8 }}>
+                    <Link href={`/utilities/${utility.id}`}>
+                      <Button type="button">View utility</Button>
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>
@@ -441,6 +446,11 @@ export default function RoomDetailPage() {
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                       {repair.reported_date || 'No reported date'} • {formatEnumLabel(repair.repair_type)} • {formatEnumLabel(repair.status)}
                     </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Link href={`/repairs/${repair.id}`}>
+                        <Button type="button">View repair</Button>
+                      </Link>
+                    </div>
                   </div>
                 ))}
             </div>
@@ -497,6 +507,11 @@ export default function RoomDetailPage() {
                     <div style={{ fontWeight: 600 }}>{issue.title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                       {issue.first_seen_date || 'Not set'} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Link href={`/issues/${issue.id}`}>
+                        <Button type="button">View issue</Button>
+                      </Link>
                     </div>
                   </div>
                 ))}

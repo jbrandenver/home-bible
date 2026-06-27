@@ -60,6 +60,10 @@ export default function RemindersPage() {
   const [saving, setSaving] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [linkedFilter, setLinkedFilter] = useState('');
+  const [sortBy, setSortBy] = useState<'due_date' | 'priority' | 'status'>('due_date');
 
   useEffect(() => {
     let isMounted = true;
@@ -160,6 +164,39 @@ export default function RemindersPage() {
     }),
     [reminders]
   );
+
+  const filteredReminders = useMemo(() => {
+    const priorityRank = new Map(REMINDER_PRIORITIES.map((value, index) => [value, index]));
+    const statusRank = new Map(REMINDER_STATUSES.map((value, index) => [value, index]));
+
+    return reminders
+      .filter((reminder) => {
+        const matchesStatus = !statusFilter || reminder.status === statusFilter;
+        const matchesType = !typeFilter || reminder.reminder_type === typeFilter;
+        const matchesLinked =
+          !linkedFilter ||
+          reminder.linked_type === linkedFilter ||
+          (linkedFilter === 'room' && Boolean(reminder.room_id)) ||
+          (linkedFilter === 'asset' && Boolean(reminder.asset_id)) ||
+          (linkedFilter === 'utility' && Boolean(reminder.utility_id));
+
+        return matchesStatus && matchesType && matchesLinked;
+      })
+      .slice()
+      .sort((a, b) => {
+        if (sortBy === 'priority') {
+          return (priorityRank.get(b.priority) ?? 0) - (priorityRank.get(a.priority) ?? 0);
+        }
+
+        if (sortBy === 'status') {
+          return (statusRank.get(a.status) ?? 0) - (statusRank.get(b.status) ?? 0);
+        }
+
+        const aDue = a.due_date ? new Date(a.due_date).getTime() : Number.POSITIVE_INFINITY;
+        const bDue = b.due_date ? new Date(b.due_date).getTime() : Number.POSITIVE_INFINITY;
+        return aDue - bDue;
+      });
+  }, [reminders, statusFilter, typeFilter, linkedFilter, sortBy]);
 
   const getLinkedLabel = (reminder: ReminderRow) => {
     if (!reminder.linked_type || !reminder.linked_id) {
@@ -459,6 +496,47 @@ export default function RemindersPage() {
         </div>
       </Card>
 
+      <Card>
+        <h2 style={{ marginTop: 0 }}>Find reminders</h2>
+        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Status</span>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <option value="">All statuses</option>
+              {REMINDER_STATUSES.map((value) => (
+                <option key={value} value={value}>{formatEnumLabel(value)}</option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Type</span>
+            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <option value="">All types</option>
+              {REMINDER_TYPES.map((value) => (
+                <option key={value} value={value}>{formatEnumLabel(value)}</option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Linked to</span>
+            <select value={linkedFilter} onChange={(event) => setLinkedFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <option value="">Any item</option>
+              {REMINDER_LINKED_TYPES.map((value) => (
+                <option key={value} value={value}>{formatEnumLabel(value)}</option>
+              ))}
+            </select>
+          </label>
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontWeight: 600 }}>Sort</span>
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'due_date' | 'priority' | 'status')} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <option value="due_date">Due date</option>
+              <option value="priority">Priority</option>
+              <option value="status">Status</option>
+            </select>
+          </label>
+        </div>
+      </Card>
+
       {loading ? (
         <Card>
           <p style={{ color: '#6b7280', margin: 0 }}>Loading reminders...</p>
@@ -468,9 +546,14 @@ export default function RemindersPage() {
           <h3 style={{ marginTop: 0 }}>No reminders yet</h3>
           <p style={{ color: '#6b7280' }}>Add your first reminder to track upcoming home tasks.</p>
         </Card>
+      ) : filteredReminders.length === 0 ? (
+        <Card>
+          <h3 style={{ marginTop: 0 }}>No reminders match</h3>
+          <p style={{ color: '#6b7280' }}>Adjust the filters to see more reminders.</p>
+        </Card>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
-          {reminders.map((reminder) => (
+          {filteredReminders.map((reminder) => (
             <Card key={reminder.id}>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12 }}>
                 <div>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import {
   formatEnumLabel,
   ISSUE_SEVERITIES,
@@ -94,6 +95,18 @@ export default function IssuesPage() {
   const [savingTrendFlag, setSavingTrendFlag] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [issueStatusFilter, setIssueStatusFilter] = useState('');
+  const [issueSeverityFilter, setIssueSeverityFilter] = useState('');
+  const [issueTypeFilter, setIssueTypeFilter] = useState('');
+  const [issueLinkFilter, setIssueLinkFilter] = useState('');
+  const [issueSearch, setIssueSearch] = useState('');
+  const [issueSortBy, setIssueSortBy] = useState<'severity' | 'first_seen_date' | 'last_seen_date' | 'status'>('first_seen_date');
+  const [flagStatusFilter, setFlagStatusFilter] = useState('');
+  const [flagSeverityFilter, setFlagSeverityFilter] = useState('');
+  const [flagTypeFilter, setFlagTypeFilter] = useState('');
+  const [flagLinkFilter, setFlagLinkFilter] = useState('');
+  const [flagSearch, setFlagSearch] = useState('');
+  const [flagSortBy, setFlagSortBy] = useState<'severity' | 'first_detected_at' | 'last_detected_at' | 'status'>('first_detected_at');
 
   const [title, setTitle] = useState('');
   const [issueType, setIssueType] = useState<IssueType>('general');
@@ -220,6 +233,90 @@ export default function IssuesPage() {
     () => trendFlags.filter((flag) => flag.status === 'active').length,
     [trendFlags]
   );
+
+  const filteredIssues = useMemo(() => {
+    const searchTerm = issueSearch.trim().toLowerCase();
+    const severityRank = new Map(ISSUE_SEVERITIES.map((value, index) => [value, index]));
+    const statusRank = new Map(ISSUE_STATUSES.map((value, index) => [value, index]));
+
+    return issues
+      .filter((issue) => {
+        const haystack = [issue.title, issue.description, issue.notes].filter(Boolean).join(' ').toLowerCase();
+        const matchesSearch = !searchTerm || haystack.includes(searchTerm);
+        const matchesStatus = !issueStatusFilter || issue.status === issueStatusFilter;
+        const matchesSeverity = !issueSeverityFilter || issue.severity === issueSeverityFilter;
+        const matchesType = !issueTypeFilter || issue.issue_type === issueTypeFilter;
+        const matchesLink =
+          !issueLinkFilter ||
+          (issueLinkFilter === 'room' && Boolean(issue.room_id)) ||
+          (issueLinkFilter === 'asset' && Boolean(issue.asset_id)) ||
+          (issueLinkFilter === 'utility' && Boolean(issue.utility_id)) ||
+          (issueLinkFilter === 'repair' && Boolean(issue.repair_id));
+
+        return matchesSearch && matchesStatus && matchesSeverity && matchesType && matchesLink;
+      })
+      .slice()
+      .sort((a, b) => {
+        if (issueSortBy === 'severity') {
+          return (severityRank.get(b.severity) ?? 0) - (severityRank.get(a.severity) ?? 0);
+        }
+
+        if (issueSortBy === 'last_seen_date') {
+          const aDate = a.last_seen_date ? new Date(a.last_seen_date).getTime() : 0;
+          const bDate = b.last_seen_date ? new Date(b.last_seen_date).getTime() : 0;
+          return bDate - aDate || a.title.localeCompare(b.title);
+        }
+
+        if (issueSortBy === 'status') {
+          return (statusRank.get(a.status) ?? 0) - (statusRank.get(b.status) ?? 0);
+        }
+
+        const aDate = a.first_seen_date ? new Date(a.first_seen_date).getTime() : 0;
+        const bDate = b.first_seen_date ? new Date(b.first_seen_date).getTime() : 0;
+        return bDate - aDate || a.title.localeCompare(b.title);
+      });
+  }, [issues, issueSearch, issueStatusFilter, issueSeverityFilter, issueTypeFilter, issueLinkFilter, issueSortBy]);
+
+  const filteredTrendFlags = useMemo(() => {
+    const searchTerm = flagSearch.trim().toLowerCase();
+    const severityRank = new Map(ISSUE_SEVERITIES.map((value, index) => [value, index]));
+    const statusRank = new Map(TREND_FLAG_STATUSES.map((value, index) => [value, index]));
+
+    return trendFlags
+      .filter((flag) => {
+        const haystack = [flag.title, flag.description].filter(Boolean).join(' ').toLowerCase();
+        const matchesSearch = !searchTerm || haystack.includes(searchTerm);
+        const matchesStatus = !flagStatusFilter || flag.status === flagStatusFilter;
+        const matchesSeverity = !flagSeverityFilter || flag.severity === flagSeverityFilter;
+        const matchesType = !flagTypeFilter || flag.flag_type === flagTypeFilter;
+        const matchesLink =
+          !flagLinkFilter ||
+          (flagLinkFilter === 'room' && Boolean(flag.room_id)) ||
+          (flagLinkFilter === 'asset' && Boolean(flag.asset_id)) ||
+          (flagLinkFilter === 'utility' && Boolean(flag.utility_id)) ||
+          (flagLinkFilter === 'issue' && Boolean(flag.issue_id));
+
+        return matchesSearch && matchesStatus && matchesSeverity && matchesType && matchesLink;
+      })
+      .slice()
+      .sort((a, b) => {
+        if (flagSortBy === 'severity') {
+          return (severityRank.get(b.severity) ?? 0) - (severityRank.get(a.severity) ?? 0);
+        }
+
+        if (flagSortBy === 'last_detected_at') {
+          const aDate = a.last_detected_at ? new Date(a.last_detected_at).getTime() : 0;
+          const bDate = b.last_detected_at ? new Date(b.last_detected_at).getTime() : 0;
+          return bDate - aDate || a.title.localeCompare(b.title);
+        }
+
+        if (flagSortBy === 'status') {
+          return (statusRank.get(a.status) ?? 0) - (statusRank.get(b.status) ?? 0);
+        }
+
+        return new Date(b.first_detected_at).getTime() - new Date(a.first_detected_at).getTime();
+      });
+  }, [trendFlags, flagSearch, flagStatusFilter, flagSeverityFilter, flagTypeFilter, flagLinkFilter, flagSortBy]);
 
   const resetIssueForm = () => {
     setTitle('');
@@ -645,15 +742,130 @@ export default function IssuesPage() {
           </form>
         </Card>
 
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Find issues</h2>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Search</span>
+              <input value={issueSearch} onChange={(event) => setIssueSearch(event.target.value)} placeholder="Title, description, notes" style={fieldStyle} />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Status</span>
+              <select value={issueStatusFilter} onChange={(event) => setIssueStatusFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All statuses</option>
+                {ISSUE_STATUSES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Severity</span>
+              <select value={issueSeverityFilter} onChange={(event) => setIssueSeverityFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All severities</option>
+                {ISSUE_SEVERITIES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Issue type</span>
+              <select value={issueTypeFilter} onChange={(event) => setIssueTypeFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All issue types</option>
+                {ISSUE_TYPES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Linked to</span>
+              <select value={issueLinkFilter} onChange={(event) => setIssueLinkFilter(event.target.value)} style={fieldStyle}>
+                <option value="">Any item</option>
+                <option value="room">Room</option>
+                <option value="asset">Asset</option>
+                <option value="utility">Utility</option>
+                <option value="repair">Repair</option>
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Sort</span>
+              <select value={issueSortBy} onChange={(event) => setIssueSortBy(event.target.value as 'severity' | 'first_seen_date' | 'last_seen_date' | 'status')} style={fieldStyle}>
+                <option value="first_seen_date">First seen date</option>
+                <option value="last_seen_date">Last seen date</option>
+                <option value="severity">Severity</option>
+                <option value="status">Status</option>
+              </select>
+            </label>
+          </div>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Find trend flags</h2>
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Search</span>
+              <input value={flagSearch} onChange={(event) => setFlagSearch(event.target.value)} placeholder="Title or description" style={fieldStyle} />
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Status</span>
+              <select value={flagStatusFilter} onChange={(event) => setFlagStatusFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All statuses</option>
+                {TREND_FLAG_STATUSES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Severity</span>
+              <select value={flagSeverityFilter} onChange={(event) => setFlagSeverityFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All severities</option>
+                {ISSUE_SEVERITIES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Flag type</span>
+              <select value={flagTypeFilter} onChange={(event) => setFlagTypeFilter(event.target.value)} style={fieldStyle}>
+                <option value="">All flag types</option>
+                {TREND_FLAG_TYPES.map((value) => (
+                  <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Linked to</span>
+              <select value={flagLinkFilter} onChange={(event) => setFlagLinkFilter(event.target.value)} style={fieldStyle}>
+                <option value="">Any item</option>
+                <option value="room">Room</option>
+                <option value="asset">Asset</option>
+                <option value="utility">Utility</option>
+                <option value="issue">Issue</option>
+              </select>
+            </label>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Sort</span>
+              <select value={flagSortBy} onChange={(event) => setFlagSortBy(event.target.value as 'severity' | 'first_detected_at' | 'last_detected_at' | 'status')} style={fieldStyle}>
+                <option value="first_detected_at">First detected date</option>
+                <option value="last_detected_at">Last detected date</option>
+                <option value="severity">Severity</option>
+                <option value="status">Status</option>
+              </select>
+            </label>
+          </div>
+        </Card>
+
         {!loading && issues.length === 0 && trendFlags.length === 0 ? (
           <EmptyState title="No issues or trend flags yet" description="Add your first issue or trend flag to start tracking home health." />
         ) : null}
 
         {issues.length > 0 ? (
           <Card>
-            <h2 style={{ marginTop: 0 }}>Issues</h2>
+            <h2 style={{ marginTop: 0 }}>Issues ({filteredIssues.length})</h2>
+            {filteredIssues.length === 0 ? (
+              <p style={{ color: '#6b7280', margin: 0 }}>No issues match the current filters.</p>
+            ) : (
             <div style={{ display: 'grid', gap: 12 }}>
-              {issues.map((issue) => (
+              {filteredIssues.map((issue) => (
                 <div key={issue.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
                     <div>
@@ -676,6 +888,9 @@ export default function IssuesPage() {
                     </div>
 
                     <div style={{ display: 'grid', gap: 8, minWidth: 150 }}>
+                      <Link href={`/issues/${issue.id}`}>
+                        <Button type="button">View</Button>
+                      </Link>
                       <select
                         value={issue.status}
                         onChange={(event) => changeIssueStatus(issue.id, event.target.value as IssueStatus)}
@@ -703,14 +918,18 @@ export default function IssuesPage() {
                 </div>
               ))}
             </div>
+            )}
           </Card>
         ) : null}
 
         {trendFlags.length > 0 ? (
           <Card>
-            <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+            <h2 style={{ marginTop: 0 }}>Trend flags ({filteredTrendFlags.length})</h2>
+            {filteredTrendFlags.length === 0 ? (
+              <p style={{ color: '#6b7280', margin: 0 }}>No trend flags match the current filters.</p>
+            ) : (
             <div style={{ display: 'grid', gap: 12 }}>
-              {trendFlags.map((flag) => (
+              {filteredTrendFlags.map((flag) => (
                 <div key={flag.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
                     <div>
@@ -760,6 +979,7 @@ export default function IssuesPage() {
                 </div>
               ))}
             </div>
+            )}
           </Card>
         ) : null}
       </div>

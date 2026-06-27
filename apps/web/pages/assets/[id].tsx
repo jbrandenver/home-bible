@@ -1,12 +1,14 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
+import { ASSET_TYPES, formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
 import {
   deleteAssetForContext,
   getAssetByIdForContext,
   getAssetDataContext,
+  updateAssetForContext,
+  type AssetType,
   type AssetDataContext,
   type AssetDataMode,
   type AssetRow
@@ -24,6 +26,12 @@ type Room = {
   name: string;
 };
 
+const fieldStyle = {
+  padding: 10,
+  borderRadius: 8,
+  border: '1px solid #d1d5db'
+};
+
 export default function AssetDetailPage() {
   const router = useRouter();
   const { id } = router.query;
@@ -33,6 +41,7 @@ export default function AssetDetailPage() {
   const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
   const [asset, setAsset] = useState<AssetRow | null>(null);
   const [roomName, setRoomName] = useState<string | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
@@ -40,12 +49,24 @@ export default function AssetDetailPage() {
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [formError, setFormError] = useState('');
   const [reminderError, setReminderError] = useState('');
   const [repairError, setRepairError] = useState('');
   const [serviceRecordError, setServiceRecordError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [editName, setEditName] = useState('');
+  const [editAssetType, setEditAssetType] = useState<AssetType>('other');
+  const [editRoomId, setEditRoomId] = useState('');
+  const [editBrand, setEditBrand] = useState('');
+  const [editModel, setEditModel] = useState('');
+  const [editRetailer, setEditRetailer] = useState('');
+  const [editPurchaseDate, setEditPurchaseDate] = useState('');
+  const [editWarrantyExpires, setEditWarrantyExpires] = useState('');
+  const [editNotes, setEditNotes] = useState('');
 
   const getWarrantyMeta = (assetItem: AssetRow) => {
     let expirationDate: Date | null = null;
@@ -97,6 +118,7 @@ export default function AssetDetailPage() {
 
       setLoading(true);
       setError('');
+      setFormError('');
       setReminderError('');
       setRepairError('');
       setServiceRecordError('');
@@ -171,6 +193,7 @@ export default function AssetDetailPage() {
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setAsset(nextAsset);
+        setRooms(roomList);
         setReminders(nextReminders);
         setRepairs(nextRepairs);
         setServiceRecords(nextServiceRecords);
@@ -181,6 +204,18 @@ export default function AssetDetailPage() {
             ? roomList.find((room: Room) => room.id === nextAsset.room_id)?.name || 'Unknown room'
             : null
         );
+
+        if (nextAsset) {
+          setEditName(nextAsset.name);
+          setEditAssetType(nextAsset.asset_type);
+          setEditRoomId(nextAsset.room_id || '');
+          setEditBrand(nextAsset.brand || '');
+          setEditModel(nextAsset.model || '');
+          setEditRetailer(nextAsset.retailer || '');
+          setEditPurchaseDate(nextAsset.purchase_date || '');
+          setEditWarrantyExpires(nextAsset.warranty_expires_at || '');
+          setEditNotes(nextAsset.notes || '');
+        }
       } catch (loadError) {
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load asset.');
@@ -232,8 +267,48 @@ export default function AssetDetailPage() {
       await deleteAssetForContext(context, asset.id);
       router.push('/assets');
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete asset.');
+      setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete asset.');
       setDeleting(false);
+    }
+  };
+
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!asset || !context) return;
+
+    if (!editName.trim()) {
+      setFormError('Asset name is required.');
+      return;
+    }
+
+    setSaving(true);
+    setFormError('');
+
+    try {
+      const updatedAsset = await updateAssetForContext(context, asset.id, {
+        name: editName,
+        asset_type: editAssetType,
+        room_id: editRoomId || null,
+        brand: editBrand,
+        model: editModel,
+        retailer: editRetailer,
+        purchase_date: editPurchaseDate || null,
+        warranty_expires_at: editWarrantyExpires || null,
+        notes: editNotes
+      });
+
+      if (updatedAsset) {
+        setAsset(updatedAsset);
+        setRoomName(
+          updatedAsset.room_id
+            ? rooms.find((room) => room.id === updatedAsset.room_id)?.name || 'Unknown room'
+            : null
+        );
+      }
+    } catch (saveError) {
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to update asset.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -322,6 +397,11 @@ export default function AssetDetailPage() {
           {trendFlagError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
               {trendFlagError}
+            </p>
+          ) : null}
+          {formError ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              {formError}
             </p>
           ) : null}
         </Card>
@@ -472,6 +552,75 @@ export default function AssetDetailPage() {
         )}
 
         <Card>
+          <h2 style={{ marginTop: 0 }}>Edit asset</h2>
+          <form onSubmit={handleSave} style={{ display: 'grid', gap: 12 }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Name</span>
+              <input value={editName} onChange={(event) => setEditName(event.target.value)} style={fieldStyle} />
+            </label>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Category</span>
+                <select value={editAssetType} onChange={(event) => setEditAssetType(event.target.value as AssetType)} style={fieldStyle}>
+                  {ASSET_TYPES.map((type) => (
+                    <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Room</span>
+                <select value={editRoomId} onChange={(event) => setEditRoomId(event.target.value)} style={fieldStyle}>
+                  <option value="">Not assigned</option>
+                  {rooms.map((room) => (
+                    <option key={room.id} value={room.id}>{room.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Brand</span>
+                <input value={editBrand} onChange={(event) => setEditBrand(event.target.value)} style={fieldStyle} />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Model</span>
+                <input value={editModel} onChange={(event) => setEditModel(event.target.value)} style={fieldStyle} />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Retailer</span>
+                <input value={editRetailer} onChange={(event) => setEditRetailer(event.target.value)} style={fieldStyle} />
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Purchase date</span>
+                <input type="date" value={editPurchaseDate} onChange={(event) => setEditPurchaseDate(event.target.value)} style={fieldStyle} />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Warranty expires</span>
+                <input type="date" value={editWarrantyExpires} onChange={(event) => setEditWarrantyExpires(event.target.value)} style={fieldStyle} />
+              </label>
+            </div>
+
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontWeight: 600 }}>Notes</span>
+              <textarea value={editNotes} onChange={(event) => setEditNotes(event.target.value)} style={{ ...fieldStyle, minHeight: 72 }} />
+            </label>
+
+            <div>
+              <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</Button>
+            </div>
+          </form>
+        </Card>
+
+        <Card>
           <h2 style={{ marginTop: 0 }}>Trend flags</h2>
           {trendFlags.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No trend flags currently for this asset.</p>
@@ -506,6 +655,11 @@ export default function AssetDetailPage() {
                     <div style={{ fontWeight: 600 }}>{repair.title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                       {repair.reported_date || 'No reported date'} • {formatEnumLabel(repair.repair_type)} • {formatEnumLabel(repair.status)}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Link href={`/repairs/${repair.id}`}>
+                        <Button type="button">View repair</Button>
+                      </Link>
                     </div>
                   </div>
                 ))}
@@ -563,6 +717,11 @@ export default function AssetDetailPage() {
                     <div style={{ fontWeight: 600 }}>{issue.title}</div>
                     <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
                       {issue.first_seen_date || 'Not set'} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Link href={`/issues/${issue.id}`}>
+                        <Button type="button">View issue</Button>
+                      </Link>
                     </div>
                   </div>
                 ))}
