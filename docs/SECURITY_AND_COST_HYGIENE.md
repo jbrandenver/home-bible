@@ -25,6 +25,47 @@ Use this checklist before commits, after migrations, and during periodic project
 - Remove unused Edge Functions after confirming they are not deployed or referenced.
 - Review scheduled jobs before enabling them in hosted environments.
 
+## Standing Cost Review
+
+### Before Each Phase
+
+- Add a Cost Impact section to the phase prompt or plan.
+- Identify Supabase, GitHub, storage, email, AI, OCR, logs, background-job, and hosting cost risks.
+- Stop for approval before adding anything from the Cost Approval Required list in `docs/COST_GOVERNANCE.md`.
+
+### During Implementation
+
+- Prefer local docs, local scripts, manual user-triggered actions, and existing private storage.
+- Avoid background processing, realtime, new buckets, and paid services unless already approved.
+- Keep file sizes and storage usage within current limits.
+
+### Before Commit
+
+- Run `git status`.
+- Confirm no `.env` files, secrets, service role keys, or generated build output are staged.
+- Confirm expected cost impact is documented.
+- Run the local audit script when practical.
+
+### Before Push
+
+- Confirm the branch is intentional.
+- Run `git fetch --prune` when reviewing remote branch hygiene.
+- Confirm no new GitHub Actions or preview resources were added accidentally.
+
+### After Supabase Migration
+
+- Confirm RLS is enabled on new exposed tables.
+- Confirm viewers remain read-only.
+- Confirm maintenance guests do not get broad whole-home access.
+- Confirm no public bucket or background job was created accidentally.
+
+### Monthly Maintenance
+
+- Review Supabase preview branches and delete stale ones only after confirming they are safe.
+- Review storage usage, bucket list, auth test users, Edge Functions, and scheduled jobs.
+- Prune stale Git remote-tracking branches.
+- Re-run `scripts/security-cost-audit.sh`.
+
 ## Suggested Checks
 
 ```bash
