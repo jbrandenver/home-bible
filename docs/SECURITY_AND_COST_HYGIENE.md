@@ -17,6 +17,8 @@ Use this checklist before commits, after migrations, and during periodic project
 
 ## Cost Hygiene
 
+- Cost strategy must not compromise product quality, security, or the core MVP.
+- Avoid unnecessary, accidental, premature, stale, or usage-based cost; do not avoid all necessary MVP cost.
 - Run `git fetch --prune` periodically.
 - Delete merged stale branches after merge.
 - Keep Supabase preview and branch resources cleaned up.
@@ -37,6 +39,8 @@ Use this checklist before commits, after migrations, and during periodic project
 
 - Prefer local docs, local scripts, manual user-triggered actions, and existing private storage.
 - Avoid background processing, realtime, new buckets, and paid services unless already approved.
+- Allow required MVP database reads/writes, private storage, auth, tables, RLS policies, migrations, and metadata when they are secure and bounded.
+- Never weaken RLS, make private files public, skip necessary schema work, or degrade the core user experience to reduce cost.
 - Keep file sizes and storage usage within current limits.
 
 ### Before Commit

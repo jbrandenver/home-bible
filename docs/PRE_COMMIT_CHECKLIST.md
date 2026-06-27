@@ -14,7 +14,10 @@ Run this checklist before committing Home Bible changes.
 
 ## Cost
 
+- Did cost strategy preserve product quality, security, and the core MVP?
+- Did this avoid unnecessary, accidental, premature, stale, or usage-based cost?
 - Did this add a new paid service?
+- Did this add a new Supabase project?
 - Did this add a Supabase Edge Function?
 - Did this add a scheduled job?
 - Did this add realtime?
@@ -24,10 +27,12 @@ Run this checklist before committing Home Bible changes.
 - Did this add larger upload limits?
 - Did this add a GitHub Action?
 - Did this add a preview branch?
+- Did this add a third-party API, analytics, monitoring, email, SMS, or push notification cost?
 - Did this add test users or seed data?
 - Did this leave local or remote stale branches?
 - Did this require a Supabase dashboard cleanup?
 - Did this document expected cost impact?
+- Did this keep required MVP reads/writes, auth, RLS, migrations, metadata, and private storage work intact instead of weakening the app to save small costs?
 
 ## Verification
 

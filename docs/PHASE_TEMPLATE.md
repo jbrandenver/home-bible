@@ -26,12 +26,15 @@ Use this template for every future Codex phase.
 - Do not store private user files in public buckets.
 - Do not save parsed receipt data before user approval.
 - Do not add cost-impacting services without explicit approval.
+- Do not weaken security, skip required MVP schema/data-layer work, or degrade core user experience to reduce cost.
 
 ## Security Impact
 
 <!-- Describe auth, RLS, storage, secret, and data-sensitivity impact. -->
 
 ## Cost Impact
+
+Cost strategy must avoid unnecessary, accidental, premature, stale, or usage-based cost without compromising product quality, security, or the core MVP.
 
 Choose exactly one:
 
@@ -42,6 +45,10 @@ Choose exactly one:
 Notes:
 
 <!-- Document the reasoning and any approval needed. -->
+
+Allowed MVP costs include normal Supabase database reads and writes, normal private storage for homeowner documents and receipts, auth for real users and limited test users, secure tables/RLS/migrations/metadata, local build and test commands, and manual user-triggered actions.
+
+Approval is required before adding paid services, new Supabase projects, Supabase branching, Edge Functions, scheduled jobs, realtime, AI/OCR/vector features, email/SMS/push, public production deployment, automatic GitHub Actions, large upload limit increases, new buckets, third-party APIs, usage-billed analytics/monitoring, or background processing.
 
 ## Supabase Resources Touched
 

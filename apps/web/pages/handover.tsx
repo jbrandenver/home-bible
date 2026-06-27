@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { formatEnumLabel } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
 import {
@@ -318,6 +319,14 @@ export default function HandoverPage() {
           <p style={{ ...subtleText, marginTop: 0 }}>
             Privacy reminder: reports omit sensitive entry details, passwords, private file links, storage paths, and signed file URLs.
           </p>
+          <p style={{ ...subtleText, marginTop: 0 }}>
+            Before future sharing is enabled, review who should see each report type in Sharing & Access Review.
+          </p>
+          <Link href="/sharing">
+            <Button type="button" style={{ background: '#4b5563', marginBottom: 16 }}>
+              Review sharing access
+            </Button>
+          </Link>
 
           {loadingContext ? <p style={subtleText}>Loading report options...</p> : null}
           {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}

@@ -446,6 +446,9 @@ export default function DashboardPage() {
               <Link href="/handover">
                 <Button type="button">Build handover</Button>
               </Link>
+              <Link href="/sharing">
+                <Button type="button">Review sharing</Button>
+              </Link>
               <Link href="/utilities">
                 <Button type="button">View utilities</Button>
               </Link>
@@ -486,6 +489,19 @@ export default function DashboardPage() {
             </p>
             <Link href="/handover">
               <Button type="button">Open handover builder</Button>
+            </Link>
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Sharing & Access Review</h2>
+            <p style={{ color: '#6b7280' }}>
+              Preview role-based access before future invitations, guests, or share links are enabled.
+            </p>
+            <p style={{ color: '#6b7280', marginTop: 0 }}>
+              This is review-only and does not create public links, emails, guests, or background jobs.
+            </p>
+            <Link href="/sharing">
+              <Button type="button">Open sharing review</Button>
             </Link>
           </Card>
 

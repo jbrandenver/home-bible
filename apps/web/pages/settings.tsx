@@ -94,13 +94,22 @@ export default function SettingsPage() {
               <UtilityBadge label="No sensitive access details" />
               <UtilityBadge label="Address optional" />
               <UtilityBadge label="Browser-only handover reports" />
+              <UtilityBadge label="Public sharing not enabled" />
             </div>
             <p style={{ color: '#6b7280' }}>
               Home Handover reports are generated in the browser from existing saved data. They do not create public links, stored report files, emails, or background jobs, and sensitive entry details or passwords should not be stored in Home Bible.
             </p>
+            <p style={{ color: '#6b7280' }}>
+              Sharing & Access Review previews future role visibility only. It does not create guests, invitations, public share links, or tokenized URLs.
+            </p>
             <Link href="/handover">
               <Button type="button">Open handover builder</Button>
             </Link>
+            <span style={{ display: 'inline-block', marginLeft: 12 }}>
+              <Link href="/sharing">
+                <Button type="button">Open sharing review</Button>
+              </Link>
+            </span>
           </Card>
 
           <Card>
