@@ -73,6 +73,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               Dashboard
             </Link>
             <Link
+              href="/handover"
+              className={`px-3 py-2 rounded ${
+                isActive('/handover') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Handover
+            </Link>
+            <Link
               href="/home-map"
               className={`px-3 py-2 rounded ${
                 isActive('/home-map') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'

@@ -9,8 +9,8 @@
     "docs"
   ],
   "scripts": {
-    "dev:web": "pnpm --filter @home-bible/web dev",
-    "dev:mobile": "pnpm --filter @home-bible/mobile dev",
+    "dev:web": "corepack pnpm --filter @home-bible/web dev",
+    "dev:mobile": "corepack pnpm --filter @home-bible/mobile dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
     "security:audit": "bash scripts/security-cost-audit.sh"

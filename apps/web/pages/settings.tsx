@@ -91,9 +91,16 @@ export default function SettingsPage() {
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <UtilityBadge label="Account deletion required" />
               <UtilityBadge label="Data export required" />
-              <UtilityBadge label="No access codes" />
+              <UtilityBadge label="No sensitive access details" />
               <UtilityBadge label="Address optional" />
+              <UtilityBadge label="Browser-only handover reports" />
             </div>
+            <p style={{ color: '#6b7280' }}>
+              Home Handover reports are generated in the browser from existing saved data. They do not create public links, stored report files, emails, or background jobs, and sensitive entry details or passwords should not be stored in Home Bible.
+            </p>
+            <Link href="/handover">
+              <Button type="button">Open handover builder</Button>
+            </Link>
           </Card>
 
           <Card>

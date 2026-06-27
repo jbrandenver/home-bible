@@ -443,6 +443,9 @@ export default function DashboardPage() {
               <Link href="/home-map">
                 <Button type="button">View home map</Button>
               </Link>
+              <Link href="/handover">
+                <Button type="button">Build handover</Button>
+              </Link>
               <Link href="/utilities">
                 <Button type="button">View utilities</Button>
               </Link>
@@ -471,6 +474,19 @@ export default function DashboardPage() {
                 <Button type="button">Settings</Button>
               </Link>
             </div>
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Home Handover</h2>
+            <p style={{ color: '#6b7280' }}>
+              Prepare a browser-generated, print-friendly summary for family, buyer, maintenance, insurance, or personal archive use.
+            </p>
+            <p style={{ color: '#6b7280', marginTop: 0 }}>
+              No public link, email, background job, or stored report file is created.
+            </p>
+            <Link href="/handover">
+              <Button type="button">Open handover builder</Button>
+            </Link>
           </Card>
 
           <Card>
