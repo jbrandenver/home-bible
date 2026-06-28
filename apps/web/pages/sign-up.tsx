@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useState } from 'react';
 import { Button, Card, PageHeader } from '@home-bible/ui';
 import {
+  formatAuthError,
   getSupabaseSetupMessage,
   isSupabaseConfigured,
   signInWithApple,
@@ -21,6 +22,8 @@ export default function SignUpPage() {
 
   const handleSignUp = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (loading) return;
+
     setError('');
     setLoading(true);
 
@@ -29,7 +32,7 @@ export default function SignUpPage() {
     setLoading(false);
 
     if (result.error) {
-      setError(result.error.message);
+      setError(formatAuthError(result.error));
       return;
     }
 
@@ -77,30 +80,32 @@ export default function SignUpPage() {
           {error ? <p style={{ color: '#b91c1c', margin: 0 }}>{error}</p> : null}
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Button type="submit">{loading ? 'Creating account...' : 'Create account with email'}</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Creating account...' : 'Create account with email'}</Button>
             <button
               type="button"
+              disabled={loading}
               onClick={async () => {
                 setError('');
                 const result = await signInWithGoogle();
                 if (result.error) {
-                  setError(result.error.message);
+                  setError(formatAuthError(result.error));
                 }
               }}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
             >
               Continue with Google
             </button>
             <button
               type="button"
+              disabled={loading}
               onClick={async () => {
                 setError('');
                 const result = await signInWithApple();
                 if (result.error) {
-                  setError(result.error.message);
+                  setError(formatAuthError(result.error));
                 }
               }}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: 'pointer' }}
+              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
             >
               Continue with Apple
             </button>

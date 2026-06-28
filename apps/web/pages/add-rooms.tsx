@@ -90,6 +90,7 @@ export default function AddRoomsPage() {
 
   async function handleAddRoom(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (isSubmitting) return;
 
     if (!roomName.trim()) {
       setError('Room name is required.');
@@ -231,8 +232,8 @@ export default function AddRoomsPage() {
               ) : null}
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <Button type="submit">{isSubmitting ? 'Saving...' : 'Add room'}</Button>
-                <Button type="button" onClick={handleContinue}>Continue to dashboard</Button>
+                <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Add room'}</Button>
+                <Button type="button" disabled={isSubmitting} onClick={handleContinue}>Continue to dashboard</Button>
               </div>
             </form>
           </Card>

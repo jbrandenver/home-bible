@@ -5,6 +5,7 @@ import Link from 'next/link';
 export default function HomeMap() {
   const { query } = useRouter();
   const id = query.id as string | undefined;
+  const propertyHref = id ? `/property/${id}` : '/dashboard';
 
   // Local mock floors/rooms for phase 1
   const floors = [
@@ -21,7 +22,7 @@ export default function HomeMap() {
             <FloorSection key={floor.id} title={floor.name}>
               <div className="grid grid-cols-2 gap-2">
                 {floor.rooms.map((r) => (
-                  <Link key={r.id} href={`/property/${id}/room/${r.id}`}>
+                  <Link key={r.id} href={id ? `/property/${id}/room/${r.id}` : '/home-map'}>
                     <RoomCard name={r.name} type="Room" />
                   </Link>
                 ))}
@@ -32,7 +33,7 @@ export default function HomeMap() {
           <p>No floors or rooms yet. Add them from the dashboard.</p>
         )}
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <Link href={`/property/${id}`}>
+          <Link href={propertyHref}>
             <Button>Back to Dashboard</Button>
           </Link>
         </div>

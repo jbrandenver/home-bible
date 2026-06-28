@@ -13,7 +13,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const isActive = (path: string) => router.pathname === path;
+  const isActive = (path: string) => {
+    if (path === '/') return router.pathname === '/';
+    return router.pathname === path || router.pathname.startsWith(`${path}/`);
+  };
+
+  const navLinkClass = (path: string) =>
+    `px-3 py-2 rounded ${isActive(path) ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'}`;
 
   useEffect(() => {
     let isMounted = true;
@@ -39,7 +45,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
       {/* Navigation header */}
       <nav className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
             <Link href="/" className="text-lg font-semibold text-amber-700">
               Home Bible
             </Link>
@@ -47,137 +53,99 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               {userEmail ? `Signed in: ${userEmail}` : 'Demo mode'}
             </div>
           </div>
-          <div className="flex gap-4 text-sm">
+          <div className="flex gap-2 text-sm flex-wrap">
             <Link
               href="/"
-              className={`px-3 py-2 rounded ${
-                isActive('/') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/')}
             >
               Home
             </Link>
             <Link
               href="/create-property"
-              className={`px-3 py-2 rounded ${
-                isActive('/create-property') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/create-property')}
             >
               Create Property
             </Link>
             <Link
               href="/dashboard"
-              className={`px-3 py-2 rounded ${
-                isActive('/dashboard') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/dashboard')}
             >
               Dashboard
             </Link>
             <Link
               href="/handover"
-              className={`px-3 py-2 rounded ${
-                isActive('/handover') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/handover')}
             >
               Handover
             </Link>
             <Link
               href="/sharing"
-              className={`px-3 py-2 rounded ${
-                isActive('/sharing') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/sharing')}
             >
               Sharing
             </Link>
             <Link
               href="/home-map"
-              className={`px-3 py-2 rounded ${
-                isActive('/home-map') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/home-map')}
             >
               Home Map
             </Link>
             <Link
               href="/add-rooms"
-              className={`px-3 py-2 rounded ${
-                isActive('/add-rooms') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/add-rooms')}
             >
               Add Rooms
             </Link>
             <Link
               href="/utilities"
-              className={`px-3 py-2 rounded ${
-                isActive('/utilities') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/utilities')}
             >
               Utilities
             </Link>
             <Link
               href="/assets"
-              className={`px-3 py-2 rounded ${
-                isActive('/assets') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/assets')}
             >
               Assets
             </Link>
             <Link
               href="/warranties"
-              className={`px-3 py-2 rounded ${
-                isActive('/warranties') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/warranties')}
             >
               Warranties
             </Link>
             <Link
               href="/documents"
-              className={`px-3 py-2 rounded ${
-                isActive('/documents') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/documents')}
             >
               Documents
             </Link>
             <Link
               href="/receipts"
-              className={`px-3 py-2 rounded ${
-                isActive('/receipts') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/receipts')}
             >
               Receipts
             </Link>
             <Link
               href="/reminders"
-              className={`px-3 py-2 rounded ${
-                isActive('/reminders') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/reminders')}
             >
               Reminders
             </Link>
             <Link
               href="/repairs"
-              className={`px-3 py-2 rounded ${
-                isActive('/repairs') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/repairs')}
             >
               Repairs
             </Link>
             <Link
               href="/issues"
-              className={`px-3 py-2 rounded ${
-                isActive('/issues') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/issues')}
             >
               Issues
             </Link>
             {userEmail ? (
               <>
-                <Link
-                  href="/settings"
-                  className={`px-3 py-2 rounded ${
-                    isActive('/settings') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-                  }`}
-                >
-                  Account
-                </Link>
                 <button
                   type="button"
                   onClick={async () => {
@@ -190,22 +158,26 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 </button>
               </>
             ) : (
-              <Link
-                href="/sign-in"
-                className={`px-3 py-2 rounded ${
-                  isActive('/sign-in') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Sign in
-              </Link>
+              <>
+                <Link
+                  href="/sign-in"
+                  className={navLinkClass('/sign-in')}
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/sign-up"
+                  className={navLinkClass('/sign-up')}
+                >
+                  Sign up
+                </Link>
+              </>
             )}
             <Link
               href="/settings"
-              className={`px-3 py-2 rounded ${
-                isActive('/settings') ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'
-              }`}
+              className={navLinkClass('/settings')}
             >
-              Settings
+              {userEmail ? 'Account' : 'Settings'}
             </Link>
           </div>
         </div>

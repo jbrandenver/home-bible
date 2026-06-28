@@ -16,6 +16,25 @@ export function getSupabaseSetupMessage() {
   return 'Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to your local env.';
 }
 
+export function formatAuthError(error: Error) {
+  const message = error.message || 'Authentication failed. Please try again.';
+  const lowerMessage = message.toLowerCase();
+
+  if (lowerMessage.includes('rate') || lowerMessage.includes('security purposes')) {
+    return 'Too many auth attempts. Please wait a minute before trying again.';
+  }
+
+  if (lowerMessage.includes('invalid login') || lowerMessage.includes('invalid credentials')) {
+    return 'Email or password was not recognized. Check your details and try again.';
+  }
+
+  if (lowerMessage.includes('email not confirmed')) {
+    return 'Please confirm your email address before signing in.';
+  }
+
+  return message;
+}
+
 export async function getCurrentUser() {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {

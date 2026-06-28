@@ -28,6 +28,7 @@ export default function CreatePropertyPage() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (loading) return;
 
     if (!nickname.trim()) {
       setError('Property nickname is required.');
@@ -156,7 +157,7 @@ export default function CreatePropertyPage() {
             ) : null}
 
             <div>
-              <Button type="submit">{loading ? 'Saving...' : 'Continue'}</Button>
+              <Button type="submit" disabled={loading}>{loading ? 'Saving...' : 'Continue'}</Button>
             </div>
           </form>
         </Card>
