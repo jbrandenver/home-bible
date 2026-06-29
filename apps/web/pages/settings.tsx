@@ -102,14 +102,17 @@ export default function SettingsPage() {
             <p style={{ color: '#6b7280' }}>
               Sharing & Access Review previews future role visibility only. It does not create guests, invitations, public share links, or tokenized URLs.
             </p>
-            <Link href="/handover">
-              <Button type="button">Open handover builder</Button>
-            </Link>
-            <span style={{ display: 'inline-block', marginLeft: 12 }}>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Link href="/handover">
+                <Button type="button">Open handover builder</Button>
+              </Link>
               <Link href="/sharing">
                 <Button type="button">Open sharing review</Button>
               </Link>
-            </span>
+              <Link href="/mvp-test">
+                <Button type="button">Open MVP test checklist</Button>
+              </Link>
+            </div>
           </Card>
 
           <Card>

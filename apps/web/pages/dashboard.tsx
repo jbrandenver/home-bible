@@ -449,6 +449,9 @@ export default function DashboardPage() {
               <Link href="/sharing">
                 <Button type="button">Review sharing</Button>
               </Link>
+              <Link href="/mvp-test">
+                <Button type="button">MVP test checklist</Button>
+              </Link>
               <Link href="/utilities">
                 <Button type="button">View utilities</Button>
               </Link>
@@ -502,6 +505,19 @@ export default function DashboardPage() {
             </p>
             <Link href="/sharing">
               <Button type="button">Open sharing review</Button>
+            </Link>
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Private MVP Test</h2>
+            <p style={{ color: '#6b7280' }}>
+              Follow the manual test checklist and Maple House seed walkthrough before inviting more testers.
+            </p>
+            <p style={{ color: '#6b7280', marginTop: 0 }}>
+              No sample data is created automatically and no paid or background services are enabled.
+            </p>
+            <Link href="/mvp-test">
+              <Button type="button">Open MVP test checklist</Button>
             </Link>
           </Card>
 
