@@ -89,6 +89,7 @@ export default function SettingsPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Security and privacy</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <UtilityBadge label="MVP RC local" />
               <UtilityBadge label="Account deletion required" />
               <UtilityBadge label="Data export required" />
               <UtilityBadge label="No sensitive access details" />
@@ -101,6 +102,9 @@ export default function SettingsPage() {
             </p>
             <p style={{ color: '#6b7280' }}>
               Sharing & Access Review previews future role visibility only. It does not create guests, invitations, public share links, or tokenized URLs.
+            </p>
+            <p style={{ color: '#6b7280' }}>
+              This local release-candidate package is for controlled private testing only. It does not deploy, enable hosting, or add automated infrastructure.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Link href="/handover">
