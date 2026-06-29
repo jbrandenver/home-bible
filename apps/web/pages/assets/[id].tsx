@@ -182,7 +182,7 @@ export default function AssetDetailPage() {
           nextServiceRecords = await getServiceRecordsForAsset(serviceRecordContext, assetId);
         } catch (loadError) {
           if (isMounted) {
-            setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load asset service records.');
+            setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load asset service history.');
           }
         }
 
@@ -214,7 +214,7 @@ export default function AssetDetailPage() {
           nextTrendFlags = await getTrendFlagsForAsset(trendFlagContext, assetId);
         } catch (loadError) {
           if (isMounted) {
-            setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load asset trend flags.');
+            setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load asset trends.');
           }
         }
 
@@ -396,8 +396,8 @@ export default function AssetDetailPage() {
           </p>
           <p style={{ color: '#6b7280', marginTop: 8 }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode is active. If this asset was removed, it will no longer appear.'
-              : 'Demo mode is active. Add assets from the asset flow to continue.'}
+              ? 'Saved to your account. If this asset was removed, it will no longer appear.'
+              : 'Demo data is stored only in this browser. Add assets from the asset flow to continue.'}
           </p>
           <Link href="/assets">
             <Button type="button">Back to assets</Button>
@@ -420,8 +420,8 @@ export default function AssetDetailPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: this asset, reminders, repairs, service records, issues, and trend flags are loaded from Supabase.'
-              : 'Demo mode: this asset, reminders, repairs, service records, issues, and trend flags are loaded from localStorage.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {reminderError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -703,7 +703,7 @@ export default function AssetDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Trend flags</h2>
           {trendFlags.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No trend flags currently for this asset.</p>
+            <p style={{ color: '#6b7280' }}>No trends currently for this asset.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {trendFlags.map((flag) => (
@@ -755,7 +755,7 @@ export default function AssetDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Service records for this asset</h2>
           {linkedServiceRecords.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No service records linked to this asset.</p>
+            <p style={{ color: '#6b7280' }}>No service history linked to this asset.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {linkedServiceRecords

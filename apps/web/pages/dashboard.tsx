@@ -155,7 +155,7 @@ export default function DashboardPage() {
         nextServiceRecords = await getServiceRecordsForContext(serviceRecordContext);
       } catch (loadError) {
         if (isMounted) {
-          setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load service records.');
+          setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load service history.');
         }
       }
 
@@ -187,7 +187,7 @@ export default function DashboardPage() {
         nextTrendFlags = await getTrendFlagsForContext(trendFlagContext);
       } catch (loadError) {
         if (isMounted) {
-          setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load trend flags.');
+          setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load trends.');
         }
       }
 
@@ -351,6 +351,24 @@ export default function DashboardPage() {
     [trendFlags]
   );
 
+  const criticalUtilities = useMemo(() => {
+    const criticalTypes = new Set([
+      'main_water_shutoff',
+      'electrical_panel',
+      'gas_shutoff',
+      'water_heater',
+      'hvac_unit',
+      'furnace',
+      'air_conditioner',
+      'breaker_panel',
+      'sump_pump',
+      'internet_modem',
+      'router'
+    ]);
+
+    return utilities.filter((utility) => criticalTypes.has(utility.utility_type)).slice(0, 6);
+  }, [utilities]);
+
   const openRepairCount = useMemo(
     () => repairs.filter((repair) => repair.status === 'open').length,
     [repairs]
@@ -360,7 +378,7 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title={propertyNickname}
-        description="Your home map is starting to take shape."
+        description="Command center for your home: next actions, key records, and shortcuts."
       />
 
         <div style={{ display: 'grid', gap: 24 }}>
@@ -372,18 +390,18 @@ export default function DashboardPage() {
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${openRepairCount} open repair${openRepairCount === 1 ? '' : 's'}`} />
-              <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${serviceRecords.length} service history item${serviceRecords.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${highUrgentIssueCount} high or urgent issue${highUrgentIssueCount === 1 ? '' : 's'}`} />
-              <UtilityBadge label={`${activeTrendFlagCount} active trend flag${activeTrendFlagCount === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${activeTrendFlagCount} active trend${activeTrendFlagCount === 1 ? '' : 's'}`} />
             </div>
 
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags are loaded from localStorage.'}
+                ? 'Saved to your account.'
+                : 'Demo data is stored only in this browser.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -441,43 +459,65 @@ export default function DashboardPage() {
 
             <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Link href="/home-map">
-                <Button type="button">View home map</Button>
+                <Button type="button">Home Map</Button>
               </Link>
-              <Link href="/handover">
-                <Button type="button">Build handover</Button>
-              </Link>
-              <Link href="/sharing">
-                <Button type="button">Review sharing</Button>
-              </Link>
-              <Link href="/mvp-test">
-                <Button type="button">MVP test checklist</Button>
+              <Link href="/add-rooms">
+                <Button type="button">Add Room</Button>
               </Link>
               <Link href="/utilities">
-                <Button type="button">View utilities</Button>
+                <Button type="button">Utilities</Button>
               </Link>
               <Link href="/assets">
-                <Button type="button">View assets</Button>
+                <Button type="button">Assets</Button>
               </Link>
-              <Link href="/warranties">
-                <Button type="button">View warranties</Button>
+              <Link href="/maintenance">
+                <Button type="button">Maintenance</Button>
               </Link>
               <Link href="/documents">
-                <Button type="button">View documents</Button>
+                <Button type="button">Documents</Button>
               </Link>
-              <Link href="/receipts">
-                <Button type="button">View receipts</Button>
+              <Link href="/handover">
+                <Button type="button">Handover</Button>
               </Link>
-              <Link href="/reminders">
-                <Button type="button">View reminders</Button>
+              <Link href="/more">
+                <Button type="button">More</Button>
               </Link>
-              <Link href="/repairs">
-                <Button type="button">View repairs</Button>
-              </Link>
-              <Link href="/issues">
-                <Button type="button">View issues</Button>
-              </Link>
-              <Link href="/settings">
-                <Button type="button">Settings</Button>
+            </div>
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Critical Utilities</h2>
+            <p style={{ color: '#6b7280' }}>
+              Quick access to shutoffs, panels, HVAC, water heater, router, and other home systems.
+            </p>
+            {criticalUtilities.length === 0 ? (
+              <div>
+                <p style={{ color: '#6b7280' }}>No critical utilities added yet.</p>
+                <Link href="/utilities">
+                  <Button type="button">Add utilities</Button>
+                </Link>
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {criticalUtilities.map((utility) => (
+                  <Link
+                    key={utility.id}
+                    href={`/utilities/${utility.id}`}
+                    style={{ color: 'inherit', textDecoration: 'none' }}
+                  >
+                    <div style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 10, background: '#fff' }}>
+                      <div style={{ fontWeight: 600 }}>{utility.name}</div>
+                      <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                        {formatEnumLabel(utility.utility_type)}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+            <div style={{ marginTop: 12 }}>
+              <Link href="/utilities">
+                <Button type="button">Open utilities</Button>
               </Link>
             </div>
           </Card>
@@ -509,22 +549,9 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Private MVP Test</h2>
-            <p style={{ color: '#6b7280' }}>
-              Follow the manual test checklist and Maple House seed walkthrough before inviting more testers.
-            </p>
-            <p style={{ color: '#6b7280', marginTop: 0 }}>
-              No sample data is created automatically and no paid or background services are enabled.
-            </p>
-            <Link href="/mvp-test">
-              <Button type="button">Open MVP test checklist</Button>
-            </Link>
-          </Card>
-
-          <Card>
-            <h2 style={{ marginTop: 0 }}>Service records</h2>
+            <h2 style={{ marginTop: 0 }}>Service History</h2>
             {recentServiceRecords.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No service records yet.</p>
+              <p style={{ color: '#6b7280' }}>No service history yet.</p>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {recentServiceRecords.map((record) => (
@@ -610,9 +637,9 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+            <h2 style={{ marginTop: 0 }}>Trends</h2>
             {trendFlags.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No trend flags currently.</p>
+              <p style={{ color: '#6b7280' }}>No trends currently.</p>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {trendFlags.slice(0, 6).map((flag) => (

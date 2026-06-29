@@ -126,7 +126,7 @@ export default function HomeMapPage() {
         nextServiceRecords = await getServiceRecordsForContext(serviceRecordContext);
       } catch (loadError) {
         if (isMounted) {
-          setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load service records.');
+          setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load service history.');
         }
       }
 
@@ -158,7 +158,7 @@ export default function HomeMapPage() {
         nextTrendFlags = await getTrendFlagsForContext(trendFlagContext);
       } catch (loadError) {
         if (isMounted) {
-          setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load trend flags.');
+          setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load trends.');
         }
       }
 
@@ -334,16 +334,16 @@ export default function HomeMapPage() {
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${reminders.length} reminder${reminders.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${repairs.length} repair${repairs.length === 1 ? '' : 's'}`} />
-              <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${serviceRecords.length} service history item${serviceRecords.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length} open issue${issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length === 1 ? '' : 's'}`} />
-              <UtilityBadge label={`${trendFlags.filter((flag) => flag.status === 'active').length} active trend flag${trendFlags.filter((flag) => flag.status === 'active').length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${trendFlags.filter((flag) => flag.status === 'active').length} active trend${trendFlags.filter((flag) => flag.status === 'active').length === 1 ? '' : 's'}`} />
             </div>
             <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
               {dataMode === 'supabase'
-                ? 'Signed-in mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags are loaded from Supabase.'
-                : 'Demo mode: property, floors, rooms, utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags are loaded from localStorage.'}
+                ? 'Saved to your account.'
+                : 'Demo data is stored only in this browser.'}
             </p>
             {utilityError ? (
               <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>

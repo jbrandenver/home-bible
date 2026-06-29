@@ -252,7 +252,7 @@ export default function HandoverPage() {
 
   const selectedSections = useMemo(() => new Set(sections), [sections]);
 
-  const modeLabel = context?.mode === 'supabase' ? 'Signed-in Supabase mode' : 'Demo mode';
+  const modeLabel = context?.mode === 'supabase' ? 'Saved to your account.' : 'Demo data is stored only in this browser.';
   const canPreview = !loadingContext && Boolean(context?.property) && sections.length > 0;
 
   const toggleSection = (section: HandoverSection) => {
@@ -337,8 +337,8 @@ export default function HandoverPage() {
               <strong>No property found yet.</strong>
               <p style={{ ...subtleText, marginBottom: 0 }}>
                 {context?.mode === 'supabase'
-                  ? 'Create or join a property before generating a signed-in handover report.'
-                  : 'Demo mode can load this page safely. Add a demo property and rooms first to preview report content.'}
+                  ? 'Create or join a property before generating a handover report.'
+                  : 'Demo data is stored only in this browser. Add a demo property and rooms first to preview report content.'}
               </p>
             </div>
           ) : null}

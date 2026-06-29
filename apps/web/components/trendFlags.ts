@@ -80,7 +80,7 @@ export function detectTrendFlags(serviceRecords: ServiceRecord[], issues: IssueR
         label: 'Recurring service pattern',
         entityType: 'asset',
         entityId: assetId,
-        details: `${count} service records in 5 years.`
+        details: `${count} service history items in 5 years.`
       });
     }
   }
@@ -92,7 +92,7 @@ export function detectTrendFlags(serviceRecords: ServiceRecord[], issues: IssueR
         label: 'Recurring service pattern',
         entityType: 'utility',
         entityId: utilityId,
-        details: `${count} service records in 5 years.`
+        details: `${count} service history items in 5 years.`
       });
     }
   }
@@ -104,7 +104,7 @@ export function detectTrendFlags(serviceRecords: ServiceRecord[], issues: IssueR
         label: 'Review recommended',
         entityType: 'room',
         entityId: roomId,
-        details: `${count} service records in 5 years.`
+        details: `${count} service history items in 5 years.`
       });
     }
   }

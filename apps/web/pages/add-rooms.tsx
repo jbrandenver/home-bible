@@ -171,7 +171,7 @@ export default function AddRoomsPage() {
         ) : (
           <Card>
             <p style={{ margin: 0, color: '#6b7280' }}>
-              Demo mode: floors and rooms save to localStorage.
+              Demo data is stored only in this browser.
             </p>
             {!supabaseReady ? (
               <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>

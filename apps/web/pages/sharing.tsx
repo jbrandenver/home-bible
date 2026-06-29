@@ -141,7 +141,7 @@ export default function SharingPage() {
     };
   }, [selectedRole]);
 
-  const modeLabel = preview?.mode === 'supabase' ? 'Signed-in Supabase mode' : 'Demo mode';
+  const modeLabel = preview?.mode === 'supabase' ? 'Saved to your account.' : 'Demo data is stored only in this browser.';
 
   return (
     <>
@@ -173,8 +173,8 @@ export default function SharingPage() {
               <strong>No property found yet.</strong>
               <p style={{ ...subtleText, marginBottom: 0 }}>
                 {preview.mode === 'supabase'
-                  ? 'Create or join a property before reviewing signed-in access.'
-                  : 'Demo mode can load this page safely. Add a demo property and rooms first to preview sample access.'}
+                  ? 'Create or join a property before reviewing access.'
+                  : 'Demo data is stored only in this browser. Add a demo property and rooms first to preview sample access.'}
               </p>
             </div>
           ) : null}
@@ -314,7 +314,7 @@ function SharingPreviewPanel({ preview }: { preview: SharingPreview }) {
             />
           </PreviewDataSection>
 
-          <PreviewDataSection title="Repairs and service" emptyLabel="No repairs or service records visible for this role.">
+          <PreviewDataSection title="Repairs and service history" emptyLabel="No repairs or service history visible for this role.">
             <RecordList
               items={[
                 ...preview.data.repairs.slice(0, 4).map((repair) =>
@@ -327,7 +327,7 @@ function SharingPreviewPanel({ preview }: { preview: SharingPreview }) {
             />
           </PreviewDataSection>
 
-          <PreviewDataSection title="Issues and trend flags" emptyLabel="No issues or trend flags visible for this role.">
+          <PreviewDataSection title="Issues and trends" emptyLabel="No issues or trends visible for this role.">
             <RecordList
               items={[
                 ...preview.data.issues.slice(0, 4).map((issue) =>

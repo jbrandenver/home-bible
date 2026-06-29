@@ -94,7 +94,7 @@ export default function CreatePropertyPage() {
             </p>
           ) : (
             <p style={{ marginTop: 0, color: '#6b7280' }}>
-              Demo mode: this property saves to localStorage only.
+              Demo data is stored only in this browser.
             </p>
           )}
 

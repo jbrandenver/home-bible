@@ -320,8 +320,8 @@ export default function RemindersPage() {
       <Card>
         <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
           {dataMode === 'supabase'
-            ? 'Signed-in mode: reminders save to Supabase.'
-            : 'Demo mode: reminders save to localStorage.'}
+            ? 'Saved to your account.'
+            : 'Demo data is stored only in this browser.'}
         </p>
         {error ? (
           <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -334,7 +334,7 @@ export default function RemindersPage() {
         <h2 style={{ marginTop: 0 }}>Add reminder</h2>
         {dataMode === 'supabase' && !context?.property ? (
           <div>
-            <p style={{ color: '#6b7280' }}>Create a property before adding Supabase reminders.</p>
+            <p style={{ color: '#6b7280' }}>Create a property before adding reminders.</p>
             <Link href="/create-property">
               <Button type="button">Create property</Button>
             </Link>

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
-import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
+import { getCurrentUser } from '../lib/auth';
 
 const routeGroups = [
   {
@@ -42,7 +42,7 @@ const routeGroups = [
 const walkthroughSteps = [
   'Create or sign into a private test account.',
   'Create Maple House with address skipped.',
-  'Add rooms, utilities, assets, reminders, repairs, service records, issues, and trend flags manually.',
+  'Add rooms, utilities, assets, reminders, repairs, service history, issues, and trends manually.',
   'Upload a few small placeholder documents and receipts.',
   'Approve receipt metadata before saving receipt rows.',
   'Generate Family and Buyer handover reports in the browser.',
@@ -72,11 +72,11 @@ export default function MvpTestPage() {
       if (!isMounted) return;
 
       if (user) {
-        setModeLabel(`Signed-in Supabase mode: ${user.email || 'authenticated user'}`);
+        setModeLabel(`Saved to your account: ${user.email || 'authenticated user'}`);
         return;
       }
 
-      setModeLabel(isSupabaseConfigured() ? 'Demo mode: Supabase configured, no active session' : 'Demo mode: Supabase env not configured');
+      setModeLabel('Demo data is stored only in this browser.');
     }
 
     loadMode();

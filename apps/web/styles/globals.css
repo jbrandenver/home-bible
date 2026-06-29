@@ -61,9 +61,15 @@ a{color:inherit}
 .text-white{color:#fff}
 .bg-gray-100{background:#f3f4f6}
 .hover\:text-gray-900:hover{color:#111827}
+.mobile-bottom-nav{display:none}
+.mobile-bottom-link{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.125rem;min-width:0;padding:0.45rem 0.25rem;border-radius:10px;text-decoration:none;font-size:0.75rem;font-weight:700}
+.mobile-bottom-link span:first-child{font-size:0.8rem;line-height:1}
 
 @media (max-width: 640px){
   .p-6{padding:1rem}
   .px-6{padding-left:1rem;padding-right:1rem}
   .grid-cols-2{grid-template-columns:1fr}
+  .desktop-primary-nav{display:none}
+  .app-main{padding-bottom:5.5rem}
+  .mobile-bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:grid;grid-template-columns:repeat(5, minmax(0, 1fr));gap:0.25rem;padding:0.5rem 0.5rem 0.65rem}
 }

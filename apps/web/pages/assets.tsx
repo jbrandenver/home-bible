@@ -157,8 +157,8 @@ export default function AssetsPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: assets are loaded from Supabase.'
-              : 'Demo mode: assets are stored in localStorage only.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
         </Card>
 
@@ -216,7 +216,7 @@ export default function AssetsPage() {
           ) : dataMode === 'supabase' && context && !context.property ? (
             <EmptyState
               title="No property found"
-              description="Create a property before adding Supabase assets."
+              description="Create a property before adding assets."
             />
           ) : assets.length === 0 ? (
             <EmptyState

@@ -251,8 +251,8 @@ export default function UtilityDetailPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: this utility and related records are saved to your Supabase-backed account.'
-              : 'Demo mode: this utility and related records are stored locally in this browser.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {formError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>{formError}</p>
@@ -266,11 +266,11 @@ export default function UtilityDetailPage() {
             <UtilityBadge label={roomName} />
             <UtilityBadge label={`${reminders.length} reminder${reminders.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${repairs.length} repair${repairs.length === 1 ? '' : 's'}`} />
-            <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${serviceRecords.length} service history item${serviceRecords.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${issues.length} issue${issues.length === 1 ? '' : 's'}`} />
-            <UtilityBadge label={`${trendFlags.length} trend flag${trendFlags.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${trendFlags.length} trend${trendFlags.length === 1 ? '' : 's'}`} />
           </div>
           {utility.location_notes ? <p><strong>Location:</strong> {utility.location_notes}</p> : null}
           {utility.emergency_notes ? <p style={{ color: '#b91c1c' }}><strong>Emergency:</strong> {utility.emergency_notes}</p> : null}
@@ -345,7 +345,7 @@ export default function UtilityDetailPage() {
           ))}
         </RelatedList>
 
-        <RelatedList title="Service records" empty="No service records linked to this utility.">
+        <RelatedList title="Service History" empty="No service history linked to this utility.">
           {serviceRecords.map((record) => (
             <RelatedItem key={record.id} title={record.service_title} detail={`${record.service_date} • ${formatEnumLabel(record.service_type)}`} />
           ))}
@@ -371,7 +371,7 @@ export default function UtilityDetailPage() {
           ))}
         </RelatedList>
 
-        <RelatedList title="Trend flags" empty="No trend flags linked to this utility.">
+        <RelatedList title="Trends" empty="No trends linked to this utility.">
           {trendFlags.map((flag) => (
             <RelatedItem key={flag.id} title={flag.title} detail={`${formatEnumLabel(flag.status)} • ${formatEnumLabel(flag.severity)}`} />
           ))}

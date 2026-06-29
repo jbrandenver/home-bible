@@ -13,13 +13,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
-  const isActive = (path: string) => {
+  const isActiveRoute = (path: string) => {
     if (path === '/') return router.pathname === '/';
     return router.pathname === path || router.pathname.startsWith(`${path}/`);
   };
 
-  const navLinkClass = (path: string) =>
-    `px-3 py-2 rounded ${isActive(path) ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'}`;
+  const sectionMatches = (section: NavSection) => {
+    if (section.href === '/dashboard') {
+      return isActiveRoute('/dashboard');
+    }
+
+    return section.activeRoutes.some((path) => isActiveRoute(path));
+  };
+
+  const navLinkClass = (section: NavSection) =>
+    `px-3 py-2 rounded ${sectionMatches(section) ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'}`;
 
   useEffect(() => {
     let isMounted = true;
@@ -49,103 +57,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             <Link href="/" className="text-lg font-semibold text-amber-700">
               Home Bible
             </Link>
-            <div className="text-sm text-gray-600">
-              {userEmail ? `Signed in: ${userEmail}` : 'Demo mode'}
-            </div>
-          </div>
-          <div className="flex gap-2 text-sm flex-wrap">
-            <Link
-              href="/"
-              className={navLinkClass('/')}
-            >
-              Home
-            </Link>
-            <Link
-              href="/create-property"
-              className={navLinkClass('/create-property')}
-            >
-              Create Property
-            </Link>
-            <Link
-              href="/dashboard"
-              className={navLinkClass('/dashboard')}
-            >
-              Dashboard
-            </Link>
-            <Link
-              href="/handover"
-              className={navLinkClass('/handover')}
-            >
-              Handover
-            </Link>
-            <Link
-              href="/sharing"
-              className={navLinkClass('/sharing')}
-            >
-              Sharing
-            </Link>
-            <Link
-              href="/home-map"
-              className={navLinkClass('/home-map')}
-            >
-              Home Map
-            </Link>
-            <Link
-              href="/add-rooms"
-              className={navLinkClass('/add-rooms')}
-            >
-              Add Rooms
-            </Link>
-            <Link
-              href="/utilities"
-              className={navLinkClass('/utilities')}
-            >
-              Utilities
-            </Link>
-            <Link
-              href="/assets"
-              className={navLinkClass('/assets')}
-            >
-              Assets
-            </Link>
-            <Link
-              href="/warranties"
-              className={navLinkClass('/warranties')}
-            >
-              Warranties
-            </Link>
-            <Link
-              href="/documents"
-              className={navLinkClass('/documents')}
-            >
-              Documents
-            </Link>
-            <Link
-              href="/receipts"
-              className={navLinkClass('/receipts')}
-            >
-              Receipts
-            </Link>
-            <Link
-              href="/reminders"
-              className={navLinkClass('/reminders')}
-            >
-              Reminders
-            </Link>
-            <Link
-              href="/repairs"
-              className={navLinkClass('/repairs')}
-            >
-              Repairs
-            </Link>
-            <Link
-              href="/issues"
-              className={navLinkClass('/issues')}
-            >
-              Issues
-            </Link>
-            {userEmail ? (
-              <>
+            <div className="flex items-center gap-2 flex-wrap text-sm">
+              <span className="text-gray-600">
+                {userEmail ? 'Saved to your account.' : 'Demo data is stored only in this browser.'}
+              </span>
+              {userEmail ? (
                 <button
                   type="button"
                   onClick={async () => {
@@ -156,37 +72,95 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 >
                   Sign out
                 </button>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/sign-in"
-                  className={navLinkClass('/sign-in')}
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/sign-up"
-                  className={navLinkClass('/sign-up')}
-                >
-                  Sign up
-                </Link>
-              </>
-            )}
-            <Link
-              href="/settings"
-              className={navLinkClass('/settings')}
-            >
-              {userEmail ? 'Account' : 'Settings'}
-            </Link>
+              ) : (
+                <>
+                  <Link href="/sign-in" className="px-3 py-2 rounded text-gray-600 hover:text-gray-900">
+                    Sign in
+                  </Link>
+                  <Link href="/sign-up" className="px-3 py-2 rounded text-gray-600 hover:text-gray-900">
+                    Sign up
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="desktop-primary-nav flex gap-2 text-sm flex-wrap">
+            {desktopSections.map((section) => (
+              <Link key={section.href} href={section.href} className={navLinkClass(section)}>
+                {section.label}
+              </Link>
+            ))}
           </div>
         </div>
       </nav>
 
       {/* Main content */}
-      <main className="p-6">
+      <main className="p-6 app-main">
         <div className="max-w-6xl mx-auto">{children}</div>
       </main>
+
+      <nav className="mobile-bottom-nav bg-white shadow-sm border-t border-gray-200">
+        {mobileSections.map((section) => (
+          <Link
+            key={section.href}
+            href={section.href}
+            className={`mobile-bottom-link ${sectionMatches(section) ? 'bg-amber-100 text-amber-900' : 'text-gray-600'}`}
+          >
+            <span aria-hidden="true">{section.icon}</span>
+            <span>{section.mobileLabel || section.label}</span>
+          </Link>
+        ))}
+      </nav>
     </div>
   );
 };
+
+type NavSection = {
+  href: string;
+  label: string;
+  mobileLabel?: string;
+  icon: string;
+  activeRoutes: string[];
+};
+
+const desktopSections: NavSection[] = [
+  {
+    href: '/dashboard',
+    label: 'Dashboard',
+    icon: 'D',
+    activeRoutes: ['/dashboard']
+  },
+  {
+    href: '/home',
+    label: 'Home',
+    icon: 'H',
+    activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms', '/utilities']
+  },
+  {
+    href: '/assets',
+    label: 'Assets',
+    icon: 'A',
+    activeRoutes: ['/assets']
+  },
+  {
+    href: '/maintenance',
+    label: 'Maintenance',
+    mobileLabel: 'Care',
+    icon: 'M',
+    activeRoutes: ['/maintenance', '/warranties', '/reminders', '/repairs', '/issues', '/receipts']
+  },
+  {
+    href: '/documents',
+    label: 'Documents',
+    icon: 'Docs',
+    activeRoutes: ['/documents']
+  },
+  {
+    href: '/more',
+    label: 'More',
+    icon: '...',
+    activeRoutes: ['/more', '/handover', '/sharing', '/settings', '/mvp-test', '/sign-in', '/sign-up']
+  }
+];
+
+const mobileSections = desktopSections.filter((section) => section.href !== '/documents');

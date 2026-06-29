@@ -153,7 +153,7 @@ export default function RepairsPage() {
       try {
         nextServiceRecords = await getServiceRecordsForContext(nextServiceContext);
       } catch (loadRecordsError) {
-        errors.push(loadRecordsError instanceof Error ? loadRecordsError.message : 'Failed to load service records.');
+        errors.push(loadRecordsError instanceof Error ? loadRecordsError.message : 'Failed to load service history.');
       }
 
       try {
@@ -165,7 +165,7 @@ export default function RepairsPage() {
       try {
         nextTrendFlags = await getTrendFlagsForContext(trendFlagContext);
       } catch (loadFlagsError) {
-        errors.push(loadFlagsError instanceof Error ? loadFlagsError.message : 'Failed to load trend flags.');
+        errors.push(loadFlagsError instanceof Error ? loadFlagsError.message : 'Failed to load trends.');
       }
 
       try {
@@ -454,7 +454,7 @@ export default function RepairsPage() {
       setServiceRecords((currentRecords) => [createdRecord, ...currentRecords]);
       resetServiceRecordForm();
     } catch (saveError) {
-      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save service record.');
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save service history item.');
     } finally {
       setSavingServiceRecord(false);
     }
@@ -512,7 +512,7 @@ export default function RepairsPage() {
       await deleteServiceRecordForContext(serviceContext, recordId);
       setServiceRecords((currentRecords) => currentRecords.filter((record) => record.id !== recordId));
     } catch (deleteError) {
-      setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete service record.');
+      setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete service history item.');
     } finally {
       setDeletingId(null);
     }
@@ -562,7 +562,7 @@ export default function RepairsPage() {
   return (
     <>
       <PageHeader
-        title="Repairs & Service Records"
+        title="Repairs & Service History"
         description="Track open repairs and completed service history for rooms, assets, and utilities."
       />
 
@@ -571,14 +571,14 @@ export default function RepairsPage() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
             <UtilityBadge label={`${openRepairCount} open repair${openRepairCount === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${repairs.length} repair${repairs.length === 1 ? '' : 's'}`} />
-            <UtilityBadge label={`${serviceRecords.length} service record${serviceRecords.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${serviceRecords.length} service history item${serviceRecords.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
-            <UtilityBadge label={`${activeTrendFlagCount} active trend flag${activeTrendFlagCount === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${activeTrendFlagCount} active trend${activeTrendFlagCount === 1 ? '' : 's'}`} />
           </div>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: repairs, service records, issues, and trend flags are loaded from Supabase.'
-              : 'Demo mode: repairs, service records, issues, and trend flags are stored in localStorage.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {loading ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>Loading repairs and service history...</p>
@@ -588,7 +588,7 @@ export default function RepairsPage() {
           ) : null}
           {dataMode === 'supabase' && !hasProperty ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>
-              Create a property before adding Supabase repairs or service records.
+              Create a property before adding repairs or service history.
             </p>
           ) : null}
           {formError ? (
@@ -700,7 +700,7 @@ export default function RepairsPage() {
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Add service record</h2>
+          <h2 style={{ marginTop: 0 }}>Add service history</h2>
           <form onSubmit={submitServiceRecord} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Service title</span>
@@ -769,7 +769,7 @@ export default function RepairsPage() {
 
             <div>
               <Button type="submit" disabled={savingServiceRecord || (dataMode === 'supabase' && !hasProperty)}>
-                {savingServiceRecord ? 'Saving service record...' : 'Save service record'}
+                {savingServiceRecord ? 'Saving service history...' : 'Save service history'}
               </Button>
             </div>
           </form>
@@ -831,7 +831,7 @@ export default function RepairsPage() {
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Find service records</h2>
+          <h2 style={{ marginTop: 0 }}>Find service history</h2>
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Search</span>
@@ -868,7 +868,7 @@ export default function RepairsPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Trend flags</h2>
           {trendFlags.length === 0 ? (
-            <p style={{ color: '#6b7280', margin: 0 }}>No trend flags currently. Keep logging service records for better trend insight.</p>
+            <p style={{ color: '#6b7280', margin: 0 }}>No trends currently. Keep logging service history for better trend insight.</p>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {trendFlags.map((flag) => (
@@ -885,8 +885,8 @@ export default function RepairsPage() {
 
         {!loading && repairs.length === 0 && serviceRecords.length === 0 ? (
           <EmptyState
-            title="No repairs or service records yet"
-            description="Add a repair or service record to start building your home's maintenance history."
+            title="No repairs or service history yet"
+            description="Add a repair or service history item to start building your home's maintenance history."
           />
         ) : null}
 
@@ -964,7 +964,7 @@ export default function RepairsPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Service Records ({filteredServiceRecords.length})</h2>
             {filteredServiceRecords.length === 0 ? (
-              <p style={{ color: '#6b7280', margin: 0 }}>No service records match the current filters.</p>
+              <p style={{ color: '#6b7280', margin: 0 }}>No service history matches the current filters.</p>
             ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {filteredServiceRecords.map((record) => (

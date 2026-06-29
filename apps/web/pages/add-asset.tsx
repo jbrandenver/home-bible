@@ -168,8 +168,8 @@ export default function AddAssetPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: this asset will save to Supabase.'
-              : 'Demo mode: this asset will save to localStorage only.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {dataMode === 'demo' && !context?.supabaseConfigured ? (
             <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>

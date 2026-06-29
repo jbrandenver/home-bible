@@ -142,7 +142,7 @@ export default function RoomDetailPage() {
         nextServiceRecords = await getServiceRecordsForContext(serviceRecordContext);
       } catch (loadError) {
         if (isMounted) {
-          setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load room service records.');
+          setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load room service history.');
         }
       }
 
@@ -174,7 +174,7 @@ export default function RoomDetailPage() {
         nextTrendFlags = await getTrendFlagsForContext(trendFlagContext);
       } catch (loadError) {
         if (isMounted) {
-          setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load room trend flags.');
+          setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load room trends.');
         }
       }
 
@@ -296,8 +296,8 @@ export default function RoomDetailPage() {
           </p>
           <p style={{ color: '#6b7280', marginTop: 8 }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode is active. If this room was removed, it will no longer appear.'
-              : 'Demo mode is active. Add rooms from the onboarding flow to continue.'}
+              ? 'Saved to your account. If this room was removed, it will no longer appear.'
+              : 'Demo data is stored only in this browser. Add rooms from the onboarding flow to continue.'}
           </p>
           <Link href="/home-map">
             <Button type="button">Back to home map</Button>
@@ -324,16 +324,16 @@ export default function RoomDetailPage() {
             <UtilityBadge label={`${roomAssets.length} asset${roomAssets.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomReminders.length} reminder${roomReminders.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomRepairs.length} repair${roomRepairs.length === 1 ? '' : 's'}`} />
-            <UtilityBadge label={`${roomServiceRecords.length} service record${roomServiceRecords.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${roomServiceRecords.length} service history item${roomServiceRecords.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomIssues.length} issue${roomIssues.length === 1 ? '' : 's'}`} />
-            <UtilityBadge label={`${roomTrendFlags.length} trend flag${roomTrendFlags.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${roomTrendFlags.length} trend${roomTrendFlags.length === 1 ? '' : 's'}`} />
           </div>
           <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags for this room are loaded from Supabase.'
-              : 'Demo mode: utilities, assets, reminders, repairs, service records, documents, receipts, issues, and trend flags for this room are loaded from localStorage.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {utilityError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -399,7 +399,7 @@ export default function RoomDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Trend flags</h2>
           {roomTrendFlags.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No room-level trend flags currently.</p>
+            <p style={{ color: '#6b7280' }}>No room-level trends currently.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {roomTrendFlags.map((flag) => (
@@ -534,7 +534,7 @@ export default function RoomDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Service records for this room</h2>
           {roomServiceRecords.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No service records linked to this room.</p>
+            <p style={{ color: '#6b7280' }}>No service history linked to this room.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {roomServiceRecords

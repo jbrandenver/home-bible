@@ -398,7 +398,7 @@ export default function DocumentsPage() {
         <Card>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
-            <UtilityBadge label={context?.mode === 'supabase' ? 'Private Supabase storage' : 'Demo mode'} />
+            <UtilityBadge label={context?.mode === 'supabase' ? 'Private storage' : 'Demo data'} />
             {context?.property ? <UtilityBadge label={context.property.nickname} /> : null}
           </div>
           {loading ? <p style={{ color: '#6b7280' }}>Loading documents...</p> : null}

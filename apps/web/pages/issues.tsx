@@ -162,7 +162,7 @@ export default function IssuesPage() {
       try {
         nextTrendFlags = await getTrendFlagsForContext(nextTrendContext);
       } catch (loadFlagsError) {
-        errors.push(loadFlagsError instanceof Error ? loadFlagsError.message : 'Failed to load trend flags.');
+        errors.push(loadFlagsError instanceof Error ? loadFlagsError.message : 'Failed to load trends.');
       }
 
       try {
@@ -422,7 +422,7 @@ export default function IssuesPage() {
       setTrendFlags((currentFlags) => [createdFlag, ...currentFlags]);
       resetTrendFlagForm();
     } catch (saveError) {
-      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save trend flag.');
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to save trend.');
     } finally {
       setSavingTrendFlag(false);
     }
@@ -466,7 +466,7 @@ export default function IssuesPage() {
         );
       }
     } catch (statusError) {
-      setFormError(statusError instanceof Error ? statusError.message : 'Failed to update trend flag status.');
+      setFormError(statusError instanceof Error ? statusError.message : 'Failed to update trend status.');
     } finally {
       setUpdatingId(null);
     }
@@ -502,7 +502,7 @@ export default function IssuesPage() {
       await deleteTrendFlagForContext(trendContext, flagId);
       setTrendFlags((currentFlags) => currentFlags.filter((flag) => flag.id !== flagId));
     } catch (deleteError) {
-      setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete trend flag.');
+      setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete trend.');
     } finally {
       setDeletingId(null);
     }
@@ -553,7 +553,7 @@ export default function IssuesPage() {
     <>
       <PageHeader
         title="Issues"
-        description="Track observed issues and trend flags across rooms, assets, utilities, and repairs."
+        description="Track observed issues and trends across rooms, assets, utilities, and repairs."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
@@ -561,23 +561,23 @@ export default function IssuesPage() {
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
             <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${highPriorityIssueCount} high or urgent`} />
-            <UtilityBadge label={`${activeTrendFlagCount} active trend flag${activeTrendFlagCount === 1 ? '' : 's'}`} />
-            <UtilityBadge label={`${trendFlags.length} trend flag${trendFlags.length === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${activeTrendFlagCount} active trend${activeTrendFlagCount === 1 ? '' : 's'}`} />
+            <UtilityBadge label={`${trendFlags.length} trend${trendFlags.length === 1 ? '' : 's'}`} />
           </div>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: issues and trend flags are loaded from Supabase.'
-              : 'Demo mode: issues and trend flags are stored in localStorage.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {loading ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>Loading issues and trend flags...</p>
+            <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>Loading issues and trends...</p>
           ) : null}
           {loadError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>{loadError}</p>
           ) : null}
           {dataMode === 'supabase' && !hasProperty ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>
-              Create a property before adding Supabase issues or trend flags.
+              Create a property before adding issues or trends.
             </p>
           ) : null}
           {formError ? (
@@ -672,7 +672,7 @@ export default function IssuesPage() {
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Add trend flag</h2>
+          <h2 style={{ marginTop: 0 }}>Add trend</h2>
           <form onSubmit={submitTrendFlag} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Title</span>
@@ -736,7 +736,7 @@ export default function IssuesPage() {
 
             <div>
               <Button type="submit" disabled={savingTrendFlag || (dataMode === 'supabase' && !hasProperty)}>
-                {savingTrendFlag ? 'Saving trend flag...' : 'Save trend flag'}
+                {savingTrendFlag ? 'Saving trend...' : 'Save trend'}
               </Button>
             </div>
           </form>
@@ -799,7 +799,7 @@ export default function IssuesPage() {
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Find trend flags</h2>
+          <h2 style={{ marginTop: 0 }}>Find trends</h2>
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Search</span>
@@ -855,7 +855,7 @@ export default function IssuesPage() {
         </Card>
 
         {!loading && issues.length === 0 && trendFlags.length === 0 ? (
-          <EmptyState title="No issues or trend flags yet" description="Add your first issue or trend flag to start tracking home health." />
+          <EmptyState title="No issues or trends yet" description="Add your first issue or trend to start tracking home health." />
         ) : null}
 
         {issues.length > 0 ? (
@@ -926,7 +926,7 @@ export default function IssuesPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Trend flags ({filteredTrendFlags.length})</h2>
             {filteredTrendFlags.length === 0 ? (
-              <p style={{ color: '#6b7280', margin: 0 }}>No trend flags match the current filters.</p>
+              <p style={{ color: '#6b7280', margin: 0 }}>No trends match the current filters.</p>
             ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {filteredTrendFlags.map((flag) => (

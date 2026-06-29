@@ -488,7 +488,7 @@ export default function ReceiptsPage() {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <UtilityBadge label={`${receipts.length} approved receipt${receipts.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${receiptDocumentsWithoutMetadata.length} awaiting review`} />
-            <UtilityBadge label={context?.mode === 'supabase' ? 'Private storage' : 'Demo mode'} />
+            <UtilityBadge label={context?.mode === 'supabase' ? 'Private storage' : 'Demo data'} />
             {context?.property ? <UtilityBadge label={context.property.nickname} /> : null}
           </div>
           {loading ? <p style={{ color: '#6b7280' }}>Loading receipts...</p> : null}
@@ -496,7 +496,7 @@ export default function ReceiptsPage() {
           {notice ? <p style={{ color: '#065f46', fontWeight: 700 }}>{notice}</p> : null}
           {context?.mode === 'demo' ? (
             <p style={{ color: '#6b7280' }}>
-              Demo mode can view this page safely, but receipt files and approved metadata require signing in.
+              Demo data is stored only in this browser. Receipt files and approved metadata require signing in.
             </p>
           ) : null}
         </Card>

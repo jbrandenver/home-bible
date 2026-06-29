@@ -484,8 +484,8 @@ export default function WarrantiesPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: warranty data is read from Supabase assets and reminders save to Supabase.'
-              : 'Demo mode: warranty data is read from localStorage assets and reminders save to localStorage.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {error ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>

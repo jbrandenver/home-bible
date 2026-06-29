@@ -95,7 +95,7 @@ export default function UtilitiesPage() {
           nextServiceRecords = await getServiceRecordsForContext(serviceRecordContext);
         } catch (loadError) {
           if (isMounted) {
-            setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load utility service records.');
+            setServiceRecordError(loadError instanceof Error ? loadError.message : 'Failed to load utility service history.');
           }
         }
 
@@ -111,7 +111,7 @@ export default function UtilitiesPage() {
           nextTrendFlags = await getTrendFlagsForContext(trendFlagContext);
         } catch (loadError) {
           if (isMounted) {
-            setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load utility trend flags.');
+            setTrendFlagError(loadError instanceof Error ? loadError.message : 'Failed to load utility trends.');
           }
         }
 
@@ -231,8 +231,8 @@ export default function UtilitiesPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: utilities, utility-linked reminders, repairs, service records, issues, and trend flags are loaded from Supabase.'
-              : 'Demo mode: utilities, utility-linked reminders, repairs, service records, issues, and trend flags are stored in localStorage.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {reminderError ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
@@ -313,7 +313,7 @@ export default function UtilitiesPage() {
           ) : dataMode === 'supabase' && context && !context.property ? (
             <EmptyState
               title="No property found"
-              description="Create a property before adding Supabase utilities."
+              description="Create a property before adding utilities."
             />
           ) : utilities.length === 0 ? (
             <EmptyState

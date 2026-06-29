@@ -241,8 +241,8 @@ export default function RepairDetailPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: this repair and related records are saved to your Supabase-backed account.'
-              : 'Demo mode: this repair and related records are stored locally in this browser.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
         </Card>
@@ -297,7 +297,7 @@ export default function RepairDetailPage() {
           </div>
         </Card>
 
-        <RelatedList title="Service records" empty="No related service records found.">
+        <RelatedList title="Service History" empty="No related service history found.">
           {serviceRecords.map((record) => (
             <RelatedItem key={record.id} title={record.service_title} detail={`${record.service_date} • ${formatEnumLabel(record.service_type)}`} />
           ))}
@@ -329,7 +329,7 @@ export default function RepairDetailPage() {
           ))}
         </RelatedList>
 
-        <RelatedList title="Trend flags" empty="No related trend flags found.">
+        <RelatedList title="Trends" empty="No related trends found.">
           {trendFlags.map((flag) => (
             <RelatedItem key={flag.id} title={flag.title} detail={`${formatEnumLabel(flag.status)} • ${formatEnumLabel(flag.severity)}`} />
           ))}

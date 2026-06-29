@@ -203,8 +203,8 @@ export default function IssueDetailPage() {
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
             {dataMode === 'supabase'
-              ? 'Signed-in mode: this issue and related records are saved to your Supabase-backed account.'
-              : 'Demo mode: this issue and related records are stored locally in this browser.'}
+              ? 'Saved to your account.'
+              : 'Demo data is stored only in this browser.'}
           </p>
           {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
         </Card>
@@ -269,7 +269,7 @@ export default function IssueDetailPage() {
           </Card>
         ) : null}
 
-        <RelatedList title="Trend flags" empty="No trend flags linked to this issue.">
+        <RelatedList title="Trends" empty="No trends linked to this issue.">
           {trendFlags.map((flag) => (
             <RelatedItem key={flag.id} title={flag.title} detail={`${formatEnumLabel(flag.status)} • ${formatEnumLabel(flag.severity)}`} />
           ))}
