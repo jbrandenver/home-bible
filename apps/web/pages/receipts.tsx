@@ -37,8 +37,9 @@ type RoomOption = {
 
 const fieldStyle = {
   padding: 10,
-  borderRadius: 8,
-  border: '1px solid #d1d5db'
+  borderRadius: 4,
+  border: '1px solid var(--border-subtle)',
+  background: 'var(--surface-card)'
 };
 
 const LINK_KINDS: Array<{ value: LinkKind; label: string }> = [
@@ -47,7 +48,7 @@ const LINK_KINDS: Array<{ value: LinkKind; label: string }> = [
   { value: 'asset_id', label: 'Asset' },
   { value: 'utility_id', label: 'Utility' },
   { value: 'repair_id', label: 'Repair' },
-  { value: 'service_record_id', label: 'Service record' }
+  { value: 'service_record_id', label: 'Service History' }
 ];
 
 const QUERY_TO_LINK_KIND: Record<string, LinkKind> = {
@@ -309,7 +310,7 @@ export default function ReceiptsPage() {
     setCurrency('USD');
     setPaymentMethod('');
     setCategory('other');
-    setNotice('Review the receipt details, then approve to save structured metadata.');
+    setNotice('Review the receipt details, then approve to save.');
   };
 
   const startEditing = (receipt: ReceiptRow) => {
@@ -327,7 +328,7 @@ export default function ReceiptsPage() {
     setCategory(receipt.category);
     setDescription(receipt.description || '');
     setNotes(receipt.notes || '');
-    setNotice('Edit the approved receipt metadata, then save changes.');
+    setNotice('Edit the approved receipt details, then save changes.');
   };
 
   const clearReview = () => {
@@ -418,7 +419,7 @@ export default function ReceiptsPage() {
         if (updated) {
           setReceipts((current) => current.map((receipt) => (receipt.id === updated.id ? updated : receipt)));
         }
-        setNotice('Receipt metadata updated.');
+        setNotice('Receipt details updated.');
       } else {
         const created = await approveReceiptForContext(context, {
           ...payload,
@@ -438,7 +439,7 @@ export default function ReceiptsPage() {
 
   const cancelReview = () => {
     clearReview();
-    setNotice('Review canceled. The uploaded receipt document was kept, but no structured receipt metadata was saved.');
+    setNotice('Review canceled. The uploaded receipt document was kept, but no receipt details were saved.');
   };
 
   const openDocument = async (documentId: string) => {
@@ -468,7 +469,7 @@ export default function ReceiptsPage() {
     try {
       await deleteReceiptForContext(context, receiptId);
       setReceipts((current) => current.filter((receipt) => receipt.id !== receiptId));
-      setNotice('Receipt metadata deleted. The original document was kept.');
+      setNotice('Receipt details deleted. The original document was kept.');
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete receipt.');
     } finally {
@@ -480,7 +481,7 @@ export default function ReceiptsPage() {
     <>
       <PageHeader
         title="Receipts"
-        description="Upload receipts, review details, then explicitly approve structured receipt metadata."
+        description="Upload receipts, review the details, then approve and save."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
@@ -496,7 +497,7 @@ export default function ReceiptsPage() {
           {notice ? <p style={{ color: '#065f46', fontWeight: 700 }}>{notice}</p> : null}
           {context?.mode === 'demo' ? (
             <p style={{ color: '#6b7280' }}>
-              Demo data is stored only in this browser. Receipt files and approved metadata require signing in.
+              Demo data is stored only in this browser. Receipt files and approved details require signing in.
             </p>
           ) : null}
         </Card>
@@ -570,7 +571,7 @@ export default function ReceiptsPage() {
         {pendingDocument || editingReceiptId ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>
-              {editingReceiptId ? 'Edit receipt metadata' : 'Review receipt before saving'}
+              {editingReceiptId ? 'Edit receipt details' : 'Review the receipt before saving'}
             </h2>
             {pendingDocument ? (
               <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, marginBottom: 12 }}>
@@ -740,7 +741,7 @@ export default function ReceiptsPage() {
                         </Button>
                       ) : null}
                       <Button type="button" onClick={() => startEditing(receipt)} style={{ background: '#4b5563' }}>
-                        Edit metadata
+                        Edit details
                       </Button>
                       <button
                         type="button"
@@ -757,7 +758,7 @@ export default function ReceiptsPage() {
                           opacity: isActing ? 0.7 : 1
                         }}
                       >
-                        {isActing ? 'Deleting...' : 'Delete metadata'}
+                        {isActing ? 'Deleting...' : 'Delete details'}
                       </button>
                     </div>
                   </div>

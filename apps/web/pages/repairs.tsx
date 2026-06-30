@@ -40,8 +40,9 @@ type LinkOption = {
 
 const fieldStyle = {
   padding: 10,
-  borderRadius: 8,
-  border: '1px solid #d1d5db'
+  borderRadius: 4,
+  border: '1px solid var(--border-subtle)',
+  background: 'var(--surface-card)'
 };
 
 function moneyValue(value: string) {
@@ -563,7 +564,7 @@ export default function RepairsPage() {
     <>
       <PageHeader
         title="Repairs & Service History"
-        description="Track open repairs and completed service history for rooms, assets, and utilities."
+        description="Open work, completed service, and the care history of the home."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>

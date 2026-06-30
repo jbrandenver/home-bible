@@ -84,13 +84,13 @@ export default function CreatePropertyPage() {
     <>
       <PageHeader
         title="Create your first property"
-        description="Start with a simple home profile. Full street address is optional."
+        description="Start with a simple home profile. A full street address is optional."
       />
 
         <Card>
           {userId ? (
             <p style={{ marginTop: 0, color: '#065f46' }}>
-              Signed in mode: this property will save securely in Supabase.
+              Saved to your account.
             </p>
           ) : (
             <p style={{ marginTop: 0, color: '#6b7280' }}>

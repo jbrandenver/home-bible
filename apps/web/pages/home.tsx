@@ -1,42 +1,43 @@
 import Link from 'next/link';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { Button, Card, PageHeader } from '@home-bible/ui';
+import { ShortcutLink } from '../components/ShortcutLink';
 
 const homeLinks = [
   {
     title: 'Home Map',
-    description: 'See rooms, floors, and the physical layout you have entered.',
+    description: 'See the rooms, floors, and everyday structure of the house.',
     href: '/home-map',
     action: 'Open home map'
   },
   {
     title: 'Rooms',
-    description: 'Add rooms and keep the structure of the home easy to scan.',
+    description: 'No rooms yet? Map the house one room at a time.',
     href: '/add-rooms',
     action: 'Add rooms'
   },
   {
     title: 'Utilities',
-    description: 'Track shutoffs, panels, HVAC, water heater, router, and safety devices.',
+    description: 'Find shutoffs, panels, HVAC, water heater, router, and safety devices quickly.',
     href: '/utilities',
     action: 'Open utilities'
   },
   {
     title: 'Property',
-    description: 'Create or update the basic home profile. Address is optional.',
+    description: 'Keep the home profile simple. Address is optional.',
     href: '/create-property',
     action: 'Property setup'
   }
 ];
 
-const utilityExamples = [
-  'Main water shutoff',
-  'Electrical panel',
-  'Gas shutoff',
-  'Water heater',
-  'Furnace / HVAC',
-  'Router / modem',
-  'Sump pump',
-  'Smoke and carbon monoxide devices'
+const utilityShortcuts = [
+  { label: 'Main Water Shutoff', href: '/utilities?type=main_water_shutoff' },
+  { label: 'Electrical Panel', href: '/utilities?type=electrical_panel' },
+  { label: 'Gas Shutoff', href: '/utilities?type=gas_shutoff' },
+  { label: 'Water Heater', href: '/utilities?type=water_heater' },
+  { label: 'Furnace / HVAC', href: '/utilities?type=hvac' },
+  { label: 'Router / Modem', href: '/utilities?type=router_modem' },
+  { label: 'Sump Pump', href: '/utilities?type=sump_pump' },
+  { label: 'Smoke / Carbon Monoxide Devices', href: '/utilities?type=safety_device' }
 ];
 
 export default function HomeHubPage() {
@@ -44,18 +45,23 @@ export default function HomeHubPage() {
     <>
       <PageHeader
         title="Home"
-        description="The physical structure of the home: property, rooms, map, utilities, shutoffs, panels, and home systems."
+        description="Where everything in the house lives."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
-        <Card>
+        <Card tone="dark">
           <h2 style={{ marginTop: 0 }}>Start here for the house itself</h2>
-          <p style={{ color: '#6b7280' }}>
-            Use Home when you are looking for where something is, how a room is organized, or where a major utility or home system lives.
+          <p style={{ color: 'rgba(255,248,234,0.78)' }}>
+            Use Home when you need to know where something is, how a room is organized, or where a major utility or home system lives.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {utilityExamples.map((label) => (
-              <UtilityBadge key={label} label={label} />
+            {utilityShortcuts.map((shortcut) => (
+              <ShortcutLink
+                key={shortcut.label}
+                href={shortcut.href}
+                label={shortcut.label}
+                variant="brassOnDark"
+              />
             ))}
           </div>
         </Card>
@@ -64,7 +70,7 @@ export default function HomeHubPage() {
           {homeLinks.map((link) => (
             <Card key={link.href}>
               <h2 style={{ marginTop: 0 }}>{link.title}</h2>
-              <p style={{ color: '#6b7280' }}>{link.description}</p>
+              <p style={{ color: 'var(--text-muted)' }}>{link.description}</p>
               <Link href={link.href}>
                 <Button type="button">{link.action}</Button>
               </Link>

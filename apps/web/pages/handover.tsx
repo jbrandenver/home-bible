@@ -40,20 +40,23 @@ type Linkable = {
 
 const fieldStyle = {
   padding: 10,
-  borderRadius: 8,
-  border: '1px solid #d1d5db',
-  background: '#fff'
+  borderRadius: 4,
+  border: '1px solid var(--border-subtle)',
+  background: 'var(--surface-card)'
 };
 
 const reportSurfaceStyle = {
-  background: '#fff',
-  border: '1px solid #e5e7eb',
-  borderRadius: 18,
+  background: 'var(--surface-card)',
+  border: '1px solid var(--border-subtle)',
+  borderRadius: 6,
   padding: 28,
-  boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)'
+  boxShadow: '0 1px 0 rgba(44,31,24,0.08)'
 };
 
-const subtleText = { color: '#6b7280' };
+const subtleText = { color: 'var(--text-muted)' };
+const darkSubtleText = { color: 'rgba(255,248,234,0.78)' };
+const darkNoticeText = { color: 'var(--color-brass-pale)', fontWeight: 700 };
+const darkErrorText = { color: 'var(--text-inverse)', fontWeight: 700 };
 
 const forbiddenSensitivePatterns = [
   /access\s*codes?/i,
@@ -175,7 +178,7 @@ function linkedLabel(record: Linkable, lookups: LookupMaps) {
 
 function SectionShell({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="handover-major-section" style={{ paddingTop: 20, borderTop: '1px solid #e5e7eb' }}>
+    <section className="handover-major-section" style={{ paddingTop: 20, borderTop: '1px solid var(--border-subtle)' }}>
       <h2 style={{ marginBottom: 12 }}>{title}</h2>
       {children}
     </section>
@@ -203,8 +206,8 @@ function SummaryGrid({ children }: { children: React.ReactNode }) {
 
 function SummaryTile({ label, value }: { label: string; value: string | number }) {
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 12, padding: 12 }}>
-      <div style={{ color: '#6b7280', fontSize: '0.85rem' }}>{label}</div>
+    <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 12 }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{label}</div>
       <div style={{ fontWeight: 800, fontSize: '1.15rem' }}>{value}</div>
     </div>
   );
@@ -302,40 +305,40 @@ export default function HandoverPage() {
     <>
       <PageHeader
         title="Home Handover"
-        description="Build a safe, reviewable report for family, buyer, maintenance, insurance, or personal archive use."
+        description="Hand the whole home over — in one document."
       />
 
       <div className="handover-no-print" style={{ display: 'grid', gap: 24 }}>
-        <Card>
+        <Card tone="dark">
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
             <UtilityBadge label={modeLabel} />
             {context?.property ? <UtilityBadge label={context.property.nickname} /> : null}
             <UtilityBadge label="Browser print only" />
           </div>
 
-          <p style={{ ...subtleText, marginTop: 0 }}>
+          <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
             This report is generated locally in your browser from existing saved data. No public link, email, background job, or stored report file is created.
           </p>
-          <p style={{ ...subtleText, marginTop: 0 }}>
+          <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
             Privacy reminder: reports omit sensitive entry details, passwords, private file links, storage paths, and signed file URLs.
           </p>
-          <p style={{ ...subtleText, marginTop: 0 }}>
+          <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
             Before future sharing is enabled, review who should see each report type in Sharing & Access Review.
           </p>
           <Link href="/sharing">
-            <Button type="button" style={{ background: '#4b5563', marginBottom: 16 }}>
+            <Button type="button" variant="secondary" style={{ color: 'var(--text-inverse)', borderColor: 'rgba(236,226,207,0.42)', marginBottom: 16 }}>
               Review sharing access
             </Button>
           </Link>
 
-          {loadingContext ? <p style={subtleText}>Loading report options...</p> : null}
-          {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
-          {notice ? <p style={{ color: '#065f46', fontWeight: 700 }}>{notice}</p> : null}
+          {loadingContext ? <p style={darkSubtleText}>Loading report options...</p> : null}
+          {error ? <p style={darkErrorText}>{error}</p> : null}
+          {notice ? <p style={darkNoticeText}>{notice}</p> : null}
 
           {!loadingContext && !context?.property ? (
-            <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 12, padding: 14 }}>
+            <div style={{ border: '1px solid rgba(224,189,131,0.45)', background: 'rgba(236,226,207,0.08)', borderRadius: 6, padding: 14 }}>
               <strong>No property found yet.</strong>
-              <p style={{ ...subtleText, marginBottom: 0 }}>
+              <p style={{ color: 'rgba(255,248,234,0.78)', marginBottom: 0 }}>
                 {context?.mode === 'supabase'
                   ? 'Create or join a property before generating a handover report.'
                   : 'Demo data is stored only in this browser. Add a demo property and rooms first to preview report content.'}
@@ -372,9 +375,9 @@ export default function HandoverPage() {
                       gap: 8,
                       alignItems: 'center',
                       padding: 8,
-                      border: '1px solid #e5e7eb',
-                      borderRadius: 10,
-                      background: selectedSections.has(section) ? '#fffbeb' : '#fff'
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 6,
+                      background: selectedSections.has(section) ? 'rgba(224,189,131,0.22)' : 'var(--surface-card)'
                     }}
                   >
                     <input
@@ -397,7 +400,8 @@ export default function HandoverPage() {
               type="button"
               onClick={printReport}
               disabled={!reportData}
-              style={{ background: reportData ? '#4b5563' : '#9ca3af' }}
+              variant="secondary"
+              style={{ background: reportData ? 'var(--color-cocoa)' : 'var(--color-taupe)' }}
             >
               Print / save to PDF
             </Button>
@@ -479,8 +483,8 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
 
   return (
     <article className="handover-report" style={{ ...reportSurfaceStyle, marginTop: 24 }}>
-      <header style={{ borderBottom: '2px solid #111827', paddingBottom: 18, marginBottom: 20 }}>
-        <div style={{ color: '#92400e', fontWeight: 800, letterSpacing: 0, textTransform: 'uppercase', fontSize: 12 }}>
+      <header style={{ borderBottom: '2px solid var(--color-espresso)', paddingBottom: 18, marginBottom: 20 }}>
+        <div style={{ color: 'var(--color-brass-deep)', fontWeight: 800, letterSpacing: 0, textTransform: 'uppercase', fontSize: 12 }}>
           Home Bible handover report
         </div>
         <h1 style={{ margin: '6px 0', fontSize: 34, lineHeight: 1.1 }}>
@@ -504,7 +508,7 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
           ))}
         </div>
         {data.sectionErrors.length > 0 ? (
-          <div style={{ border: '1px solid #fecaca', borderRadius: 12, padding: 12, marginTop: 14, color: '#b91c1c' }}>
+          <div style={{ border: '1px solid rgba(168,85,58,0.38)', background: 'rgba(168,85,58,0.08)', borderRadius: 6, padding: 12, marginTop: 14, color: 'var(--status-urgent)' }}>
             <strong>Some sections could not load.</strong>
             <ul>
               {data.sectionErrors.map((sectionError) => (
@@ -807,5 +811,5 @@ function DetailLine({ value }: { value: string | null | undefined }) {
     return null;
   }
 
-  return <div style={{ color: '#4b5563', fontSize: '0.93rem', marginTop: 2 }}>{value}</div>;
+  return <div style={{ color: 'var(--text-muted)', fontSize: '0.93rem', marginTop: 2 }}>{value}</div>;
 }

@@ -150,7 +150,7 @@ export default function AssetsPage() {
     <>
       <PageHeader
         title="Assets"
-        description="Appliances, accessories, smart devices, tools, and more"
+        description="The things the home owns, where they live, and what protects them."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>

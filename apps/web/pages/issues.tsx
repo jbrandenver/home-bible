@@ -48,16 +48,17 @@ type LinkOption = {
 
 const fieldStyle = {
   padding: 10,
-  borderRadius: 8,
-  border: '1px solid #d1d5db'
+  borderRadius: 4,
+  border: '1px solid var(--border-subtle)',
+  background: 'var(--surface-card)'
 };
 
 const destructiveButtonStyle = {
   padding: '8px 12px',
-  borderRadius: 6,
-  border: '1px solid #fecaca',
-  background: '#fef2f2',
-  color: '#b91c1c',
+  borderRadius: 4,
+  border: '1px solid rgba(168,85,58,0.4)',
+  background: 'transparent',
+  color: 'var(--status-urgent)',
   cursor: 'pointer'
 };
 
@@ -553,7 +554,7 @@ export default function IssuesPage() {
     <>
       <PageHeader
         title="Issues"
-        description="Track observed issues and trends across rooms, assets, utilities, and repairs."
+        description="Risks, open problems, and patterns to watch."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>

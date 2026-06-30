@@ -21,12 +21,14 @@ type Linkable = {
 
 const fieldStyle = {
   padding: 10,
-  borderRadius: 8,
-  border: '1px solid #d1d5db',
-  background: '#fff'
+  borderRadius: 4,
+  border: '1px solid var(--border-subtle)',
+  background: 'var(--surface-card)'
 };
 
-const subtleText = { color: '#6b7280' };
+const subtleText = { color: 'var(--text-muted)' };
+const darkSubtleText = { color: 'rgba(255,248,234,0.78)' };
+const darkErrorText = { color: 'var(--text-inverse)', fontWeight: 700 };
 
 const roleCopy: Record<SharingRole, string> = {
   owner: 'Planning preview for current owner-level safe access.',
@@ -35,7 +37,7 @@ const roleCopy: Record<SharingRole, string> = {
   viewer: 'Planning preview for read-only safe access.',
   maintenance_guest: 'Planning preview for scoped maintenance access.',
   buyer_preview: 'Planning preview for safe buyer handoff access.',
-  insurance_view: 'Planning preview for insurance-oriented metadata access.'
+  insurance_view: 'Planning preview for insurance-oriented file details.'
 };
 
 const forbiddenSensitivePatterns = [
@@ -151,27 +153,27 @@ export default function SharingPage() {
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
-        <Card>
+        <Card tone="dark">
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
             <UtilityBadge label={modeLabel} />
             {preview?.propertyName ? <UtilityBadge label={preview.propertyName} /> : null}
             <UtilityBadge label="Preview only" />
           </div>
 
-          <p style={{ ...subtleText, marginTop: 0 }}>
-            This phase only previews access. It does not create public links, send emails, add guests, or create background jobs.
+          <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
+            This only previews access. No public link is created. No invitation is sent.
           </p>
-          <p style={{ ...subtleText, marginTop: 0 }}>
+          <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
             Privacy reminder: sensitive entry details, passwords, private file paths, signed file links, invite credentials, and public sharing links are not included.
           </p>
 
-          {loading ? <p style={subtleText}>Loading sharing preview...</p> : null}
-          {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
+          {loading ? <p style={darkSubtleText}>Loading sharing preview...</p> : null}
+          {error ? <p style={darkErrorText}>{error}</p> : null}
 
           {!loading && preview && !preview.propertyName ? (
-            <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 12, padding: 14 }}>
+            <div style={{ border: '1px solid rgba(224,189,131,0.45)', background: 'rgba(236,226,207,0.08)', borderRadius: 6, padding: 14 }}>
               <strong>No property found yet.</strong>
-              <p style={{ ...subtleText, marginBottom: 0 }}>
+              <p style={{ color: 'rgba(255,248,234,0.78)', marginBottom: 0 }}>
                 {preview.mode === 'supabase'
                   ? 'Create or join a property before reviewing access.'
                   : 'Demo data is stored only in this browser. Add a demo property and rooms first to preview sample access.'}
@@ -229,7 +231,7 @@ function SharingPreviewPanel({ preview }: { preview: SharingPreview }) {
             <h2 style={{ marginTop: 0 }}>{preview.label}</h2>
             <p style={subtleText}>{preview.summary}</p>
             {preview.warning ? (
-              <div style={{ border: '1px solid #fde68a', background: '#fffbeb', borderRadius: 12, padding: 12 }}>
+              <div style={{ border: '1px solid rgba(224,189,131,0.45)', background: 'rgba(224,189,131,0.18)', borderRadius: 6, padding: 12 }}>
                 <strong>{preview.warning}</strong>
               </div>
             ) : null}
@@ -281,7 +283,7 @@ function SharingPreviewPanel({ preview }: { preview: SharingPreview }) {
           <UtilityBadge label={`${visibleCounts.assets} assets`} />
           <UtilityBadge label={`${visibleCounts.repairs} repairs`} />
           <UtilityBadge label={`${visibleCounts.issues} issues`} />
-          <UtilityBadge label={`${visibleCounts.documents} document metadata`} />
+          <UtilityBadge label={`${visibleCounts.documents} file detail${visibleCounts.documents === 1 ? '' : 's'}`} />
           <UtilityBadge label={`${visibleCounts.receipts} approved receipts`} />
         </div>
 
@@ -340,7 +342,7 @@ function SharingPreviewPanel({ preview }: { preview: SharingPreview }) {
             />
           </PreviewDataSection>
 
-          <PreviewDataSection title="Documents metadata" hidden={documents.length === 0 && preview.role === 'maintenance_guest'} emptyLabel="No document metadata visible for this role.">
+          <PreviewDataSection title="File details" hidden={documents.length === 0 && preview.role === 'maintenance_guest'} emptyLabel="No file details visible for this role.">
             <RecordList
               items={documents.map((document) =>
                 [
@@ -353,7 +355,7 @@ function SharingPreviewPanel({ preview }: { preview: SharingPreview }) {
             />
           </PreviewDataSection>
 
-          <PreviewDataSection title="Receipts metadata" hidden={preview.role === 'maintenance_guest' || preview.role === 'buyer_preview'} emptyLabel="No receipt metadata visible for this role.">
+          <PreviewDataSection title="Receipt details" hidden={preview.role === 'maintenance_guest' || preview.role === 'buyer_preview'} emptyLabel="No receipt details visible for this role.">
             <RecordList
               items={activeReceipts.map((receipt) => {
                 const amount = preview.receiptAmountsVisible ? formatAmount(receipt.total_amount, receipt.currency) : 'Hidden';
@@ -398,7 +400,7 @@ function PreviewDataSection({
 }) {
   if (hidden) {
     return (
-      <section style={{ borderTop: '1px solid #e5e7eb', paddingTop: 14 }}>
+      <section style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
         <h3 style={{ margin: 0 }}>{title}</h3>
         <p style={subtleText}>{emptyLabel}</p>
       </section>
@@ -406,7 +408,7 @@ function PreviewDataSection({
   }
 
   return (
-    <section style={{ borderTop: '1px solid #e5e7eb', paddingTop: 14 }}>
+    <section style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 14 }}>
       <h3 style={{ margin: 0 }}>{title}</h3>
       {children}
     </section>

@@ -38,8 +38,9 @@ type LinkOption = {
 
 const fieldStyle = {
   padding: 10,
-  borderRadius: 8,
-  border: '1px solid #d1d5db'
+  borderRadius: 4,
+  border: '1px solid var(--border-subtle)',
+  background: 'var(--surface-card)'
 };
 
 function nameFromId(list: LinkOption[], id?: string | null) {

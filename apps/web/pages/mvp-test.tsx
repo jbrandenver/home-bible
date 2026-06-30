@@ -44,7 +44,7 @@ const walkthroughSteps = [
   'Create Maple House with address skipped.',
   'Add rooms, utilities, assets, reminders, repairs, service history, issues, and trends manually.',
   'Upload a few small placeholder documents and receipts.',
-  'Approve receipt metadata before saving receipt rows.',
+  'Approve receipt details before saving receipt rows.',
   'Generate Family and Buyer handover reports in the browser.',
   'Review viewer, maintenance_guest, and buyer_preview sharing previews.',
   'Repeat the main navigation and forms on a mobile viewport.',
@@ -142,7 +142,7 @@ export default function MvpTestPage() {
               <li>Tester can complete onboarding without coaching.</li>
               <li>Core records can be created, viewed, edited, and linked safely.</li>
               <li>Documents and receipts feel private and controlled.</li>
-              <li>Receipt metadata is saved only after approval.</li>
+              <li>Receipt details are saved only after approval.</li>
               <li>Handover and sharing previews are useful and conservative.</li>
               <li>Mobile navigation remains usable.</li>
             </ul>

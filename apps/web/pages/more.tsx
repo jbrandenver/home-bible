@@ -52,7 +52,7 @@ export default function MorePage() {
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
           <h2 style={{ marginTop: 0 }}>Secondary tools</h2>
-          <p style={{ color: '#6b7280' }}>
+          <p style={{ color: 'var(--text-muted)' }}>
             Handover, sharing review, settings, and documents live here on mobile so the main navigation stays focused.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -69,9 +69,9 @@ export default function MorePage() {
               {moreLinks
                 .filter((link) => link.group === group)
                 .map((link) => (
-                  <div key={link.href} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 14 }}>
+                  <div key={link.href} style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 14 }}>
                     <h3 style={{ marginTop: 0 }}>{link.title}</h3>
-                    <p style={{ color: '#6b7280' }}>{link.description}</p>
+                    <p style={{ color: 'var(--text-muted)' }}>{link.description}</p>
                     <Link href={link.href}>
                       <Button type="button">{link.action}</Button>
                     </Link>

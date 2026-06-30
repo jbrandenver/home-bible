@@ -464,7 +464,7 @@ export default function WarrantiesPage() {
       <>
         <PageHeader
           title="Warranties"
-          description="Track warranty coverage for your appliances and tools"
+          description="Coverage, dates, and proof for the things in your home."
         />
         <Card>
           <p style={{ color: '#6b7280', margin: 0 }}>Loading warranties...</p>
@@ -477,7 +477,7 @@ export default function WarrantiesPage() {
     <>
       <PageHeader
         title="Warranties"
-        description="Track warranty coverage for your appliances and tools"
+        description="Coverage, dates, and proof for the things in your home."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>

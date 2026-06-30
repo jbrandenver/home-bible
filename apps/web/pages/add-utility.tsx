@@ -106,7 +106,7 @@ export default function AddUtilityPage() {
     <>
       <PageHeader
         title="Add Utility"
-        description="Document key utility locations and emergency information."
+        description="Add a shutoff, panel, system, or other critical home utility."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>

@@ -314,7 +314,7 @@ export default function RemindersPage() {
     <>
       <PageHeader
         title="Reminders"
-        description="Track home tasks and dates with simple in-app reminders."
+        description="Small care tasks before they get forgotten."
       />
 
       <Card>

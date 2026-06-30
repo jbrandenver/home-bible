@@ -165,7 +165,7 @@ export default function AddRoomsPage() {
         {userId ? (
           <Card>
             <p style={{ margin: 0, color: '#065f46' }}>
-              Signed in mode: floors and rooms save to Supabase.
+              Saved to your account.
             </p>
           </Card>
         ) : (

@@ -43,7 +43,7 @@ export default function SignInPage() {
     <>
       <PageHeader
         title="Sign in"
-        description="Sign in to save your core onboarding data to Supabase."
+        description="Sign in to keep your home record saved to your account."
       />
 
       <Card>

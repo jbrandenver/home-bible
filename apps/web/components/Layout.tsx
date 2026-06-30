@@ -27,7 +27,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   };
 
   const navLinkClass = (section: NavSection) =>
-    `px-3 py-2 rounded ${sectionMatches(section) ? 'bg-amber-100 text-amber-900' : 'text-gray-600 hover:text-gray-900'}`;
+    `desktop-nav-link px-3 py-2 rounded ${sectionMatches(section) ? 'desktop-nav-link-active' : ''}`;
 
   useEffect(() => {
     let isMounted = true;
@@ -49,17 +49,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="app-shell">
       {/* Navigation header */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
+      <nav className="app-header shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
-            <Link href="/" className="text-lg font-semibold text-amber-700">
-              Home Bible
+            <Link href="/" className="brand-lockup">
+              <span className="brand-wordmark">
+                <span>Home</span>
+                <span className="brand-wordmark-accent">Bible</span>
+              </span>
+              <span className="brand-tagline">A home, documented.</span>
             </Link>
             <div className="flex items-center gap-2 flex-wrap text-sm">
-              <span className="text-gray-600">
-                {userEmail ? 'Saved to your account.' : 'Demo data is stored only in this browser.'}
+              <span className="header-meta">
+                {userEmail ? "Everything's saved to your account." : 'Demo data is stored only in this browser.'}
               </span>
               {userEmail ? (
                 <button
@@ -68,16 +72,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                     await signOut();
                     router.push('/sign-in');
                   }}
-                  className="px-3 py-2 rounded text-gray-600 hover:text-gray-900"
+                  className="header-action px-3 py-2 rounded"
                 >
                   Sign out
                 </button>
               ) : (
                 <>
-                  <Link href="/sign-in" className="px-3 py-2 rounded text-gray-600 hover:text-gray-900">
+                  <Link href="/sign-in" className="header-action px-3 py-2 rounded">
                     Sign in
                   </Link>
-                  <Link href="/sign-up" className="px-3 py-2 rounded text-gray-600 hover:text-gray-900">
+                  <Link href="/sign-up" className="header-action px-3 py-2 rounded">
                     Sign up
                   </Link>
                 </>
@@ -104,7 +108,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
           <Link
             key={section.href}
             href={section.href}
-            className={`mobile-bottom-link ${sectionMatches(section) ? 'bg-amber-100 text-amber-900' : 'text-gray-600'}`}
+            className={`mobile-bottom-link ${sectionMatches(section) ? 'mobile-bottom-link-active' : ''}`}
           >
             <span aria-hidden="true">{section.icon}</span>
             <span>{section.mobileLabel || section.label}</span>
@@ -145,7 +149,6 @@ const desktopSections: NavSection[] = [
   {
     href: '/maintenance',
     label: 'Maintenance',
-    mobileLabel: 'Care',
     icon: 'M',
     activeRoutes: ['/maintenance', '/warranties', '/reminders', '/repairs', '/issues', '/receipts']
   },

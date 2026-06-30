@@ -378,7 +378,7 @@ export default function DashboardPage() {
     <>
       <PageHeader
         title={propertyNickname}
-        description="Command center for your home: next actions, key records, and shortcuts."
+        description="Next actions & key records."
       />
 
         <div style={{ display: 'grid', gap: 24 }}>
@@ -485,14 +485,14 @@ export default function DashboardPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card tone="dark">
             <h2 style={{ marginTop: 0 }}>Critical Utilities</h2>
-            <p style={{ color: '#6b7280' }}>
-              Quick access to shutoffs, panels, HVAC, water heater, router, and other home systems.
+            <p style={{ color: 'rgba(255,248,234,0.78)' }}>
+              Where the most important systems live: shutoffs, panels, HVAC, water heater, router, and other home systems.
             </p>
             {criticalUtilities.length === 0 ? (
               <div>
-                <p style={{ color: '#6b7280' }}>No critical utilities added yet.</p>
+                <p style={{ color: 'rgba(255,248,234,0.78)' }}>No critical utilities added yet.</p>
                 <Link href="/utilities">
                   <Button type="button">Add utilities</Button>
                 </Link>
@@ -505,9 +505,9 @@ export default function DashboardPage() {
                     href={`/utilities/${utility.id}`}
                     style={{ color: 'inherit', textDecoration: 'none' }}
                   >
-                    <div style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 10, background: '#fff' }}>
+                    <div style={{ padding: 12, border: '1px solid rgba(224,189,131,0.35)', borderRadius: 6, background: 'rgba(236,226,207,0.08)' }}>
                       <div style={{ fontWeight: 600 }}>{utility.name}</div>
-                      <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                      <div style={{ color: 'rgba(255,248,234,0.72)', fontSize: '0.875rem' }}>
                         {formatEnumLabel(utility.utility_type)}
                       </div>
                     </div>
@@ -522,12 +522,12 @@ export default function DashboardPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card tone="dark">
             <h2 style={{ marginTop: 0 }}>Home Handover</h2>
-            <p style={{ color: '#6b7280' }}>
-              Prepare a browser-generated, print-friendly summary for family, buyer, maintenance, insurance, or personal archive use.
+            <p style={{ color: 'rgba(255,248,234,0.78)' }}>
+              Hand the whole home over in one document for family, buyer, maintenance, insurance, or personal archive use.
             </p>
-            <p style={{ color: '#6b7280', marginTop: 0 }}>
+            <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
               No public link, email, background job, or stored report file is created.
             </p>
             <Link href="/handover">

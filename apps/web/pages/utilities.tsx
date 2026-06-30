@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/router';
 import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
 import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
 import { getDemoRooms } from '../lib/demoStorage';
@@ -18,7 +19,50 @@ import {
   type UtilityRow
 } from '../lib/utilities';
 
+type UtilityTypeFilter = '' | (typeof UTILITY_TYPES)[number] | 'hvac' | 'router_modem' | 'safety_device';
+
+const UTILITY_FILTER_GROUPS: Record<string, (typeof UTILITY_TYPES)[number][]> = {
+  hvac: ['hvac_unit', 'furnace', 'air_conditioner'],
+  router_modem: ['internet_modem', 'router'],
+  safety_device: ['smoke_detector', 'carbon_monoxide_detector']
+};
+
+const utilityTypeFilterOptions: { value: UtilityTypeFilter; label: string }[] = [
+  { value: '', label: 'All types' },
+  { value: 'hvac', label: 'HVAC systems' },
+  { value: 'router_modem', label: 'Router / modem' },
+  { value: 'safety_device', label: 'Smoke / CO devices' },
+  ...UTILITY_TYPES.map((type) => ({ value: type, label: formatEnumLabel(type) }))
+];
+
+function normalizeUtilityTypeFilter(value: string | string[] | undefined): UtilityTypeFilter {
+  const rawValue = Array.isArray(value) ? value[0] : value;
+
+  if (!rawValue) {
+    return '';
+  }
+
+  if (UTILITY_TYPES.includes(rawValue as (typeof UTILITY_TYPES)[number])) {
+    return rawValue as (typeof UTILITY_TYPES)[number];
+  }
+
+  if (rawValue in UTILITY_FILTER_GROUPS) {
+    return rawValue as UtilityTypeFilter;
+  }
+
+  return '';
+}
+
+function getUtilityTypeFilterValues(filter: UtilityTypeFilter) {
+  if (!filter) {
+    return [];
+  }
+
+  return UTILITY_FILTER_GROUPS[filter] || [filter as (typeof UTILITY_TYPES)[number]];
+}
+
 export default function UtilitiesPage() {
+  const router = useRouter();
   const [context, setContext] = useState<UtilityDataContext | null>(null);
   const [dataMode, setDataMode] = useState<UtilityDataMode>('demo');
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
@@ -37,7 +81,7 @@ export default function UtilitiesPage() {
   const [trendFlagError, setTrendFlagError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState<UtilityTypeFilter>('');
   const [roomFilter, setRoomFilter] = useState('');
   const [sortBy, setSortBy] = useState<'name' | 'utility_type'>('name');
 
@@ -146,6 +190,14 @@ export default function UtilitiesPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    setTypeFilter(normalizeUtilityTypeFilter(router.query.type));
+  }, [router.isReady, router.query.type]);
+
   const handleDelete = async (id: string) => {
     if (!context) {
       return;
@@ -200,11 +252,12 @@ export default function UtilitiesPage() {
 
   const filteredUtilities = useMemo(() => {
     const searchTerm = search.trim().toLowerCase();
+    const typeFilterValues = getUtilityTypeFilterValues(typeFilter);
 
     return utilities
       .filter((utility) => {
         const matchesSearch = !searchTerm || utility.name.toLowerCase().includes(searchTerm);
-        const matchesType = !typeFilter || utility.utility_type === typeFilter;
+        const matchesType = typeFilterValues.length === 0 || typeFilterValues.includes(utility.utility_type);
         const matchesRoom = !roomFilter || utility.room_id === roomFilter;
 
         return matchesSearch && matchesType && matchesRoom;
@@ -224,7 +277,7 @@ export default function UtilitiesPage() {
     <>
       <PageHeader
         title="Utilities"
-        description="Key locations and emergency information for critical systems."
+        description="Where the critical systems live."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
@@ -281,10 +334,9 @@ export default function UtilitiesPage() {
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Type</span>
-              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
-                <option value="">All types</option>
-                {UTILITY_TYPES.map((type) => (
-                  <option key={type} value={type}>{formatEnumLabel(type)}</option>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as UtilityTypeFilter)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+                {utilityTypeFilterOptions.map((option) => (
+                  <option key={option.value || 'all'} value={option.value}>{option.label}</option>
                 ))}
               </select>
             </label>

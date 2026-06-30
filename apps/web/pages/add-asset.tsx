@@ -162,7 +162,7 @@ export default function AddAssetPage() {
 
   return (
     <>
-      <PageHeader title="Add Asset" description="Track appliances, tools, and other home items" />
+      <PageHeader title="Add Asset" description="Add an appliance, tool, device, or other item worth keeping track of." />
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>

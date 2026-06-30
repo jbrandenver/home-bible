@@ -43,7 +43,7 @@ export default function SignUpPage() {
     <>
       <PageHeader
         title="Create account"
-        description="Create an account to save profile, property, floors, and rooms securely with Supabase."
+        description="Create an account to keep your home record private and saved."
       />
 
       <Card>

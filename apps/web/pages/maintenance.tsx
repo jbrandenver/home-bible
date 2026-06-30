@@ -1,43 +1,54 @@
 import Link from 'next/link';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { Button, Card, PageHeader } from '@home-bible/ui';
+import { ShortcutLink } from '../components/ShortcutLink';
 
 const maintenanceLinks = [
   {
     title: 'Warranties',
-    description: 'Review coverage, expiration dates, manuals, and warranty documents.',
+    description: 'See what is covered, what is ending soon, and where the proof lives.',
     href: '/warranties',
     action: 'Open warranties'
   },
   {
     title: 'Receipts',
-    description: 'Find purchase and service receipts as ownership and maintenance records.',
+    description: 'Keep purchase and service receipts close to the things they support.',
     href: '/receipts',
     action: 'Open receipts'
   },
   {
     title: 'Reminders',
-    description: 'Track recurring care such as filters, seasonal work, inspections, and tune-ups.',
+    description: 'Remember filters, seasonal work, inspections, and tune-ups before they drift.',
     href: '/reminders',
     action: 'Open reminders'
   },
   {
     title: 'Repairs',
-    description: 'Track open repairs, scheduled work, contractors, and completion notes.',
+    description: 'Follow open work, scheduled visits, contractors, and completion notes.',
     href: '/repairs',
     action: 'Open repairs'
   },
   {
     title: 'Service History',
-    description: 'Review completed tune-ups, inspections, contractor visits, and other maintenance history.',
+    description: 'Review completed tune-ups, inspections, contractor visits, and maintenance history.',
     href: '/repairs',
     action: 'View service history'
   },
   {
     title: 'Issues and Trends',
-    description: 'Watch risks, recurring problems, severity, status, and trend patterns.',
+    description: 'Watch recurring problems, severity, status, and patterns over time.',
     href: '/issues',
     action: 'Open issues'
   }
+];
+
+const maintenanceShortcuts = [
+  { label: 'Warranties', href: '/warranties' },
+  { label: 'Receipts', href: '/receipts' },
+  { label: 'Reminders', href: '/reminders' },
+  { label: 'Repairs', href: '/repairs' },
+  { label: 'Service History', href: '/repairs' },
+  { label: 'Issues', href: '/issues' },
+  { label: 'Trends', href: '/issues' }
 ];
 
 export default function MaintenanceHubPage() {
@@ -45,23 +56,24 @@ export default function MaintenanceHubPage() {
     <>
       <PageHeader
         title="Maintenance"
-        description="Ongoing care and ownership records: warranties, receipts, reminders, repairs, service history, issues, and trends."
+        description="Care, records, and the things that need attention."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
-        <Card>
+        <Card tone="dark">
           <h2 style={{ marginTop: 0 }}>Care, records, and risk tracking</h2>
-          <p style={{ color: '#6b7280' }}>
+          <p style={{ color: 'rgba(255,248,234,0.78)' }}>
             Use Maintenance for what needs attention, what has been serviced, what is under warranty, and what risks are emerging.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <UtilityBadge label="Warranties" />
-            <UtilityBadge label="Receipts" />
-            <UtilityBadge label="Reminders" />
-            <UtilityBadge label="Repairs" />
-            <UtilityBadge label="Service History" />
-            <UtilityBadge label="Issues" />
-            <UtilityBadge label="Trends" />
+            {maintenanceShortcuts.map((shortcut) => (
+              <ShortcutLink
+                key={shortcut.label}
+                href={shortcut.href}
+                label={shortcut.label}
+                variant="brassOnDark"
+              />
+            ))}
           </div>
         </Card>
 
@@ -69,7 +81,7 @@ export default function MaintenanceHubPage() {
           {maintenanceLinks.map((link) => (
             <Card key={`${link.title}-${link.href}`}>
               <h2 style={{ marginTop: 0 }}>{link.title}</h2>
-              <p style={{ color: '#6b7280' }}>{link.description}</p>
+              <p style={{ color: 'var(--text-muted)' }}>{link.description}</p>
               <Link href={link.href}>
                 <Button type="button">{link.action}</Button>
               </Link>

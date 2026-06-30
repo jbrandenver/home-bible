@@ -45,8 +45,9 @@ type RoomOption = {
 
 const fieldStyle = {
   padding: 10,
-  borderRadius: 8,
-  border: '1px solid #d1d5db'
+  borderRadius: 4,
+  border: '1px solid var(--border-subtle)',
+  background: 'var(--surface-card)'
 };
 
 const LINK_KINDS: Array<{ value: LinkKind; label: string }> = [
@@ -56,9 +57,9 @@ const LINK_KINDS: Array<{ value: LinkKind; label: string }> = [
   { value: 'asset_id', label: 'Asset' },
   { value: 'reminder_id', label: 'Reminder' },
   { value: 'repair_id', label: 'Repair' },
-  { value: 'service_record_id', label: 'Service record' },
+  { value: 'service_record_id', label: 'Service History' },
   { value: 'issue_id', label: 'Issue' },
-  { value: 'trend_flag_id', label: 'Trend flag' }
+  { value: 'trend_flag_id', label: 'Trend' }
 ];
 
 const QUERY_TO_LINK_KIND: Record<string, LinkKind> = {
@@ -391,7 +392,7 @@ export default function DocumentsPage() {
     <>
       <PageHeader
         title="Documents"
-        description="Private uploads for manuals, warranties, receipts, reports, photos, permits, and related home records."
+        description="A private file cabinet for manuals, warranties, reports, photos, permits, and home records."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
@@ -573,7 +574,7 @@ export default function DocumentsPage() {
                             {isActing ? 'Opening...' : 'View / download'}
                           </Button>
                           <Button type="button" onClick={() => startEditing(document)} style={{ background: '#4b5563' }}>
-                            Edit metadata
+                            Edit details
                           </Button>
                           {document.document_type === 'receipt' ? (
                             <Link href={`/receipts?documentId=${document.id}`}>

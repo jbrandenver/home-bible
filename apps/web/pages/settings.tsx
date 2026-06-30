@@ -52,16 +52,23 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Account, property, privacy, sharing, billing, export, and deletion controls will live here."
+        description="Home Bible account, privacy, sharing, export, and deletion controls."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
+          <Card tone="dark">
+            <h2 style={{ marginTop: 0 }}>Home Bible</h2>
+            <p style={{ color: 'rgba(255,248,234,0.78)', marginBottom: 0 }}>
+              A home, documented. Keep the record calm, private, and complete enough to hand on.
+            </p>
+          </Card>
+
           <Card>
             <h2 style={{ marginTop: 0 }}>Account</h2>
             {!supabaseReady ? (
-              <p style={{ color: '#92400e', margin: 0 }}>{getSupabaseSetupMessage()}</p>
+              <p style={{ color: 'var(--status-attention)', margin: 0 }}>{getSupabaseSetupMessage()}</p>
             ) : !isReady ? (
-              <p style={{ color: '#6b7280', margin: 0 }}>Loading account…</p>
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading account...</p>
             ) : user ? (
               <div style={{ display: 'grid', gap: 12 }}>
                 <UtilityBadge label={`Signed in as ${user.email || 'unknown user'}`} />
@@ -73,7 +80,7 @@ export default function SettingsPage() {
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
-                <p style={{ color: '#6b7280', margin: 0 }}>You are in demo mode.</p>
+                <p style={{ color: 'var(--text-muted)', margin: 0 }}>Demo data is stored only in this browser.</p>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <Link href="/sign-in">
                     <Button type="button">Sign in</Button>
@@ -97,13 +104,13 @@ export default function SettingsPage() {
               <UtilityBadge label="Browser-only handover reports" />
               <UtilityBadge label="Public sharing not enabled" />
             </div>
-            <p style={{ color: '#6b7280' }}>
+            <p style={{ color: 'var(--text-muted)' }}>
               Home Handover reports are generated in the browser from existing saved data. They do not create public links, stored report files, emails, or background jobs, and sensitive entry details or passwords should not be stored in Home Bible.
             </p>
-            <p style={{ color: '#6b7280' }}>
+            <p style={{ color: 'var(--text-muted)' }}>
               Sharing & Access Review previews future role visibility only. It does not create guests, invitations, public share links, or tokenized URLs.
             </p>
-            <p style={{ color: '#6b7280' }}>
+            <p style={{ color: 'var(--text-muted)' }}>
               This local release-candidate package is for controlled private testing only. It does not deploy, enable hosting, or add automated infrastructure.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -114,14 +121,14 @@ export default function SettingsPage() {
                 <Button type="button">Open sharing review</Button>
               </Link>
               <Link href="/mvp-test">
-                <Button type="button">Open MVP test checklist</Button>
+                <Button type="button" variant="secondary">Open MVP test checklist</Button>
               </Link>
             </div>
           </Card>
 
           <Card>
             <h2 style={{ marginTop: 0 }}>Future settings sections</h2>
-            <ul style={{ color: '#4b5563', lineHeight: 1.8 }}>
+            <ul style={{ color: 'var(--text-muted)', lineHeight: 1.8 }}>
               <li>Account</li>
               <li>Properties</li>
               <li>Plan and billing</li>

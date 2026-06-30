@@ -1,5 +1,6 @@
 import type {
   ButtonHTMLAttributes,
+  CSSProperties,
   InputHTMLAttributes,
   ReactNode,
   SelectHTMLAttributes
@@ -7,23 +8,44 @@ import type {
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
+  variant?: 'primary' | 'secondary';
 };
 
-export function Button({ children, type = 'button', style, disabled, ...rest }: ButtonProps) {
+export function Button({
+  children,
+  type = 'button',
+  style,
+  disabled,
+  variant = 'primary',
+  ...rest
+}: ButtonProps) {
+  const hasCustomBackground = Boolean(style && ('background' in style || 'backgroundColor' in style));
+  const primaryStyle: CSSProperties = {
+    background: 'var(--color-brass)',
+    color: 'var(--color-ink)',
+    border: '1px solid var(--color-brass)'
+  };
+  const secondaryStyle: CSSProperties = {
+    background: 'transparent',
+    color: 'var(--color-espresso)',
+    border: '1px solid var(--border-subtle)'
+  };
+
   return (
     <button
       type={type}
       disabled={disabled}
       {...rest}
       style={{
-        border: '0',
-        borderRadius: 14,
-        padding: '12px 18px',
-        background: '#1f2937',
-        color: '#fff',
+        borderRadius: 'var(--radius-control)',
+        padding: '11px 16px',
+        ...(variant === 'secondary' ? secondaryStyle : primaryStyle),
+        color: hasCustomBackground ? 'var(--text-inverse)' : variant === 'secondary' ? 'var(--color-espresso)' : 'var(--color-ink)',
         fontWeight: 700,
+        fontSize: 14,
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.65 : 1,
+        boxShadow: disabled ? 'none' : '0 1px 0 rgba(44,31,24,0.12)',
         ...style
       }}
     >
@@ -32,15 +54,30 @@ export function Button({ children, type = 'button', style, disabled, ...rest }: 
   );
 }
 
-export function Card({ children }: { children: ReactNode }) {
+export function Card({
+  children,
+  className,
+  style,
+  tone = 'default'
+}: {
+  children: ReactNode;
+  className?: string;
+  style?: CSSProperties;
+  tone?: 'default' | 'dark';
+}) {
+  const isDark = tone === 'dark';
+
   return (
     <section
+      className={`${isDark ? 'brand-hero' : ''} ${className || ''}`.trim()}
       style={{
-        border: '1px solid #e5e7eb',
-        borderRadius: 18,
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-card)',
         padding: 24,
-        background: '#fff',
-        boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)'
+        background: isDark ? 'var(--surface-dark)' : 'var(--surface-card)',
+        color: isDark ? 'var(--text-inverse)' : 'var(--text-primary)',
+        boxShadow: '0 1px 0 rgba(44,31,24,0.08)',
+        ...style
       }}
     >
       {children}
@@ -57,11 +94,30 @@ export function PageHeader({
 }) {
   return (
     <header style={{ marginBottom: 24 }}>
-      <h1 style={{ fontSize: 40, lineHeight: 1.1, margin: 0, color: '#111827' }}>
+      <div
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          textTransform: 'uppercase',
+          color: 'var(--color-brass-deep)',
+          marginBottom: 6
+        }}
+      >
+        A home, documented.
+      </div>
+      <h1
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 'clamp(2rem, 4vw, 3rem)',
+          lineHeight: 1.04,
+          margin: 0,
+          color: 'var(--color-ink)'
+        }}
+      >
         {title}
       </h1>
       {description ? (
-        <p style={{ fontSize: 18, color: '#4b5563', maxWidth: 720 }}>
+        <p style={{ fontSize: 17, color: 'var(--text-muted)', maxWidth: 760 }}>
           {description}
         </p>
       ) : null}
@@ -75,10 +131,12 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
       {...props}
       style={{
         width: '100%',
-        border: '1px solid #d1d5db',
-        borderRadius: 12,
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-control)',
         padding: '12px 14px',
         fontSize: 16,
+        background: 'var(--surface-card)',
+        color: 'var(--text-primary)',
         ...props.style
       }}
     />
@@ -91,11 +149,12 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
       {...props}
       style={{
         width: '100%',
-        border: '1px solid #d1d5db',
-        borderRadius: 12,
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 'var(--radius-control)',
         padding: '12px 14px',
         fontSize: 16,
-        background: '#fff',
+        background: 'var(--surface-card)',
+        color: 'var(--text-primary)',
         ...props.style
       }}
     />
@@ -112,7 +171,7 @@ export function EmptyState({
   return (
     <Card>
       <h2 style={{ marginTop: 0 }}>{title}</h2>
-      {description ? <p style={{ color: '#6b7280' }}>{description}</p> : null}
+      {description ? <p style={{ color: 'var(--text-muted)' }}>{description}</p> : null}
     </Card>
   );
 }
@@ -127,7 +186,7 @@ export function RoomCard({
   return (
     <Card>
       <h3 style={{ marginTop: 0 }}>{name}</h3>
-      {type ? <p style={{ color: '#6b7280' }}>{type}</p> : null}
+      {type ? <p style={{ color: 'var(--text-muted)' }}>{type}</p> : null}
     </Card>
   );
 }
@@ -141,23 +200,42 @@ export function FloorSection({
 }) {
   return (
     <section style={{ marginBottom: 32 }}>
-      <h2>{title}</h2>
+      <h2 style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>{title}</h2>
       <div style={{ display: 'grid', gap: 16 }}>{children}</div>
     </section>
   );
 }
 
-export function UtilityBadge({ label }: { label: string }) {
+export function UtilityBadge({
+  label,
+  variant = 'default'
+}: {
+  label: string;
+  variant?: 'default' | 'brassPale';
+}) {
+  const isBrassPale = variant === 'brassPale';
+
   return (
     <span
+      className={`utility-badge ${isBrassPale ? 'shortcut-tag-on-dark' : ''}`.trim()}
       style={{
         display: 'inline-flex',
-        borderRadius: 999,
+        borderRadius: 'var(--radius-control)',
         padding: '6px 10px',
-        background: '#fef3c7',
-        color: '#111827',
-        fontSize: 14,
-        fontWeight: 700
+        background: isBrassPale
+          ? 'var(--shortcut-tag-bg, #E0BD83)'
+          : 'var(--utility-badge-bg, rgba(224,189,131,0.22))',
+        color: isBrassPale
+          ? 'var(--shortcut-tag-color, #2C1F18)'
+          : 'var(--utility-badge-color, var(--color-ink))',
+        border: isBrassPale
+          ? '1px solid var(--shortcut-tag-border, #C8923F)'
+          : '1px solid var(--utility-badge-border, rgba(168,118,44,0.22))',
+        fontFamily: 'var(--font-mono)',
+        fontSize: 11,
+        fontWeight: 700,
+        textTransform: 'uppercase',
+        transition: 'background-color 140ms ease, color 140ms ease, border-color 140ms ease'
       }}
     >
       {label}
