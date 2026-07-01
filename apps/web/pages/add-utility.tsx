@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { UTILITY_TYPES, formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Input, Select, Button } from '@home-bible/ui';
-import { getSupabaseSetupMessage } from '../lib/auth';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getRoomsForProperty } from '../lib/rooms';
 import {
@@ -11,11 +10,18 @@ import {
   type UtilityDataContext,
   type UtilityDataMode
 } from '../lib/utilities';
+import { formatRoomLocation } from '../lib/roomLabels';
 
 type Room = {
   id: string;
   name: string;
+  room_type?: string | null;
+  floor_name?: string | null;
 };
+
+function queryValue(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export default function AddUtilityPage() {
   const router = useRouter();
@@ -51,7 +57,7 @@ export default function AddUtilityPage() {
 
         setContext(nextContext);
         setDataMode(nextContext.mode);
-        setRooms(roomList.map((room) => ({ id: room.id, name: room.name })));
+        setRooms(roomList);
       } catch (loadError) {
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load rooms.');
@@ -70,6 +76,33 @@ export default function AddUtilityPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const queryUtilityType = queryValue(router.query.utilityType);
+    const queryRoomId = queryValue(router.query.roomId);
+    const queryName = queryValue(router.query.name);
+    const queryLocationNotes = queryValue(router.query.locationNotes);
+
+    if (queryUtilityType && UTILITY_TYPES.includes(queryUtilityType as (typeof UTILITY_TYPES)[number])) {
+      setUtilityType(queryUtilityType as (typeof UTILITY_TYPES)[number]);
+    }
+
+    if (queryRoomId) {
+      setRoomId(queryRoomId);
+    }
+
+    if (queryName) {
+      setName(queryName);
+    }
+
+    if (queryLocationNotes) {
+      setLocationNotes(queryLocationNotes);
+    }
+  }, [router.isReady, router.query.locationNotes, router.query.name, router.query.roomId, router.query.utilityType]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -79,7 +112,7 @@ export default function AddUtilityPage() {
     }
 
     if (!context) {
-      setError('Utility storage is still loading. Please try again.');
+      setError('Utility details are still loading. Please try again.');
       return;
     }
 
@@ -87,7 +120,7 @@ export default function AddUtilityPage() {
     setError('');
 
     try {
-      await createUtilityForContext(context, {
+      const createdUtility = await createUtilityForContext(context, {
         utility_type: utilityType,
         name: name.trim(),
         room_id: roomId || null,
@@ -95,7 +128,7 @@ export default function AddUtilityPage() {
         emergency_notes: emergencyNotes.trim() || null
       });
 
-      router.push('/utilities');
+      router.push(`/utilities/${createdUtility.id}`);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Failed to save utility.');
       setSaving(false);
@@ -105,7 +138,7 @@ export default function AddUtilityPage() {
   return (
     <>
       <PageHeader
-        title="Add Utility"
+        title="Add utility"
         description="Add a shutoff, panel, system, or other critical home utility."
       />
 
@@ -118,12 +151,12 @@ export default function AddUtilityPage() {
           </p>
           {dataMode === 'demo' && !context?.supabaseConfigured ? (
             <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
-              {getSupabaseSetupMessage()}
+              Account saving is not available in this local build. Demo data stays only in this browser.
             </p>
           ) : null}
           {dataMode === 'supabase' && context && !context.property ? (
             <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
-              Create a property before adding utilities to Supabase.
+              Create a property before adding utilities to your account.
             </p>
           ) : null}
         </Card>
@@ -193,7 +226,7 @@ export default function AddUtilityPage() {
               <option value="">{loading ? 'Loading rooms...' : 'Not assigned'}</option>
               {rooms.map((room) => (
                 <option key={room.id} value={room.id}>
-                  {room.name}
+                  {formatRoomLocation(room)}
                 </option>
               ))}
             </Select>
@@ -245,7 +278,7 @@ export default function AddUtilityPage() {
 
           <div style={{ display: 'flex', gap: 8 }}>
             <Button type="submit" disabled={saving || loading}>
-              {saving ? 'Saving...' : 'Save Utility'}
+              {saving ? 'Saving...' : 'Save utility'}
             </Button>
             <button
               type="button"

@@ -72,6 +72,14 @@ export const VISIBILITY_OPTIONS = [
   'buyer_report'
 ] as const;
 
+export const VISIBILITY_CONTEXTS = [
+  'family',
+  'buyer',
+  'maintenance',
+  'insurance',
+  'personal_archive'
+] as const;
+
 export const WARRANTY_STATUSES = [
   'active',
   'expiring_soon',
@@ -380,7 +388,8 @@ export const createAssetSchema = z.object({
   manual_url: z.string().url().optional().nullable(),
   support_url: z.string().url().optional().nullable(),
   notes: z.string().optional().nullable(),
-  visibility: z.enum(VISIBILITY_OPTIONS).default('private')
+  visibility: z.enum(VISIBILITY_OPTIONS).default('private'),
+  visibility_contexts: z.array(z.enum(VISIBILITY_CONTEXTS)).default(['personal_archive'])
 });
 
 export const createReminderSchema = z.object({
@@ -490,6 +499,7 @@ export const createDocumentSchema = z.object({
   mime_type: z.string().optional().nullable(),
   file_size_bytes: z.coerce.number().nonnegative().optional().nullable(),
   visibility: z.enum(DOCUMENT_VISIBILITIES).default('private'),
+  visibility_contexts: z.array(z.enum(VISIBILITY_CONTEXTS)).default(['personal_archive']),
   source: z.enum(DOCUMENT_SOURCES).default('manual_upload')
 });
 
@@ -519,6 +529,7 @@ export type RoomType = typeof ROOM_TYPES[number];
 export type UtilityType = typeof UTILITY_TYPES[number];
 export type AssetType = typeof ASSET_TYPES[number];
 export type VisibilityOption = typeof VISIBILITY_OPTIONS[number];
+export type VisibilityContext = typeof VISIBILITY_CONTEXTS[number];
 export type WarrantyStatus = typeof WARRANTY_STATUSES[number];
 export type ReminderType = typeof REMINDER_TYPES[number];
 export type ReminderLinkedType = typeof REMINDER_LINKED_TYPES[number];
@@ -609,6 +620,7 @@ export interface UtilityRow {
   utility_type: UtilityType;
   name: string;
   visibility: VisibilityOption;
+  visibility_contexts?: VisibilityContext[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -621,6 +633,7 @@ export interface AssetRow {
   asset_type: AssetType;
   name: string;
   visibility: VisibilityOption;
+  visibility_contexts: VisibilityContext[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -644,6 +657,7 @@ export interface ReminderRow {
   priority: ReminderPriority;
   source: ReminderSource;
   visibility: VisibilityOption;
+  visibility_contexts?: VisibilityContext[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -668,6 +682,7 @@ export interface RepairRow {
   estimated_cost: number | null;
   actual_cost: number | null;
   notes: string | null;
+  visibility_contexts?: VisibilityContext[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -689,6 +704,7 @@ export interface ServiceRecordRow {
   summary: string | null;
   notes: string | null;
   next_service_date: string | null;
+  visibility_contexts?: VisibilityContext[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -710,6 +726,7 @@ export interface IssueRow {
   last_seen_date: string | null;
   resolved_date: string | null;
   notes: string | null;
+  visibility_contexts?: VisibilityContext[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -756,6 +773,7 @@ export interface DocumentRow {
   mime_type: string | null;
   file_size_bytes: number | null;
   visibility: DocumentVisibility;
+  visibility_contexts: VisibilityContext[];
   source: DocumentSource;
   created_by: string | null;
   created_at: string;

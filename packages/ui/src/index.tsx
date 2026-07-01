@@ -6,19 +6,22 @@ import type {
   SelectHTMLAttributes
 } from 'react';
 
+type ButtonVariant = 'primary' | 'secondary';
+
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode;
-  variant?: 'primary' | 'secondary';
+  variant?: ButtonVariant;
 };
 
-export function Button({
-  children,
-  type = 'button',
-  style,
-  disabled,
+export function getControlStyle({
   variant = 'primary',
-  ...rest
-}: ButtonProps) {
+  disabled,
+  style
+}: {
+  variant?: ButtonVariant;
+  disabled?: boolean;
+  style?: CSSProperties;
+} = {}): CSSProperties {
   const hasCustomBackground = Boolean(style && ('background' in style || 'backgroundColor' in style));
   const primaryStyle: CSSProperties = {
     background: 'var(--color-brass)',
@@ -31,23 +34,41 @@ export function Button({
     border: '1px solid var(--border-subtle)'
   };
 
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 'var(--radius-control)',
+    padding: '11px 16px',
+    minHeight: 44,
+    textDecoration: 'none',
+    ...(variant === 'secondary' ? secondaryStyle : primaryStyle),
+    color: hasCustomBackground ? 'var(--text-inverse)' : variant === 'secondary' ? 'var(--color-espresso)' : 'var(--color-ink)',
+    fontWeight: 700,
+    fontSize: 14,
+    lineHeight: 1.2,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.65 : 1,
+    boxShadow: disabled ? 'none' : '0 1px 0 rgba(44,31,24,0.12)',
+    ...style
+  };
+}
+
+export function Button({
+  children,
+  type = 'button',
+  style,
+  disabled,
+  variant = 'primary',
+  ...rest
+}: ButtonProps) {
   return (
     <button
       type={type}
       disabled={disabled}
       {...rest}
-      style={{
-        borderRadius: 'var(--radius-control)',
-        padding: '11px 16px',
-        ...(variant === 'secondary' ? secondaryStyle : primaryStyle),
-        color: hasCustomBackground ? 'var(--text-inverse)' : variant === 'secondary' ? 'var(--color-espresso)' : 'var(--color-ink)',
-        fontWeight: 700,
-        fontSize: 14,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.65 : 1,
-        boxShadow: disabled ? 'none' : '0 1px 0 rgba(44,31,24,0.12)',
-        ...style
-      }}
+      style={getControlStyle({ variant, disabled, style })}
     >
       {children}
     </button>
@@ -87,10 +108,14 @@ export function Card({
 
 export function PageHeader({
   title,
-  description
+  description,
+  eyebrow = 'A home, documented.',
+  children
 }: {
   title: string;
   description?: string;
+  eyebrow?: string;
+  children?: ReactNode;
 }) {
   return (
     <header style={{ marginBottom: 24 }}>
@@ -103,7 +128,7 @@ export function PageHeader({
           marginBottom: 6
         }}
       >
-        A home, documented.
+        {eyebrow}
       </div>
       <h1
         style={{
@@ -121,6 +146,7 @@ export function PageHeader({
           {description}
         </p>
       ) : null}
+      {children ? <div style={{ marginTop: 14 }}>{children}</div> : null}
     </header>
   );
 }
@@ -208,12 +234,28 @@ export function FloorSection({
 
 export function UtilityBadge({
   label,
-  variant = 'default'
+  variant = 'default',
+  tone = 'neutral'
 }: {
   label: string;
   variant?: 'default' | 'brassPale';
+  tone?: 'neutral' | 'good' | 'attention' | 'urgent';
 }) {
   const isBrassPale = variant === 'brassPale';
+  const inferredTone = (() => {
+    const value = label.toLowerCase();
+    if (/(urgent|error|high|expired|failed|delete)/.test(value)) return 'urgent';
+    if (/(soon|attention|open|pending|due)/.test(value)) return 'attention';
+    if (/(good|logged|complete|completed|active|saved|approved)/.test(value)) return 'good';
+    return tone;
+  })();
+  const toneColor = inferredTone === 'good'
+    ? 'var(--status-good)'
+    : inferredTone === 'attention'
+      ? 'var(--status-attention)'
+      : inferredTone === 'urgent'
+        ? 'var(--status-urgent)'
+        : 'var(--color-ink)';
 
   return (
     <span
@@ -227,7 +269,7 @@ export function UtilityBadge({
           : 'var(--utility-badge-bg, rgba(224,189,131,0.22))',
         color: isBrassPale
           ? 'var(--shortcut-tag-color, #2C1F18)'
-          : 'var(--utility-badge-color, var(--color-ink))',
+          : `var(--utility-badge-color, ${toneColor})`,
         border: isBrassPale
           ? '1px solid var(--shortcut-tag-border, #C8923F)'
           : '1px solid var(--utility-badge-border, rgba(168,118,44,0.22))',

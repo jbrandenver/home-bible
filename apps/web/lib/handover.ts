@@ -78,9 +78,9 @@ export const HANDOVER_SECTION_LABELS: Record<HandoverSection, string> = {
   warranties: 'Warranties',
   reminders: 'Reminders',
   repairs: 'Repairs',
-  service_records: 'Service records',
+  service_records: 'Service History',
   issues: 'Issues',
-  trend_flags: 'Trend flags',
+  trend_flags: 'Trends',
   documents_summary: 'Documents summary',
   receipts_summary: 'Receipts summary',
   emergency_overview: 'Emergency overview'

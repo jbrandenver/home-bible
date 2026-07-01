@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getDemoRooms } from '../../lib/demoStorage';
@@ -17,6 +18,7 @@ import { getReminderDataContext, getRemindersForUtility, type ReminderRow } from
 import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import { getRepairDataContext, getRepairsForUtility, type RepairRow } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
+import { formatRoomLocation } from '../../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForUtility, type ServiceRecordRow } from '../../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForUtility, type TrendFlagRow } from '../../lib/trendFlags';
 import {
@@ -33,6 +35,8 @@ import {
 type RoomOption = {
   id: string;
   name: string;
+  room_type?: string | null;
+  floor_name?: string | null;
 };
 
 const fieldStyle = {
@@ -117,7 +121,7 @@ export default function UtilityDetailPage() {
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setUtility(nextUtility);
-        setRooms(roomRows.map((room) => ({ id: room.id, name: room.name })));
+        setRooms(roomRows);
         setReminders(nextReminders);
         setRepairs(nextRepairs);
         setServiceRecords(nextServiceRecords);
@@ -154,7 +158,7 @@ export default function UtilityDetailPage() {
   }, [utilityId]);
 
   const roomName = utility?.room_id
-    ? rooms.find((room) => room.id === utility.room_id)?.name || 'Unknown room'
+    ? formatRoomLocation(rooms.find((room) => room.id === utility.room_id) || { name: 'Unknown room' })
     : 'Not assigned';
 
   const saveUtility = async (event: React.FormEvent) => {
@@ -220,9 +224,7 @@ export default function UtilityDetailPage() {
         <PageHeader title="Utility error" />
         <Card>
           <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p>
-          <Link href="/utilities">
-            <Button type="button">Back to utilities</Button>
-          </Link>
+          <ActionLink href="/utilities" variant="secondary">Back to utilities</ActionLink>
         </Card>
       </>
     );
@@ -236,9 +238,7 @@ export default function UtilityDetailPage() {
           <p style={{ color: '#6b7280' }}>
             This utility may have been removed, or it may not belong to the current property.
           </p>
-          <Link href="/utilities">
-            <Button type="button">Back to utilities</Button>
-          </Link>
+          <ActionLink href="/utilities" variant="secondary">Back to utilities</ActionLink>
         </Card>
       </>
     );
@@ -298,7 +298,7 @@ export default function UtilityDetailPage() {
                 <select value={roomId} onChange={(event) => setRoomId(event.target.value)} style={fieldStyle}>
                   <option value="">Not assigned</option>
                   {rooms.map((room) => (
-                    <option key={room.id} value={room.id}>{room.name}</option>
+                    <option key={room.id} value={room.id}>{formatRoomLocation(room)}</option>
                   ))}
                 </select>
               </label>
@@ -379,12 +379,8 @@ export default function UtilityDetailPage() {
         </RelatedList>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link href="/utilities">
-            <Button type="button">Back to utilities</Button>
-          </Link>
-          <Link href="/dashboard">
-            <Button type="button">Back to dashboard</Button>
-          </Link>
+          <ActionLink href="/utilities" variant="secondary">Back to utilities</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
     </>

@@ -7,6 +7,10 @@ export type RoomDraft = {
   floor_name: string;
 };
 
+export type RoomUpdateInput = RoomDraft & {
+  notes?: string | null;
+};
+
 export type FloorRow = {
   id: string;
   property_id: string;
@@ -22,6 +26,7 @@ export type RoomRow = {
   name: string;
   room_type: string;
   sort_order: number;
+  notes?: string | null;
   created_at?: string;
 };
 
@@ -31,6 +36,7 @@ export type RoomWithFloor = {
   room_type: string;
   floor_name: string;
   floor_id: string | null;
+  notes?: string | null;
 };
 
 export async function getFloorsForProperty(propertyId: string) {
@@ -60,7 +66,7 @@ export async function getRoomsForProperty(propertyId: string) {
     getFloorsForProperty(propertyId),
     supabase
       .from('rooms')
-      .select('id, property_id, floor_id, name, room_type, sort_order')
+      .select('id, property_id, floor_id, name, room_type, sort_order, notes')
       .eq('property_id', propertyId)
       .is('deleted_at', null)
       .order('created_at', { ascending: true })
@@ -73,7 +79,8 @@ export async function getRoomsForProperty(propertyId: string) {
     name: room.name,
     room_type: room.room_type,
     floor_name: room.floor_id ? floorMap.get(room.floor_id) || 'Unknown floor' : 'Unassigned',
-    floor_id: room.floor_id
+    floor_id: room.floor_id,
+    notes: room.notes || null
   }));
 }
 
@@ -85,7 +92,7 @@ export async function getRoomById(roomId: string): Promise<RoomWithFloor | null>
 
   const { data: room } = await supabase
     .from('rooms')
-    .select('id, property_id, floor_id, name, room_type')
+    .select('id, property_id, floor_id, name, room_type, notes')
     .eq('id', roomId)
     .is('deleted_at', null)
     .maybeSingle();
@@ -110,8 +117,48 @@ export async function getRoomById(roomId: string): Promise<RoomWithFloor | null>
     name: room.name,
     room_type: room.room_type,
     floor_name: floorName,
-    floor_id: room.floor_id
+    floor_id: room.floor_id,
+    notes: room.notes || null
   };
+}
+
+async function getOrCreateFloorForProperty(propertyId: string, floorName: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const normalizedFloorName = floorName.trim() || 'Main Floor';
+  const existingFloors = await getFloorsForProperty(propertyId);
+  const existingFloor = existingFloors.find(
+    (floor) => floor.name.trim().toLowerCase() === normalizedFloorName.toLowerCase()
+  );
+
+  if (existingFloor) {
+    return existingFloor;
+  }
+
+  const nextFloorNumber =
+    existingFloors.length > 0
+      ? Math.max(...existingFloors.map((floor) => floor.floor_number || 0)) + 1
+      : 0;
+
+  const { data: createdFloor, error } = await supabase
+    .from('floors')
+    .insert({
+      property_id: propertyId,
+      name: normalizedFloorName,
+      floor_number: nextFloorNumber,
+      sort_order: nextFloorNumber
+    })
+    .select('id, property_id, name, floor_number, sort_order')
+    .single();
+
+  if (error || !createdFloor) {
+    throw new Error(error?.message || 'Failed to create floor');
+  }
+
+  return createdFloor as FloorRow;
 }
 
 export async function createRoomsForProperty(propertyId: string, drafts: RoomDraft[]) {
@@ -167,7 +214,7 @@ export async function createRoomsForProperty(propertyId: string, drafts: RoomDra
 
   const { data: existingRooms } = await supabase
     .from('rooms')
-    .select('id, property_id, floor_id, name, room_type, sort_order')
+    .select('id, property_id, floor_id, name, room_type, sort_order, notes')
     .eq('property_id', propertyId)
     .is('deleted_at', null);
 
@@ -204,6 +251,38 @@ export async function createRoomsForProperty(propertyId: string, drafts: RoomDra
     if (error) {
       throw new Error(error.message || 'Failed to create rooms');
     }
+  }
+
+  return getRoomsForProperty(propertyId);
+}
+
+export async function updateRoomForProperty(propertyId: string, roomId: string, input: RoomUpdateInput) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const name = input.name.trim();
+  if (!name) {
+    throw new Error('Room or space name is required.');
+  }
+
+  const floor = await getOrCreateFloorForProperty(propertyId, input.floor_name);
+
+  const { error } = await supabase
+    .from('rooms')
+    .update({
+      name,
+      room_type: input.room_type,
+      floor_id: floor.id,
+      notes: input.notes?.trim() || null
+    })
+    .eq('id', roomId)
+    .eq('property_id', propertyId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(error.message || 'Failed to update room or space.');
   }
 
   return getRoomsForProperty(propertyId);

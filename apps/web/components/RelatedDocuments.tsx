@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { Button, Card, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from './ActionLink';
 import {
   createDocumentSignedUrlForContext,
   formatFileSize,
@@ -29,7 +29,7 @@ export function RelatedDocuments({
 
   const openDocument = async (documentId: string) => {
     if (!context) {
-      setError('Document storage is still loading. Please try again.');
+      setError('File details are still loading. Please try again.');
       return;
     }
 
@@ -82,9 +82,7 @@ export function RelatedDocuments({
         </div>
       )}
       <div style={{ marginTop: 12 }}>
-        <Link href={uploadHref}>
-          <Button type="button">Add document</Button>
-        </Link>
+        <ActionLink href={uploadHref} variant="secondary">Add document</ActionLink>
       </div>
     </Card>
   );

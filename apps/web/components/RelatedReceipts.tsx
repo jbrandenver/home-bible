@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { Button, Card, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from './ActionLink';
 import { createDocumentSignedUrlForContext, type DocumentDataContext } from '../lib/documents';
 import { formatReceiptAmount, type ReceiptDataContext, type ReceiptRow } from '../lib/receipts';
 
@@ -76,9 +76,7 @@ export function RelatedReceipts({
                       {isActing ? 'Opening...' : 'View receipt'}
                     </Button>
                   ) : null}
-                  <Link href="/receipts">
-                    <Button type="button" style={{ background: '#4b5563' }}>All receipts</Button>
-                  </Link>
+                  <ActionLink href="/receipts" variant="secondary">All receipts</ActionLink>
                 </div>
               </div>
             );
@@ -86,9 +84,7 @@ export function RelatedReceipts({
         </div>
       )}
       <div style={{ marginTop: 12 }}>
-        <Link href={uploadHref}>
-          <Button type="button">Add receipt</Button>
-        </Link>
+        <ActionLink href={uploadHref} variant="secondary">Add receipt</ActionLink>
       </div>
     </Card>
   );

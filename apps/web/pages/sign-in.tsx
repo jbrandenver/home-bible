@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Button, Card, PageHeader } from '@home-bible/ui';
 import {
   formatAuthError,
-  getSupabaseSetupMessage,
   isSupabaseConfigured,
   signInWithApple,
   signInWithEmail,
@@ -49,7 +48,7 @@ export default function SignInPage() {
       <Card>
         {setupMissing && (
           <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412' }}>
-            {getSupabaseSetupMessage()}
+            Account sign-in is not available in this local build. You can still use demo mode in this browser.
           </div>
         )}
 

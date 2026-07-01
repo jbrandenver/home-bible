@@ -1,7 +1,7 @@
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import {
   getAssetDataContext,
   getAssetsForContext,
@@ -194,7 +194,7 @@ export default function WarrantiesPage() {
 
   const saveWarrantyChanges = async (assetId: string) => {
     if (!context) {
-      setError('Asset storage is still loading. Please try again.');
+      setError('Asset details are still loading. Please try again.');
       return;
     }
 
@@ -226,7 +226,7 @@ export default function WarrantiesPage() {
 
   const createWarrantyReminder = async (asset: AssetRow) => {
     if (!reminderContext) {
-      setError('Reminder storage is still loading. Please try again.');
+      setError('Reminder details are still loading. Please try again.');
       return;
     }
 
@@ -443,12 +443,8 @@ export default function WarrantiesPage() {
                     >
                       {savingReminderAssetId === asset.id ? 'Saving...' : 'Add reminder'}
                     </Button>
-                    <Link href={`/assets/${asset.id}`}>
-                      <Button type="button">View</Button>
-                    </Link>
-                    <Link href={`/documents?assetId=${asset.id}`}>
-                      <Button type="button">Documents</Button>
-                    </Link>
+                    <ActionLink href={`/assets/${asset.id}`} variant="secondary">View</ActionLink>
+                    <ActionLink href={`/documents?assetId=${asset.id}`} variant="secondary">Documents</ActionLink>
                   </div>
                 </div>
               </Card>
@@ -506,9 +502,7 @@ export default function WarrantiesPage() {
               <p style={{ color: '#6b7280', marginBottom: 16 }}>
                 Add assets and enter warranty information to track coverage here.
               </p>
-              <Link href="/add-asset">
-                <Button type="button">Add your first asset</Button>
-              </Link>
+              <ActionLink href="/add-asset">Add your first asset</ActionLink>
             </div>
           </Card>
         ) : (

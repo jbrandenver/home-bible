@@ -57,7 +57,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             <Link href="/" className="brand-lockup">
               <span className="brand-wordmark">
                 <span>Home</span>
-                <span className="brand-wordmark-accent">Bible</span>
+                <span className="brand-wordmark-accent">& Everything</span>
               </span>
               <span className="brand-tagline">A home, documented.</span>
             </Link>

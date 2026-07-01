@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatEnumLabel, REPAIR_STATUSES } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
@@ -226,9 +227,7 @@ export default function RepairDetailPage() {
           <p style={{ color: error ? '#b91c1c' : '#6b7280', fontWeight: error ? 700 : 400 }}>
             {error || 'This repair may have been removed, or it may not belong to the current property.'}
           </p>
-          <Link href="/repairs">
-            <Button type="button">Back to repairs</Button>
-          </Link>
+          <ActionLink href="/repairs" variant="secondary">Back to repairs</ActionLink>
         </Card>
       </>
     );
@@ -337,12 +336,8 @@ export default function RepairDetailPage() {
         </RelatedList>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link href="/repairs">
-            <Button type="button">Back to repairs</Button>
-          </Link>
-          <Link href="/dashboard">
-            <Button type="button">Back to dashboard</Button>
-          </Link>
+          <ActionLink href="/repairs" variant="secondary">Back to repairs</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
     </>

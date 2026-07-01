@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 
 const moreLinks = [
   {
@@ -25,17 +25,10 @@ const moreLinks = [
   },
   {
     title: 'Settings',
-    description: 'Review account state, security reminders, privacy posture, and release-candidate status.',
+    description: 'Review account state, privacy, security reminders, and development tools.',
     href: '/settings',
     action: 'Open settings',
     group: 'Account'
-  },
-  {
-    title: 'MVP Test',
-    description: 'Development-only checklist for private MVP testing. Keep this out of real customer workflows.',
-    href: '/mvp-test',
-    action: 'Open test checklist',
-    group: 'Development tools'
   }
 ];
 
@@ -46,19 +39,19 @@ export default function MorePage() {
     <>
       <PageHeader
         title="More"
-        description="Secondary tools, review workflows, settings, and development-only testing links."
+        description="Documents, handover, sharing review, and settings."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
           <h2 style={{ marginTop: 0 }}>Secondary tools</h2>
           <p style={{ color: 'var(--text-muted)' }}>
-            Handover, sharing review, settings, and documents live here on mobile so the main navigation stays focused.
+            Handover, Sharing Review, Settings, and Documents live here on mobile so the main workflow stays easy to reach.
           </p>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <UtilityBadge label="No public sharing" />
-            <UtilityBadge label="No invitations" />
-            <UtilityBadge label="No background jobs" />
+            <UtilityBadge label="No public link is created" />
+            <UtilityBadge label="No invitation is sent" />
+            <UtilityBadge label="Preview only" />
           </div>
         </Card>
 
@@ -72,9 +65,9 @@ export default function MorePage() {
                   <div key={link.href} style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 14 }}>
                     <h3 style={{ marginTop: 0 }}>{link.title}</h3>
                     <p style={{ color: 'var(--text-muted)' }}>{link.description}</p>
-                    <Link href={link.href}>
-                      <Button type="button">{link.action}</Button>
-                    </Link>
+                    <ActionLink href={link.href} variant={link.title === 'Documents' ? 'primary' : 'secondary'}>
+                      {link.action}
+                    </ActionLink>
                   </div>
                 ))}
             </div>

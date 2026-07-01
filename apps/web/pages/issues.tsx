@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import Link from 'next/link';
 import {
   formatEnumLabel,
   ISSUE_SEVERITIES,
@@ -10,6 +9,7 @@ import {
   TREND_FLAG_TYPES
 } from '@home-bible/shared';
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import {
@@ -26,6 +26,7 @@ import {
 } from '../lib/issues';
 import { getRepairsForProperty, getDemoRepairs, type RepairRow } from '../lib/repairs';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation } from '../lib/roomLabels';
 import {
   createTrendFlagForContext,
   deleteTrendFlagForContext,
@@ -175,12 +176,12 @@ export default function IssuesPage() {
             getRepairsForProperty(nextIssueContext.property.id)
           ]);
 
-          nextRooms = roomRows.map((room) => ({ id: room.id, name: room.name }));
+          nextRooms = roomRows.map((room) => ({ id: room.id, name: formatRoomLocation(room) }));
           nextAssets = assetRows.map((asset: AssetRow) => ({ id: asset.id, name: asset.name }));
           nextUtilities = utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name }));
           nextRepairs = repairRows.map((repair: RepairRow) => ({ id: repair.id, name: repair.title }));
         } else {
-          nextRooms = getDemoRooms().map((room) => ({ id: room.id, name: room.name }));
+          nextRooms = getDemoRooms().map((room) => ({ id: room.id, name: formatRoomLocation(room) }));
           nextAssets = getDemoAssets().map((asset) => ({ id: asset.id, name: asset.name }));
           nextUtilities = getDemoUtilities().map((utility) => ({ id: utility.id, name: utility.name }));
           nextRepairs = getDemoRepairs().map((repair) => ({ id: repair.id, name: repair.title }));
@@ -889,9 +890,7 @@ export default function IssuesPage() {
                     </div>
 
                     <div style={{ display: 'grid', gap: 8, minWidth: 150 }}>
-                      <Link href={`/issues/${issue.id}`}>
-                        <Button type="button">View</Button>
-                      </Link>
+                      <ActionLink href={`/issues/${issue.id}`} variant="secondary">View</ActionLink>
                       <select
                         value={issue.status}
                         onChange={(event) => changeIssueStatus(issue.id, event.target.value as IssueStatus)}
@@ -925,7 +924,7 @@ export default function IssuesPage() {
 
         {trendFlags.length > 0 ? (
           <Card>
-            <h2 style={{ marginTop: 0 }}>Trend flags ({filteredTrendFlags.length})</h2>
+            <h2 style={{ marginTop: 0 }}>Trends ({filteredTrendFlags.length})</h2>
             {filteredTrendFlags.length === 0 ? (
               <p style={{ color: '#6b7280', margin: 0 }}>No trends match the current filters.</p>
             ) : (

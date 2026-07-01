@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
-import Link from 'next/link';
-import { PageHeader, Card, Button } from '@home-bible/ui';
+import { PageHeader, Card } from '@home-bible/ui';
+import { ActionLink } from '../../../../components/ActionLink';
 
 export default function RoomDetail() {
   const router = useRouter();
@@ -14,9 +14,7 @@ export default function RoomDetail() {
       <Card>
         <p className="mb-4">Utilities and details for this room.</p>
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <Link href={mapHref}>
-            <Button>Back to Home Map</Button>
-          </Link>
+          <ActionLink href={mapHref} variant="secondary">Back to Home Map</ActionLink>
         </div>
       </Card>
     </>

@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
-import Link from 'next/link';
-import { PageHeader, Card, Button } from '@home-bible/ui';
+import { PageHeader, Card } from '@home-bible/ui';
+import { ActionLink } from '../../../components/ActionLink';
 
 export default function PropertyDashboard() {
   const router = useRouter();
@@ -13,17 +13,11 @@ export default function PropertyDashboard() {
       <PageHeader title={propertyName || 'Property Dashboard'} description="Legacy property overview for map and onboarding shortcuts." />
       <Card>
         <div className="space-y-4">
-          <p>Property Overview — organize your home's information across floors, rooms, and utilities.</p>
+          <p>Property overview - organize your home's information across floors, rooms, and utilities.</p>
           <div className="flex gap-2 flex-wrap">
-            <Link href={mapHref}>
-              <Button>Home Map</Button>
-            </Link>
-            <Link href="/add-rooms">
-              <Button>Add Rooms</Button>
-            </Link>
-            <Link href="/settings">
-              <Button>Settings</Button>
-            </Link>
+            <ActionLink href={mapHref}>Home Map</ActionLink>
+            <ActionLink href="/add-rooms" variant="secondary">Add rooms</ActionLink>
+            <ActionLink href="/settings" variant="secondary">Settings</ActionLink>
           </div>
         </div>
       </Card>

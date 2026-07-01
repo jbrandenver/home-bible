@@ -2,7 +2,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { PageHeader, Card, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
@@ -299,9 +300,7 @@ export default function RoomDetailPage() {
               ? 'Saved to your account. If this room was removed, it will no longer appear.'
               : 'Demo data is stored only in this browser. Add rooms from the onboarding flow to continue.'}
           </p>
-          <Link href="/home-map">
-            <Button type="button">Back to home map</Button>
-          </Link>
+          <ActionLink href="/home-map" variant="secondary">Back to home map</ActionLink>
         </Card>
       </>
     );
@@ -397,7 +396,7 @@ export default function RoomDetailPage() {
         />
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+          <h2 style={{ marginTop: 0 }}>Trends</h2>
           {roomTrendFlags.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No room-level trends currently.</p>
           ) : (
@@ -445,9 +444,7 @@ export default function RoomDetailPage() {
                     </div>
                   )}
                   <div style={{ marginTop: 8 }}>
-                    <Link href={`/utilities/${utility.id}`}>
-                      <Button type="button">View utility</Button>
-                    </Link>
+                    <ActionLink href={`/utilities/${utility.id}`} variant="secondary">View utility</ActionLink>
                   </div>
                 </div>
               ))}
@@ -490,9 +487,7 @@ export default function RoomDetailPage() {
                         </div>
                       )}
                     </div>
-                    <Link href={`/assets/${asset.id}`}>
-                      <Button type="button">View</Button>
-                    </Link>
+                    <ActionLink href={`/assets/${asset.id}`} variant="secondary">View</ActionLink>
                   </div>
                 </div>
               ))}
@@ -516,23 +511,19 @@ export default function RoomDetailPage() {
                       {repair.reported_date || 'No reported date'} • {formatEnumLabel(repair.repair_type)} • {formatEnumLabel(repair.status)}
                     </div>
                     <div style={{ marginTop: 8 }}>
-                      <Link href={`/repairs/${repair.id}`}>
-                        <Button type="button">View repair</Button>
-                      </Link>
+                      <ActionLink href={`/repairs/${repair.id}`} variant="secondary">View repair</ActionLink>
                     </div>
                   </div>
                 ))}
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <Link href="/repairs">
-              <Button type="button">Manage repairs</Button>
-            </Link>
+            <ActionLink href="/repairs" variant="secondary">Manage repairs</ActionLink>
           </div>
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Service records for this room</h2>
+          <h2 style={{ marginTop: 0 }}>Service History for this room</h2>
           {roomServiceRecords.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No service history linked to this room.</p>
           ) : (
@@ -556,9 +547,7 @@ export default function RoomDetailPage() {
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <Link href="/repairs">
-              <Button type="button">Manage repairs</Button>
-            </Link>
+            <ActionLink href="/repairs" variant="secondary">Manage repairs</ActionLink>
           </div>
         </Card>
 
@@ -578,18 +567,14 @@ export default function RoomDetailPage() {
                       {issue.first_seen_date || 'Not set'} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
                     </div>
                     <div style={{ marginTop: 8 }}>
-                      <Link href={`/issues/${issue.id}`}>
-                        <Button type="button">View issue</Button>
-                      </Link>
+                      <ActionLink href={`/issues/${issue.id}`} variant="secondary">View issue</ActionLink>
                     </div>
                   </div>
                 ))}
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <Link href="/issues">
-              <Button type="button">Manage issues</Button>
-            </Link>
+            <ActionLink href="/issues" variant="secondary">Manage issues</ActionLink>
           </div>
         </Card>
 
@@ -618,9 +603,7 @@ export default function RoomDetailPage() {
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <Link href="/reminders">
-              <Button type="button">Manage reminders</Button>
-            </Link>
+            <ActionLink href="/reminders" variant="secondary">Manage reminders</ActionLink>
           </div>
         </Card>
 
@@ -632,27 +615,13 @@ export default function RoomDetailPage() {
         </Card>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Link href="/home-map">
-            <Button type="button">Back to home map</Button>
-          </Link>
-          <Link href="/dashboard">
-            <Button type="button">Back to dashboard</Button>
-          </Link>
-          <Link href="/utilities">
-            <Button type="button">All utilities</Button>
-          </Link>
-          <Link href="/repairs">
-            <Button type="button">All repairs</Button>
-          </Link>
-          <Link href="/issues">
-            <Button type="button">All issues</Button>
-          </Link>
-          <Link href="/reminders">
-            <Button type="button">All reminders</Button>
-          </Link>
-          <Link href="/settings">
-            <Button type="button">Settings</Button>
-          </Link>
+          <ActionLink href="/home-map" variant="secondary">Back to home map</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+          <ActionLink href="/utilities" variant="secondary">All utilities</ActionLink>
+          <ActionLink href="/repairs" variant="secondary">All repairs</ActionLink>
+          <ActionLink href="/issues" variant="secondary">All issues</ActionLink>
+          <ActionLink href="/reminders" variant="secondary">All reminders</ActionLink>
+          <ActionLink href="/settings" variant="secondary">Settings</ActionLink>
         </div>
       </div>
     </>

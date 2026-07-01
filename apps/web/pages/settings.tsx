@@ -2,9 +2,9 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import {
   getCurrentUser,
-  getSupabaseSetupMessage,
   isSupabaseConfigured,
   onAuthStateChange,
   signOut
@@ -52,12 +52,12 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Home Bible account, privacy, sharing, export, and deletion controls."
+        description="Privacy, account, and safe testing controls for Home & Everything."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
           <Card tone="dark">
-            <h2 style={{ marginTop: 0 }}>Home Bible</h2>
+            <h2 style={{ marginTop: 0 }}>Home & Everything</h2>
             <p style={{ color: 'rgba(255,248,234,0.78)', marginBottom: 0 }}>
               A home, documented. Keep the record calm, private, and complete enough to hand on.
             </p>
@@ -66,14 +66,16 @@ export default function SettingsPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Account</h2>
             {!supabaseReady ? (
-              <p style={{ color: 'var(--status-attention)', margin: 0 }}>{getSupabaseSetupMessage()}</p>
+              <p style={{ color: 'var(--status-attention)', margin: 0 }}>
+                Account saving is not available in this local build. Demo data stays only in this browser.
+              </p>
             ) : !isReady ? (
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading account...</p>
             ) : user ? (
               <div style={{ display: 'grid', gap: 12 }}>
-                <UtilityBadge label={`Signed in as ${user.email || 'unknown user'}`} />
+                <UtilityBadge label={`Signed in as ${user.email || 'account'}`} />
                 <div>
-                  <Button type="button" onClick={handleSignOut}>
+                  <Button type="button" onClick={handleSignOut} variant="secondary">
                     Sign out
                   </Button>
                 </div>
@@ -82,12 +84,8 @@ export default function SettingsPage() {
               <div style={{ display: 'grid', gap: 12 }}>
                 <p style={{ color: 'var(--text-muted)', margin: 0 }}>Demo data is stored only in this browser.</p>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <Link href="/sign-in">
-                    <Button type="button">Sign in</Button>
-                  </Link>
-                  <Link href="/sign-up">
-                    <Button type="button">Create account</Button>
-                  </Link>
+                  <ActionLink href="/sign-in">Sign in</ActionLink>
+                  <ActionLink href="/sign-up" variant="secondary">Create account</ActionLink>
                 </div>
               </div>
             )}
@@ -96,43 +94,33 @@ export default function SettingsPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Security and privacy</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <UtilityBadge label="MVP RC local" />
-              <UtilityBadge label="Account deletion required" />
-              <UtilityBadge label="Data export required" />
+              <UtilityBadge label="Private home record" />
               <UtilityBadge label="No sensitive access details" />
               <UtilityBadge label="Address optional" />
               <UtilityBadge label="Browser-only handover reports" />
-              <UtilityBadge label="Public sharing not enabled" />
+              <UtilityBadge label="No public link is created" />
             </div>
             <p style={{ color: 'var(--text-muted)' }}>
-              Home Handover reports are generated in the browser from existing saved data. They do not create public links, stored report files, emails, or background jobs, and sensitive entry details or passwords should not be stored in Home Bible.
+              Saved home data belongs in your account when you are signed in. In demo mode, it is stored only in this browser.
             </p>
             <p style={{ color: 'var(--text-muted)' }}>
-              Sharing & Access Review previews future role visibility only. It does not create guests, invitations, public share links, or tokenized URLs.
+              Do not store access codes, lock codes, garage codes, safe codes, alarm codes, Wi-Fi passwords, hidden key locations, or other sensitive entry details.
             </p>
             <p style={{ color: 'var(--text-muted)' }}>
-              This local release-candidate package is for controlled private testing only. It does not deploy, enable hosting, or add automated infrastructure.
+              Home Handover reports are generated in the browser from existing saved data. No public link is created, no invitation is sent, and no generated report file is stored.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Link href="/handover">
-                <Button type="button">Open handover builder</Button>
-              </Link>
-              <Link href="/sharing">
-                <Button type="button">Open sharing review</Button>
-              </Link>
-              <Link href="/mvp-test">
-                <Button type="button" variant="secondary">Open MVP test checklist</Button>
-              </Link>
+              <ActionLink href="/handover" variant="secondary">Open handover builder</ActionLink>
+              <ActionLink href="/sharing" variant="secondary">Open sharing review</ActionLink>
             </div>
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Future settings sections</h2>
+            <h2 style={{ marginTop: 0 }}>Planned settings</h2>
             <ul style={{ color: 'var(--text-muted)', lineHeight: 1.8 }}>
               <li>Account</li>
               <li>Properties</li>
-              <li>Plan and billing</li>
-              <li>Sharing</li>
+              <li>Sharing controls</li>
               <li>Privacy</li>
               <li>Data export</li>
               <li>Delete account</li>
@@ -140,13 +128,17 @@ export default function SettingsPage() {
             </ul>
           </Card>
 
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Development tools</h2>
+            <p style={{ color: 'var(--text-muted)' }}>
+              Private testing tools are kept here so they do not look like normal homeowner destinations.
+            </p>
+            <ActionLink href="/mvp-test" variant="secondary">Open private MVP test checklist</ActionLink>
+          </Card>
+
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Link href="/dashboard">
-              <Button type="button">Back to dashboard</Button>
-            </Link>
-            <Link href="/home-map">
-              <Button type="button">Home map</Button>
-            </Link>
+            <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+            <ActionLink href="/home-map" variant="secondary">Home map</ActionLink>
           </div>
       </div>
     </>

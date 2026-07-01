@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { RECEIPT_CATEGORIES, formatEnumLabel, type ReceiptCategory } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { createDocumentSignedUrlForContext, formatFileSize, getDocumentDataContext, getDocumentsForContext, type DocumentDataContext, type DocumentRow } from '../lib/documents';
 import { getDemoRooms } from '../lib/demoStorage';
@@ -20,6 +20,7 @@ import {
 } from '../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation } from '../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
@@ -33,6 +34,8 @@ type LinkOption = {
 type RoomOption = {
   id: string;
   name: string;
+  room_type?: string | null;
+  floor_name?: string | null;
 };
 
 const fieldStyle = {
@@ -206,7 +209,7 @@ export default function ReceiptsPage() {
         setDocumentContext(nextDocumentContext);
         setReceipts(nextReceipts);
         setDocuments(nextDocuments);
-        setRooms(roomRows.map((room) => ({ id: room.id, name: room.name })));
+        setRooms(roomRows);
         setUtilities(utilityRows);
         setAssets(assetRows);
         setRepairs(repairRows);
@@ -232,7 +235,7 @@ export default function ReceiptsPage() {
   const optionsByKind = useMemo<Record<LinkKind, LinkOption[]>>(
     () => ({
       property: context?.property ? [{ id: context.property.id, label: context.property.nickname }] : [],
-      room_id: rooms.map((room) => ({ id: room.id, label: room.name })),
+      room_id: rooms.map((room) => ({ id: room.id, label: formatRoomLocation(room) })),
       asset_id: assets.map((asset) => ({ id: asset.id, label: asset.name })),
       utility_id: utilities.map((utility) => ({ id: utility.id, label: utility.name })),
       repair_id: repairs.map((repair) => ({ id: repair.id, label: repair.title })),
@@ -349,7 +352,7 @@ export default function ReceiptsPage() {
     event.preventDefault();
 
     if (!context) {
-      setError('Receipt storage is still loading. Please try again.');
+      setError('Receipt details are still loading. Please try again.');
       return;
     }
 
@@ -391,7 +394,7 @@ export default function ReceiptsPage() {
     event.preventDefault();
 
     if (!context) {
-      setError('Receipt storage is still loading. Please try again.');
+      setError('Receipt details are still loading. Please try again.');
       return;
     }
 
@@ -439,7 +442,7 @@ export default function ReceiptsPage() {
 
   const cancelReview = () => {
     clearReview();
-    setNotice('Review canceled. The uploaded receipt document was kept, but no receipt details were saved.');
+    setNotice('Review canceled. The uploaded receipt file was kept, but no receipt details were saved.');
   };
 
   const openDocument = async (documentId: string) => {
@@ -489,7 +492,7 @@ export default function ReceiptsPage() {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <UtilityBadge label={`${receipts.length} approved receipt${receipts.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${receiptDocumentsWithoutMetadata.length} awaiting review`} />
-            <UtilityBadge label={context?.mode === 'supabase' ? 'Private storage' : 'Demo data'} />
+            <UtilityBadge label={context?.mode === 'supabase' ? 'Private files' : 'Demo data'} />
             {context?.property ? <UtilityBadge label={context.property.nickname} /> : null}
           </div>
           {loading ? <p style={{ color: '#6b7280' }}>Loading receipts...</p> : null}
@@ -506,10 +509,8 @@ export default function ReceiptsPage() {
           <h2 style={{ marginTop: 0 }}>Upload receipt file</h2>
           {!canUpload ? (
             <div>
-              <p style={{ color: '#6b7280' }}>Sign in and create a property to upload private receipt files.</p>
-              <Link href="/sign-in">
-                <Button type="button">Sign in</Button>
-              </Link>
+              <p style={{ color: '#6b7280' }}>Sign in and create a property to upload private receipt files. Review before saving.</p>
+              <ActionLink href="/sign-in">Sign in</ActionLink>
             </div>
           ) : (
             <form onSubmit={uploadReceipt} style={{ display: 'grid', gap: 12 }}>
@@ -562,7 +563,7 @@ export default function ReceiptsPage() {
               </label>
 
               <div>
-                <Button type="submit" disabled={uploading}>{uploading ? 'Uploading...' : 'Upload and Review'}</Button>
+                <Button type="submit" disabled={uploading}>{uploading ? 'Uploading...' : 'Upload and review'}</Button>
               </div>
             </form>
           )}
@@ -703,7 +704,7 @@ export default function ReceiptsPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Approved receipts</h2>
           {receipts.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No approved receipts yet.</p>
+            <p style={{ color: '#6b7280' }}>Save receipts after you review the details.</p>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {receipts.map((receipt) => {
@@ -769,12 +770,8 @@ export default function ReceiptsPage() {
         </Card>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Link href="/dashboard">
-            <Button type="button">Back to dashboard</Button>
-          </Link>
-          <Link href="/documents">
-            <Button type="button">Documents</Button>
-          </Link>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+          <ActionLink href="/documents" variant="secondary">Documents</ActionLink>
         </div>
       </div>
     </>

@@ -5,12 +5,14 @@ import {
   type DocumentRow as SharedDocumentRow,
   type DocumentSource,
   type DocumentType,
-  type DocumentVisibility
+  type DocumentVisibility,
+  type VisibilityContext
 } from '@home-bible/shared';
 import type { User } from '@supabase/supabase-js';
 import { ensureProfileForUser, getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { normalizeVisibilityContexts, visibilityFromContexts } from './visibility';
 
 export const HOME_DOCUMENTS_BUCKET = 'home-documents';
 export const MAX_DOCUMENT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -60,6 +62,7 @@ export type DocumentUploadInput = DocumentLinkInput & {
   description?: string | null;
   document_type?: DocumentType;
   visibility?: DocumentVisibility;
+  visibility_contexts?: VisibilityContext[];
 };
 
 export type DocumentMetadataInput = Partial<DocumentLinkInput> & {
@@ -67,6 +70,7 @@ export type DocumentMetadataInput = Partial<DocumentLinkInput> & {
   description?: string | null;
   document_type?: DocumentType;
   visibility?: DocumentVisibility;
+  visibility_contexts?: VisibilityContext[];
 };
 
 export type DocumentLinkField =
@@ -85,7 +89,7 @@ export type DocumentLinkTarget = {
 };
 
 const DOCUMENT_SELECT =
-  'id, property_id, room_id, utility_id, asset_id, reminder_id, repair_id, service_record_id, issue_id, trend_flag_id, document_type, title, description, file_name, file_path, bucket_name, mime_type, file_size_bytes, visibility, source, created_by, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, utility_id, asset_id, reminder_id, repair_id, service_record_id, issue_id, trend_flag_id, document_type, title, description, file_name, file_path, bucket_name, mime_type, file_size_bytes, visibility, visibility_contexts, source, created_by, created_at, updated_at, deleted_at';
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -99,6 +103,7 @@ function enumValue<T extends readonly string[]>(values: T, value: unknown, fallb
 
 function normalizeDocument(raw: Partial<DocumentRow>): DocumentRow {
   const createdAt = raw.created_at || new Date().toISOString();
+  const visibility = enumValue(DOCUMENT_VISIBILITIES, raw.visibility, 'private');
 
   return {
     id: raw.id || crypto.randomUUID(),
@@ -122,7 +127,8 @@ function normalizeDocument(raw: Partial<DocumentRow>): DocumentRow {
       typeof raw.file_size_bytes === 'number' && Number.isFinite(raw.file_size_bytes)
         ? raw.file_size_bytes
         : null,
-    visibility: enumValue(DOCUMENT_VISIBILITIES, raw.visibility, 'private'),
+    visibility,
+    visibility_contexts: normalizeVisibilityContexts(raw.visibility_contexts, visibility),
     source: enumValue(DOCUMENT_SOURCES, raw.source, 'manual_upload'),
     created_by: nullableString(raw.created_by),
     created_at: createdAt,
@@ -394,7 +400,8 @@ export async function uploadDocumentForContext(context: DocumentDataContext, inp
       bucket_name: HOME_DOCUMENTS_BUCKET,
       mime_type: mimeType,
       file_size_bytes: input.file.size,
-      visibility: input.visibility || 'private',
+      visibility: visibilityFromContexts(input.visibility_contexts, input.visibility || 'private'),
+      visibility_contexts: normalizeVisibilityContexts(input.visibility_contexts, input.visibility || 'private'),
       source: 'manual_upload' satisfies DocumentSource,
       created_by: context.user.id
     })
@@ -437,7 +444,14 @@ export async function updateDocumentMetadataForContext(
   }
   if (input.description !== undefined) payload.description = nullableString(input.description);
   if (input.document_type !== undefined) payload.document_type = input.document_type;
-  if (input.visibility !== undefined) payload.visibility = input.visibility;
+  if (input.visibility_contexts !== undefined) {
+    const visibilityContexts = normalizeVisibilityContexts(input.visibility_contexts, input.visibility);
+    payload.visibility_contexts = visibilityContexts;
+    payload.visibility = visibilityFromContexts(visibilityContexts);
+  } else if (input.visibility !== undefined) {
+    payload.visibility = input.visibility;
+    payload.visibility_contexts = normalizeVisibilityContexts(undefined, input.visibility);
+  }
 
   Object.assign(payload, cleanLinkUpdateInput(input));
 

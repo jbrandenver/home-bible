@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { Card, PageHeader, UtilityBadge } from '@home-bible/ui';
 import {
   loadSharingPreview,
   SHARING_ROLES,
@@ -97,9 +97,9 @@ function linkedLabel(record: Linkable, lookups: ReturnType<typeof buildLookups>)
   if (record.asset_id) return lookups.assets.get(record.asset_id) || 'Asset record';
   if (record.utility_id) return lookups.utilities.get(record.utility_id) || 'Utility record';
   if (record.repair_id) return lookups.repairs.get(record.repair_id) || 'Repair record';
-  if (record.service_record_id) return lookups.serviceRecords.get(record.service_record_id) || 'Service record';
+  if (record.service_record_id) return lookups.serviceRecords.get(record.service_record_id) || 'Service History';
   if (record.issue_id) return lookups.issues.get(record.issue_id) || 'Issue record';
-  if (record.trend_flag_id) return lookups.trendFlags.get(record.trend_flag_id) || 'Trend flag record';
+  if (record.trend_flag_id) return lookups.trendFlags.get(record.trend_flag_id) || 'Trend';
   return 'Property';
 }
 
@@ -148,7 +148,7 @@ export default function SharingPage() {
   return (
     <>
       <PageHeader
-        title="Sharing & Access Review"
+        title="Sharing Review"
         description="Preview what different roles could see before real sharing, invitations, or guest access are enabled."
       />
 
@@ -164,7 +164,7 @@ export default function SharingPage() {
             This only previews access. No public link is created. No invitation is sent.
           </p>
           <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
-            Privacy reminder: sensitive entry details, passwords, private file paths, signed file links, invite credentials, and public sharing links are not included.
+            Privacy reminder: sensitive entry details, passwords, private file access, invitation details, and public sharing links are not included.
           </p>
 
           {loading ? <p style={darkSubtleText}>Loading sharing preview...</p> : null}
@@ -323,7 +323,7 @@ function SharingPreviewPanel({ preview }: { preview: SharingPreview }) {
                   `${safeText(repair.title) || 'Repair'} · ${formatEnumLabel(repair.status)} · ${linkedLabel(repair, lookups)}`
                 ),
                 ...preview.data.serviceRecords.slice(0, 4).map((record) =>
-                  `${safeText(record.service_title) || 'Service record'} · ${formatDate(record.service_date)} · ${linkedLabel(record, lookups)}`
+                  `${safeText(record.service_title) || 'Service History'} · ${formatDate(record.service_date)} · ${linkedLabel(record, lookups)}`
                 )
               ]}
             />
@@ -336,7 +336,7 @@ function SharingPreviewPanel({ preview }: { preview: SharingPreview }) {
                   `${safeText(issue.title) || 'Issue'} · ${formatEnumLabel(issue.severity)} · ${formatEnumLabel(issue.status)} · ${linkedLabel(issue, lookups)}`
                 ),
                 ...preview.data.trendFlags.slice(0, 4).map((flag) =>
-                  `${safeText(flag.title) || 'Trend flag'} · ${formatEnumLabel(flag.status)} · ${formatEnumLabel(flag.severity)}`
+                  `${safeText(flag.title) || 'Trend'} · ${formatEnumLabel(flag.status)} · ${formatEnumLabel(flag.severity)}`
                 )
               ]}
             />

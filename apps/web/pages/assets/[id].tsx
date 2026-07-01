@@ -1,8 +1,8 @@
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { ASSET_TYPES, formatEnumLabel } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import {
@@ -27,12 +27,16 @@ import { getReminderDataContext, getRemindersForAsset, type ReminderRow } from '
 import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import { getRepairDataContext, getRepairsForAsset, type RepairRow } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
+import { formatRoomLocation } from '../../lib/roomLabels';
+import { formatVisibilityContextList } from '../../lib/visibility';
 import { getServiceRecordDataContext, getServiceRecordsForAsset, type ServiceRecordRow } from '../../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForAsset, type TrendFlagRow } from '../../lib/trendFlags';
 
 type Room = {
   id: string;
   name: string;
+  room_type?: string | null;
+  floor_name?: string | null;
 };
 
 const fieldStyle = {
@@ -243,7 +247,7 @@ export default function AssetDetailPage() {
         setTrendFlags(nextTrendFlags);
         setRoomName(
           nextAsset?.room_id
-            ? roomList.find((room: Room) => room.id === nextAsset.room_id)?.name || 'Unknown room'
+            ? formatRoomLocation(roomList.find((room: Room) => room.id === nextAsset.room_id) || { name: 'Unknown room' })
             : null
         );
 
@@ -351,7 +355,7 @@ export default function AssetDetailPage() {
         setAsset(updatedAsset);
         setRoomName(
           updatedAsset.room_id
-            ? rooms.find((room) => room.id === updatedAsset.room_id)?.name || 'Unknown room'
+            ? formatRoomLocation(rooms.find((room) => room.id === updatedAsset.room_id) || { name: 'Unknown room' })
             : null
         );
       }
@@ -379,9 +383,7 @@ export default function AssetDetailPage() {
         <PageHeader title="Asset error" />
         <Card>
           <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p>
-          <Link href="/assets">
-            <Button type="button">Back to assets</Button>
-          </Link>
+          <ActionLink href="/assets" variant="secondary">Back to assets</ActionLink>
         </Card>
       </>
     );
@@ -400,9 +402,7 @@ export default function AssetDetailPage() {
               ? 'Saved to your account. If this asset was removed, it will no longer appear.'
               : 'Demo data is stored only in this browser. Add assets from the asset flow to continue.'}
           </p>
-          <Link href="/assets">
-            <Button type="button">Back to assets</Button>
-          </Link>
+          <ActionLink href="/assets" variant="secondary">Back to assets</ActionLink>
         </Card>
       </>
     );
@@ -504,7 +504,7 @@ export default function AssetDetailPage() {
 
             {asset.visibility && (
               <div>
-                <strong>Visibility:</strong> {formatEnumLabel(asset.visibility)}
+                <strong>Appears in:</strong> {formatVisibilityContextList(asset.visibility_contexts)}
               </div>
             )}
           </div>
@@ -566,12 +566,8 @@ export default function AssetDetailPage() {
               <div style={{ color: '#6b7280' }}>Add purchase date or warranty duration to calculate expiration.</div>
             )}
 
-            <Link href="/warranties">
-              <Button type="button">Manage warranties</Button>
-            </Link>
-            <Link href={`/documents?assetId=${asset.id}`}>
-              <Button type="button">Add warranty document</Button>
-            </Link>
+            <ActionLink href="/warranties" variant="secondary">Manage warranties</ActionLink>
+            <ActionLink href={`/documents?assetId=${asset.id}`} variant="secondary">Add warranty document</ActionLink>
           </div>
         </Card>
 
@@ -655,7 +651,7 @@ export default function AssetDetailPage() {
                 <select value={editRoomId} onChange={(event) => setEditRoomId(event.target.value)} style={fieldStyle}>
                   <option value="">Not assigned</option>
                   {rooms.map((room) => (
-                    <option key={room.id} value={room.id}>{room.name}</option>
+                    <option key={room.id} value={room.id}>{formatRoomLocation(room)}</option>
                   ))}
                 </select>
               </label>
@@ -702,7 +698,7 @@ export default function AssetDetailPage() {
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+          <h2 style={{ marginTop: 0 }}>Trends</h2>
           {trendFlags.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No trends currently for this asset.</p>
           ) : (
@@ -738,23 +734,19 @@ export default function AssetDetailPage() {
                       {repair.reported_date || 'No reported date'} • {formatEnumLabel(repair.repair_type)} • {formatEnumLabel(repair.status)}
                     </div>
                     <div style={{ marginTop: 8 }}>
-                      <Link href={`/repairs/${repair.id}`}>
-                        <Button type="button">View repair</Button>
-                      </Link>
+                      <ActionLink href={`/repairs/${repair.id}`} variant="secondary">View repair</ActionLink>
                     </div>
                   </div>
                 ))}
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <Link href="/repairs">
-              <Button type="button">Open repairs</Button>
-            </Link>
+            <ActionLink href="/repairs" variant="secondary">Open repairs</ActionLink>
           </div>
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Service records for this asset</h2>
+          <h2 style={{ marginTop: 0 }}>Service History for this asset</h2>
           {linkedServiceRecords.length === 0 ? (
             <p style={{ color: '#6b7280' }}>No service history linked to this asset.</p>
           ) : (
@@ -778,9 +770,7 @@ export default function AssetDetailPage() {
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <Link href="/repairs">
-              <Button type="button">Open repairs</Button>
-            </Link>
+            <ActionLink href="/repairs" variant="secondary">Open repairs</ActionLink>
           </div>
         </Card>
 
@@ -800,18 +790,14 @@ export default function AssetDetailPage() {
                       {issue.first_seen_date || 'Not set'} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
                     </div>
                     <div style={{ marginTop: 8 }}>
-                      <Link href={`/issues/${issue.id}`}>
-                        <Button type="button">View issue</Button>
-                      </Link>
+                      <ActionLink href={`/issues/${issue.id}`} variant="secondary">View issue</ActionLink>
                     </div>
                   </div>
                 ))}
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <Link href="/issues">
-              <Button type="button">Open issues</Button>
-            </Link>
+            <ActionLink href="/issues" variant="secondary">Open issues</ActionLink>
           </div>
         </Card>
 
@@ -840,17 +826,13 @@ export default function AssetDetailPage() {
             </div>
           )}
           <div style={{ marginTop: 12 }}>
-            <Link href="/reminders">
-              <Button type="button">Open reminders</Button>
-            </Link>
+            <ActionLink href="/reminders" variant="secondary">Open reminders</ActionLink>
           </div>
         </Card>
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Link href="/assets">
-            <Button type="button">Back to assets</Button>
-          </Link>
+          <ActionLink href="/assets" variant="secondary">Back to assets</ActionLink>
 
           <button
             onClick={handleDelete}

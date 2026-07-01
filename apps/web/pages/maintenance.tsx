@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { Button, Card, PageHeader } from '@home-bible/ui';
+import { Card, PageHeader } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { ShortcutLink } from '../components/ShortcutLink';
 
 const maintenanceLinks = [
@@ -34,10 +34,16 @@ const maintenanceLinks = [
     action: 'View service history'
   },
   {
-    title: 'Issues and Trends',
+    title: 'Issues',
     description: 'Watch recurring problems, severity, status, and patterns over time.',
     href: '/issues',
     action: 'Open issues'
+  },
+  {
+    title: 'Trends',
+    description: 'Review patterns that may need attention before they become bigger problems.',
+    href: '/issues',
+    action: 'View trends'
   }
 ];
 
@@ -82,9 +88,9 @@ export default function MaintenanceHubPage() {
             <Card key={`${link.title}-${link.href}`}>
               <h2 style={{ marginTop: 0 }}>{link.title}</h2>
               <p style={{ color: 'var(--text-muted)' }}>{link.description}</p>
-              <Link href={link.href}>
-                <Button type="button">{link.action}</Button>
-              </Link>
+              <ActionLink href={link.href} variant={link.title === 'Reminders' ? 'primary' : 'secondary'}>
+                {link.action}
+              </ActionLink>
             </Card>
           ))}
         </div>

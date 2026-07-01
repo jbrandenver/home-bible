@@ -1,20 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { ASSET_TYPES, formatEnumLabel, VISIBILITY_OPTIONS } from '@home-bible/shared';
+import { ASSET_TYPES, formatEnumLabel, type VisibilityContext } from '@home-bible/shared';
 import { PageHeader, Card, Button } from '@home-bible/ui';
+import { VisibilityContextPicker } from '../components/VisibilityContextPicker';
 import {
   createAssetForContext,
   getAssetDataContext,
   type AssetDataContext,
   type AssetDataMode
 } from '../lib/assets';
-import { getSupabaseSetupMessage } from '../lib/auth';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation } from '../lib/roomLabels';
 
 type Room = {
   id: string;
   name: string;
+  room_type?: string | null;
+  floor_name?: string | null;
 };
 
 type AssetFormData = {
@@ -32,7 +35,7 @@ type AssetFormData = {
   support_url: string;
   notes: string;
   room_id: string;
-  visibility: (typeof VISIBILITY_OPTIONS)[number];
+  visibility_contexts: VisibilityContext[];
 };
 
 export default function AddAssetPage() {
@@ -59,7 +62,7 @@ export default function AddAssetPage() {
     support_url: '',
     notes: '',
     room_id: '',
-    visibility: 'private'
+    visibility_contexts: ['personal_archive']
   });
 
   useEffect(() => {
@@ -82,7 +85,7 @@ export default function AddAssetPage() {
 
         setContext(nextContext);
         setDataMode(nextContext.mode);
-        setRooms(roomList.map((room) => ({ id: room.id, name: room.name })));
+        setRooms(roomList);
       } catch (loadError) {
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load rooms.');
@@ -117,7 +120,7 @@ export default function AddAssetPage() {
     }
 
     if (!context) {
-      setError('Asset storage is still loading. Please try again.');
+      setError('Asset details are still loading. Please try again.');
       setLoading(false);
       return;
     }
@@ -138,7 +141,7 @@ export default function AddAssetPage() {
         support_url: form.support_url || null,
         notes: form.notes || null,
         room_id: form.room_id || null,
-        visibility: form.visibility
+        visibility_contexts: form.visibility_contexts
       });
 
       router.push('/assets');
@@ -162,7 +165,7 @@ export default function AddAssetPage() {
 
   return (
     <>
-      <PageHeader title="Add Asset" description="Add an appliance, tool, device, or other item worth keeping track of." />
+      <PageHeader title="Add asset" description="Add an appliance, tool, device, or other item worth keeping track of." />
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
@@ -173,12 +176,12 @@ export default function AddAssetPage() {
           </p>
           {dataMode === 'demo' && !context?.supabaseConfigured ? (
             <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
-              {getSupabaseSetupMessage()}
+              Account saving is not available in this local build. Demo data stays only in this browser.
             </p>
           ) : null}
           {dataMode === 'supabase' && context && !context.property ? (
             <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
-              Create a property before adding assets to Supabase.
+              Create a property before adding assets to your account.
             </p>
           ) : null}
         </Card>
@@ -203,11 +206,11 @@ export default function AddAssetPage() {
           <div style={{ display: 'grid', gap: 16 }}>
             {/* Basic Info Section */}
             <div>
-              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Basic Information</h3>
+              <h3 style={{ marginTop: 0, marginBottom: 12 }}>Basic details</h3>
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Asset Type</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Asset type</label>
                   <select
                     value={form.asset_type}
                     onChange={(e) => handleInputChange('asset_type', e.target.value as (typeof ASSET_TYPES)[number])}
@@ -222,7 +225,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Asset Name *</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Asset name *</label>
                   <input
                     type="text"
                     value={form.name}
@@ -234,7 +237,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Room (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Room (optional)</label>
                   <select
                     value={form.room_id}
                     onChange={(e) => handleInputChange('room_id', e.target.value)}
@@ -244,7 +247,7 @@ export default function AddAssetPage() {
                     <option value="">{roomsLoading ? 'Loading rooms...' : 'No room selected'}</option>
                     {rooms.map((room) => (
                       <option key={room.id} value={room.id}>
-                        {room.name}
+                        {formatRoomLocation(room)}
                       </option>
                     ))}
                   </select>
@@ -254,11 +257,11 @@ export default function AddAssetPage() {
 
             {/* Details Section */}
             <div>
-              <h3 style={{ marginBottom: 12 }}>Product Details</h3>
+              <h3 style={{ marginBottom: 12 }}>Product details</h3>
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Brand (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Brand (optional)</label>
                   <input
                     type="text"
                     value={form.brand}
@@ -269,7 +272,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Model (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Model (optional)</label>
                   <input
                     type="text"
                     value={form.model}
@@ -280,7 +283,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Serial Number (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Serial number (optional)</label>
                   <input
                     type="text"
                     value={form.serial_number}
@@ -294,11 +297,11 @@ export default function AddAssetPage() {
 
             {/* Purchase Info Section */}
             <div>
-              <h3 style={{ marginBottom: 12 }}>Purchase Information</h3>
+              <h3 style={{ marginBottom: 12 }}>Purchase details</h3>
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Purchase Date (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Purchase date (optional)</label>
                   <input
                     type="date"
                     value={form.purchase_date}
@@ -308,7 +311,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Purchase Price (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Purchase price (optional)</label>
                   <input
                     type="number"
                     value={form.purchase_price}
@@ -320,7 +323,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Retailer (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Retailer (optional)</label>
                   <input
                     type="text"
                     value={form.retailer}
@@ -334,11 +337,11 @@ export default function AddAssetPage() {
 
             {/* Warranty Section */}
             <div>
-              <h3 style={{ marginBottom: 12 }}>Warranty Information</h3>
+              <h3 style={{ marginBottom: 12 }}>Warranty details</h3>
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Warranty Length (months, optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Warranty length (months, optional)</label>
                   <input
                     type="number"
                     value={form.warranty_length_months}
@@ -349,7 +352,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Warranty Expires At (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Warranty expires (optional)</label>
                   <input
                     type="date"
                     value={form.warranty_expires_at}
@@ -366,7 +369,7 @@ export default function AddAssetPage() {
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Manual URL (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Manual URL (optional)</label>
                   <input
                     type="url"
                     value={form.manual_url}
@@ -377,7 +380,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Support URL (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Support URL (optional)</label>
                   <input
                     type="url"
                     value={form.support_url}
@@ -391,26 +394,20 @@ export default function AddAssetPage() {
 
             {/* Additional Info Section */}
             <div>
-              <h3 style={{ marginBottom: 12 }}>Additional Information</h3>
+              <h3 style={{ marginBottom: 12 }}>Additional details</h3>
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Visibility</label>
-                  <select
-                    value={form.visibility}
-                    onChange={(e) => handleInputChange('visibility', e.target.value as (typeof VISIBILITY_OPTIONS)[number])}
-                    style={inputStyles.input as React.CSSProperties}
-                  >
-                    {VISIBILITY_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {formatEnumLabel(opt)}
-                      </option>
-                    ))}
-                  </select>
+                  <VisibilityContextPicker
+                    idPrefix="asset-visibility-contexts"
+                    value={form.visibility_contexts}
+                    onChange={(value) => setForm((prev) => ({ ...prev, visibility_contexts: value }))}
+                    disabled={loading}
+                  />
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Notes (Optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}>Notes (optional)</label>
                   <textarea
                     value={form.notes}
                     onChange={(e) => handleInputChange('notes', e.target.value)}
@@ -432,7 +429,7 @@ export default function AddAssetPage() {
             {/* Form Actions */}
             <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
               <Button type="submit" disabled={loading || roomsLoading}>
-                {loading ? 'Saving...' : 'Save Asset'}
+                {loading ? 'Saving...' : 'Save asset'}
               </Button>
 
               <button

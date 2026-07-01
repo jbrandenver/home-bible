@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
   formatEnumLabel,
   REMINDER_FREQUENCIES,
@@ -9,6 +8,7 @@ import {
   REMINDER_TYPES
 } from '@home-bible/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import {
@@ -27,11 +27,12 @@ import {
   type ReminderType
 } from '../lib/reminders';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation } from '../lib/roomLabels';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 
 type LinkTypeOption = '' | ReminderLinkedType;
 type PropertyOption = { id: string; nickname: string };
-type RoomOption = { id: string; name: string };
+type RoomOption = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
 function formatDateLabel(value: string | null) {
   return value || 'No due date';
@@ -136,7 +137,7 @@ export default function RemindersPage() {
     }
 
     if (linkedType === 'room') {
-      return rooms.map((room) => ({ id: room.id, label: room.name }));
+      return rooms.map((room) => ({ id: room.id, label: formatRoomLocation(room) }));
     }
 
     if (linkedType === 'utility') {
@@ -208,7 +209,8 @@ export default function RemindersPage() {
     }
 
     if (reminder.linked_type === 'room') {
-      return rooms.find((room) => room.id === reminder.linked_id)?.name || 'Room';
+      const room = rooms.find((currentRoom) => currentRoom.id === reminder.linked_id);
+      return room ? formatRoomLocation(room) : 'Room';
     }
 
     if (reminder.linked_type === 'utility') {
@@ -223,7 +225,7 @@ export default function RemindersPage() {
     setError('');
 
     if (!context) {
-      setError('Reminder storage is still loading. Please try again.');
+      setError('Reminder details are still loading. Please try again.');
       return;
     }
 
@@ -335,9 +337,7 @@ export default function RemindersPage() {
         {dataMode === 'supabase' && !context?.property ? (
           <div>
             <p style={{ color: '#6b7280' }}>Create a property before adding reminders.</p>
-            <Link href="/create-property">
-              <Button type="button">Create property</Button>
-            </Link>
+            <ActionLink href="/create-property">Create property</ActionLink>
           </div>
         ) : (
           <form onSubmit={addReminder} style={{ display: 'grid', gap: 12 }}>
@@ -648,9 +648,7 @@ export default function RemindersPage() {
       )}
 
       <div style={{ marginTop: 16 }}>
-        <Link href="/dashboard">
-          <Button type="button">Back to dashboard</Button>
-        </Link>
+        <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
       </div>
     </>
   );

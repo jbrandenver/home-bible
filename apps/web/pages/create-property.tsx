@@ -6,7 +6,7 @@ import {
 } from '@home-bible/shared';
 import { PageHeader, Card, Input, Select, Button } from '@home-bible/ui';
 import { createPropertyForUser } from '../lib/properties';
-import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from '../lib/auth';
+import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
 import { setDemoActiveProperty } from '../lib/demoStorage';
 
 export default function CreatePropertyPage() {
@@ -61,7 +61,7 @@ export default function CreatePropertyPage() {
         return;
       } catch (submitError) {
         setError(
-          submitError instanceof Error ? submitError.message : 'Failed to save property to Supabase.'
+          submitError instanceof Error ? submitError.message : 'Failed to save property to your account.'
         );
         setLoading(false);
         return;
@@ -100,7 +100,7 @@ export default function CreatePropertyPage() {
 
           {!supabaseReady ? (
             <p style={{ marginTop: 0, color: '#9a3412', background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, padding: 10 }}>
-              {getSupabaseSetupMessage()}
+              Account saving is not available in this local build. Demo data stays only in this browser.
             </p>
           ) : null}
 

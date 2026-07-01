@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { Button, Card, PageHeader } from '@home-bible/ui';
+import { Card, PageHeader } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { ShortcutLink } from '../components/ShortcutLink';
 
 const homeLinks = [
@@ -71,9 +71,9 @@ export default function HomeHubPage() {
             <Card key={link.href}>
               <h2 style={{ marginTop: 0 }}>{link.title}</h2>
               <p style={{ color: 'var(--text-muted)' }}>{link.description}</p>
-              <Link href={link.href}>
-                <Button type="button">{link.action}</Button>
-              </Link>
+              <ActionLink href={link.href} variant={link.href === '/home-map' ? 'primary' : 'secondary'}>
+                {link.action}
+              </ActionLink>
             </Card>
           ))}
         </div>

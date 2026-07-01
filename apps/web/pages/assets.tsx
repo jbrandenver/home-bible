@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { ASSET_TYPES, formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
+import { PageHeader, Card, EmptyState, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import {
   deleteAssetForContext,
   getAssetDataContext,
@@ -12,10 +12,13 @@ import {
 } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation } from '../lib/roomLabels';
 
 type Room = {
   id: string;
   name: string;
+  room_type?: string | null;
+  floor_name?: string | null;
 };
 
 export default function AssetsPage() {
@@ -55,7 +58,7 @@ export default function AssetsPage() {
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setAssets(nextAssets);
-        setRooms(new Map(roomList.map((room: Room) => [room.id, room.name])));
+        setRooms(new Map(roomList.map((room: Room) => [room.id, formatRoomLocation(room)])));
       } catch (loadError) {
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load assets.');
@@ -165,9 +168,7 @@ export default function AssetsPage() {
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ margin: 0 }}>All Assets ({filteredAssets.length})</h2>
-            <Link href="/add-asset">
-              <Button type="button">Add asset</Button>
-            </Link>
+            <ActionLink href="/add-asset">Add asset</ActionLink>
           </div>
 
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 16 }}>
@@ -214,15 +215,21 @@ export default function AssetsPage() {
           ) : error ? (
             <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>{error}</p>
           ) : dataMode === 'supabase' && context && !context.property ? (
-            <EmptyState
-              title="No property found"
-              description="Create a property before adding assets."
-            />
+            <div>
+              <EmptyState
+                title="Start your home record."
+                description="Create a property before adding assets."
+              />
+              <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
+            </div>
           ) : assets.length === 0 ? (
-            <EmptyState
-              title="No assets yet"
-              description="Start tracking appliances, smart devices, tools, and other home items."
-            />
+            <div>
+              <EmptyState
+                title="No assets yet"
+                description="Add the appliances, tools, and systems that belong to this home."
+              />
+              <ActionLink href="/add-asset" variant="secondary">Add asset</ActionLink>
+            </div>
           ) : filteredAssets.length === 0 ? (
             <EmptyState
               title="No assets match"
@@ -294,9 +301,7 @@ export default function AssetsPage() {
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <Link href={`/assets/${asset.id}`}>
-                        <Button type="button">View</Button>
-                      </Link>
+                      <ActionLink href={`/assets/${asset.id}`} variant="secondary">View</ActionLink>
                       <button
                         onClick={() => handleDelete(asset.id)}
                         disabled={deletingId === asset.id}
@@ -322,9 +327,7 @@ export default function AssetsPage() {
           )}
         </Card>
         <div>
-          <Link href="/dashboard">
-            <Button type="button">Back to dashboard</Button>
-          </Link>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
     </>

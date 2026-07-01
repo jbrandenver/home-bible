@@ -1,6 +1,7 @@
-import { PageHeader, Card, FloorSection, RoomCard, Button } from '@home-bible/ui';
+import { PageHeader, Card, FloorSection, RoomCard } from '@home-bible/ui';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { ActionLink } from '../../../components/ActionLink';
 
 export default function HomeMap() {
   const { query } = useRouter();
@@ -33,9 +34,7 @@ export default function HomeMap() {
           <p>No floors or rooms yet. Add them from the dashboard.</p>
         )}
         <div className="mt-4 pt-4 border-t border-gray-200">
-          <Link href={propertyHref}>
-            <Button>Back to Dashboard</Button>
-          </Link>
+          <ActionLink href={propertyHref} variant="secondary">Back to dashboard</ActionLink>
         </div>
       </Card>
     </>

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Button, FloorSection, RoomCard, UtilityBadge } from '@home-bible/ui';
+import { PageHeader, Card, FloorSection, RoomCard, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
@@ -10,6 +10,7 @@ import { getReminderDataContext, getRemindersForContext, type ReminderRow } from
 import { getReceiptDataContext, getReceiptsForContext, type ReceiptRow } from '../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomTypeLabel } from '../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
@@ -320,7 +321,7 @@ export default function HomeMapPage() {
   return (
     <>
       <PageHeader
-        title={`${propertyNickname} home map`}
+        title="Home Map"
         description="A simple room-based map of your home. This is the foundation for utilities, appliances, accessories, tools, receipts, warranties, and repairs."
         />
 
@@ -394,21 +395,17 @@ export default function HomeMapPage() {
 
           {!hasProperty ? (
             <Card>
-              <h2 style={{ marginTop: 0 }}>No property yet</h2>
-              <p style={{ color: '#6b7280' }}>Create a property first to build your home map.</p>
-              <Link href="/create-property">
-                <Button type="button">Create property</Button>
-              </Link>
+              <h2 style={{ marginTop: 0 }}>Start your home record.</h2>
+              <p style={{ color: '#6b7280' }}>Create the property first. Your rooms, utilities, assets, and files will save to that home.</p>
+              <ActionLink href="/create-property">Create property</ActionLink>
             </Card>
           ) : rooms.length === 0 ? (
             <Card>
-              <h2 style={{ marginTop: 0 }}>No rooms yet</h2>
+              <h2 style={{ marginTop: 0 }}>No rooms yet - let's map the house.</h2>
               <p style={{ color: '#6b7280' }}>
-                Add rooms first so Home Bible can build your home map.
+                Add rooms first so Home & Everything can build your home map.
               </p>
-              <Link href="/add-rooms">
-                <Button type="button">Add rooms</Button>
-              </Link>
+              <ActionLink href="/add-rooms">Add rooms</ActionLink>
             </Card>
           ) : (
             floorNames.map((floorName) => (
@@ -421,7 +418,7 @@ export default function HomeMapPage() {
                   >
                     <RoomCard
                       name={room.name}
-                      type={`${formatEnumLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'} • ${repairCountsByRoom[room.id] || 0} repair${repairCountsByRoom[room.id] === 1 ? '' : 's'} • ${serviceRecordCountsByRoom[room.id] || 0} service${serviceRecordCountsByRoom[room.id] === 1 ? '' : 's'} • ${documentCountsByRoom[room.id] || 0} doc${documentCountsByRoom[room.id] === 1 ? '' : 's'} • ${receiptCountsByRoom[room.id] || 0} receipt${receiptCountsByRoom[room.id] === 1 ? '' : 's'} • ${reminderCountsByRoom[room.id] || 0} reminder${reminderCountsByRoom[room.id] === 1 ? '' : 's'} • ${issueCountsByRoom[room.id] || 0} issue${issueCountsByRoom[room.id] === 1 ? '' : 's'} • ${trendFlagCountsByRoom[room.id] || 0} trend${trendFlagCountsByRoom[room.id] === 1 ? '' : 's'}`}
+                      type={`${formatRoomTypeLabel(room.room_type)} • ${assetCountsByRoom[room.id] || 0} asset${assetCountsByRoom[room.id] === 1 ? '' : 's'} • ${repairCountsByRoom[room.id] || 0} repair${repairCountsByRoom[room.id] === 1 ? '' : 's'} • ${serviceRecordCountsByRoom[room.id] || 0} service${serviceRecordCountsByRoom[room.id] === 1 ? '' : 's'} • ${documentCountsByRoom[room.id] || 0} doc${documentCountsByRoom[room.id] === 1 ? '' : 's'} • ${receiptCountsByRoom[room.id] || 0} receipt${receiptCountsByRoom[room.id] === 1 ? '' : 's'} • ${reminderCountsByRoom[room.id] || 0} reminder${reminderCountsByRoom[room.id] === 1 ? '' : 's'} • ${issueCountsByRoom[room.id] || 0} issue${issueCountsByRoom[room.id] === 1 ? '' : 's'} • ${trendFlagCountsByRoom[room.id] || 0} trend${trendFlagCountsByRoom[room.id] === 1 ? '' : 's'}`}
                     />
                   </Link>
                 ))}
@@ -430,12 +427,8 @@ export default function HomeMapPage() {
           )}
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Link href="/dashboard">
-              <Button type="button">Back to dashboard</Button>
-            </Link>
-            <Link href="/add-rooms">
-              <Button type="button">Add more rooms</Button>
-            </Link>
+            <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+            <ActionLink href="/add-rooms">Add more rooms</ActionLink>
           </div>
         </div>
       </>

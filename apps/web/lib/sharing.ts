@@ -111,16 +111,16 @@ const ROLE_PROFILES: Record<SharingRole, RoleProfile> = {
     reportSections: BROAD_SAFE_SECTIONS,
     visibleSections: [
       'All safe property data',
-      'Rooms, utilities, assets, warranties, reminders, repairs, issues, and trend flags',
-      'Document and receipt metadata',
+      'Rooms, utilities, assets, warranties, reminders, repairs, issues, and trends',
+      'File and receipt details',
       'Home Handover report printing'
     ],
     hiddenSections: ['Forbidden sensitive fields because they are not stored', 'Public file links because they do not exist'],
-    canSee: ['Broad safe home records', 'Private metadata summaries', 'Receipt amounts in owner context'],
+    canSee: ['Broad safe home records', 'Private file summaries', 'Receipt amounts in owner context'],
     cannotSee: ['Sensitive entry details, passwords, or public file links'],
-    fileBehavior: 'Documents appear as metadata summaries only in this preview. No signed URLs are embedded.',
-    receiptBehavior: 'Approved receipt metadata may be shown, including amounts.',
-    financialDetailsBehavior: 'Safe financial metadata can be visible to the owner.',
+    fileBehavior: 'Documents appear as file details only in this preview. No public link is created.',
+    receiptBehavior: 'Approved receipt details may be shown, including amounts.',
+    financialDetailsBehavior: 'Safe financial details can be visible to the owner.',
     editBehavior: 'Owner can edit records under existing app permissions.',
     deleteBehavior: 'Owner can delete or soft-delete records where existing app permissions allow.',
     warning: null,
@@ -132,15 +132,15 @@ const ROLE_PROFILES: Record<SharingRole, RoleProfile> = {
     reportSections: BROAD_SAFE_SECTIONS,
     visibleSections: [
       'Broad safe property data',
-      'Rooms, utilities, assets, warranties, reminders, repairs, issues, and trend flags',
-      'Document and receipt metadata'
+      'Rooms, utilities, assets, warranties, reminders, repairs, issues, and trends',
+      'File and receipt details'
     ],
     hiddenSections: ['Forbidden sensitive fields', 'Public file links', 'Future owner-only controls not implemented here'],
-    canSee: ['Broad safe home records', 'Private metadata summaries', 'Receipt amounts in co-owner context'],
+    canSee: ['Broad safe home records', 'Private file summaries', 'Receipt amounts in co-owner context'],
     cannotSee: ['Sensitive entry details, passwords, or public file links'],
-    fileBehavior: 'Documents appear as metadata summaries only in this preview. No signed URLs are embedded.',
-    receiptBehavior: 'Approved receipt metadata may be shown, including amounts.',
-    financialDetailsBehavior: 'Safe financial metadata can be visible to co-owners.',
+    fileBehavior: 'Documents appear as file details only in this preview. No public link is created.',
+    receiptBehavior: 'Approved receipt details may be shown, including amounts.',
+    financialDetailsBehavior: 'Safe financial details can be visible to co-owners.',
     editBehavior: 'Co-owner can edit records under existing app permissions.',
     deleteBehavior: 'Co-owner can delete or soft-delete records where existing app permissions allow.',
     warning: 'Future member-management rules may distinguish owner and co-owner behavior.',
@@ -153,14 +153,14 @@ const ROLE_PROFILES: Record<SharingRole, RoleProfile> = {
     visibleSections: [
       'Broad safe property data',
       'Editable home records under existing RLS',
-      'Document and receipt metadata'
+      'File and receipt details'
     ],
     hiddenSections: ['Billing or ownership controls', 'Share links because they do not exist', 'Forbidden sensitive fields'],
-    canSee: ['Broad safe home records', 'Private metadata summaries', 'Receipt amounts in editor context'],
+    canSee: ['Broad safe home records', 'Private file summaries', 'Receipt amounts in editor context'],
     cannotSee: ['Billing controls', 'Ownership transfer controls', 'Share-link management'],
-    fileBehavior: 'Documents appear as metadata summaries only in this preview. No signed URLs are embedded.',
-    receiptBehavior: 'Approved receipt metadata may be shown, including amounts.',
-    financialDetailsBehavior: 'Safe financial metadata can be visible to editors.',
+    fileBehavior: 'Documents appear as file details only in this preview. No public link is created.',
+    receiptBehavior: 'Approved receipt details may be shown, including amounts.',
+    financialDetailsBehavior: 'Safe financial details can be visible to editors.',
     editBehavior: 'Editor can create and edit home records under existing app permissions.',
     deleteBehavior: 'Editor can delete or soft-delete records where existing app permissions allow.',
     warning: null,
@@ -172,14 +172,14 @@ const ROLE_PROFILES: Record<SharingRole, RoleProfile> = {
     reportSections: BROAD_SAFE_SECTIONS,
     visibleSections: [
       'Read-only safe property data',
-      'Rooms, utilities, assets, warranties, repairs, issues, and metadata summaries'
+      'Rooms, utilities, assets, warranties, repairs, issues, and file details'
     ],
     hiddenSections: ['Create, edit, upload, delete, or sharing controls', 'Forbidden sensitive fields'],
-    canSee: ['Safe read-only home records', 'Document metadata summaries', 'Approved receipt metadata'],
+    canSee: ['Safe read-only home records', 'File details', 'Approved receipt details'],
     cannotSee: ['Edit controls', 'Upload controls', 'Delete controls', 'Share-link controls'],
-    fileBehavior: 'Documents appear as metadata summaries only in this preview. Viewing private files would remain governed by future role-specific rules.',
-    receiptBehavior: 'Approved receipt metadata can be visible as read-only data.',
-    financialDetailsBehavior: 'Financial metadata is shown here as broad read-only data; future sharing can make this more granular.',
+    fileBehavior: 'Documents appear as file details only in this preview. Viewing private files would remain governed by future role-specific rules.',
+    receiptBehavior: 'Approved receipt details can be visible as read-only data.',
+    financialDetailsBehavior: 'Financial details are shown here as broad read-only data; future sharing can make this more granular.',
     editBehavior: 'Viewer is read-only.',
     deleteBehavior: 'Viewer cannot delete records.',
     warning: null,
@@ -192,7 +192,7 @@ const ROLE_PROFILES: Record<SharingRole, RoleProfile> = {
     visibleSections: [
       'Limited maintenance-relevant summaries',
       'Key utilities and shutoffs',
-      'Relevant assets, reminders, repairs, service records, and issues'
+      'Relevant assets, reminders, repairs, service history, and issues'
     ],
     hiddenSections: [
       'Whole-home room archive',
@@ -202,7 +202,7 @@ const ROLE_PROFILES: Record<SharingRole, RoleProfile> = {
       'Buyer or family handover archive'
     ],
     canSee: ['Conservative maintenance summaries', 'Critical utility names and safe location notes', 'Open repair and service context'],
-    cannotSee: ['Whole-home access', 'Financial receipt amounts', 'Private notes', 'Documents by default', 'Public or signed file links'],
+    cannotSee: ['Whole-home access', 'Financial receipt amounts', 'Private notes', 'Documents by default', 'Public file links'],
     fileBehavior: 'Documents are hidden by default for maintenance guests.',
     receiptBehavior: 'Receipts are hidden by default for maintenance guests.',
     financialDetailsBehavior: 'Financial details are hidden.',
@@ -217,13 +217,13 @@ const ROLE_PROFILES: Record<SharingRole, RoleProfile> = {
     reportSections: BUYER_SECTIONS,
     visibleSections: [
       'Safe buyer handover summary',
-      'Rooms, utilities, assets, warranties, repairs, service history, issues, and document metadata'
+      'Rooms, utilities, assets, warranties, repairs, service history, issues, and file details'
     ],
-    hiddenSections: ['Private notes', 'Receipt financial details by default', 'Signed file links', 'Public share links'],
-    canSee: ['Buyer-oriented safe summaries', 'Document metadata only', 'Issue status and severity without private notes'],
-    cannotSee: ['Private notes', 'Receipt amounts by default', 'Signed file links', 'Share links'],
-    fileBehavior: 'Documents appear as metadata summaries only. No signed URLs are embedded.',
-    receiptBehavior: 'Receipt metadata is hidden by default in buyer preview unless a future handover setting explicitly includes it.',
+    hiddenSections: ['Private notes', 'Receipt financial details by default', 'Private file access', 'Public share links'],
+    canSee: ['Buyer-oriented safe summaries', 'File details only', 'Issue status and severity without private notes'],
+    cannotSee: ['Private notes', 'Receipt amounts by default', 'Private file access', 'Share links'],
+    fileBehavior: 'Documents appear as file details only. No public link is created.',
+    receiptBehavior: 'Receipt details are hidden by default in buyer preview unless a future handover setting explicitly includes them.',
     financialDetailsBehavior: 'Financial details are hidden by default.',
     editBehavior: 'Buyer preview is read-only.',
     deleteBehavior: 'Buyer preview cannot delete records.',
@@ -239,13 +239,13 @@ const ROLE_PROFILES: Record<SharingRole, RoleProfile> = {
       'Assets and warranty summaries',
       'Receipts summary',
       'Documents summary',
-      'Repairs and service records'
+      'Repairs and service history'
     ],
-    hiddenSections: ['Public links', 'Signed file links', 'Guest access controls', 'Forbidden sensitive fields'],
-    canSee: ['Insurance-relevant metadata summaries', 'Asset inventory', 'Approved receipt metadata', 'Document metadata'],
-    cannotSee: ['Public file links', 'Signed file links', 'Invite credentials', 'Sensitive access details'],
-    fileBehavior: 'Documents appear as metadata summaries only. No signed URLs are embedded.',
-    receiptBehavior: 'Approved receipt metadata can be visible for insurance review.',
+    hiddenSections: ['Public links', 'Private file access', 'Guest access controls', 'Forbidden sensitive fields'],
+    canSee: ['Insurance-relevant summaries', 'Asset inventory', 'Approved receipt details', 'File details'],
+    cannotSee: ['Public file links', 'Private file access', 'Invite credentials', 'Sensitive access details'],
+    fileBehavior: 'Documents appear as file details only. No public link is created.',
+    receiptBehavior: 'Approved receipt details can be visible for insurance review.',
     financialDetailsBehavior: 'Receipt amounts may be visible for insurance context.',
     editBehavior: 'Insurance view is read-only in this planning phase.',
     deleteBehavior: 'Insurance view cannot delete records.',
@@ -270,7 +270,7 @@ function roleSummary(role: SharingRole) {
     case 'buyer_preview':
       return 'Buyer-safe report preview concept. This is not a share link or guest account.';
     case 'insurance_view':
-      return 'Insurance-oriented metadata preview concept. This is not a share link or guest account.';
+      return 'Insurance-oriented file detail preview concept. This is not a share link or guest account.';
   }
 }
 

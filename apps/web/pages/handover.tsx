@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { formatEnumLabel } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import {
   getDefaultHandoverSections,
   getHandoverContext,
@@ -320,16 +320,18 @@ export default function HandoverPage() {
             This report is generated locally in your browser from existing saved data. No public link, email, background job, or stored report file is created.
           </p>
           <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
-            Privacy reminder: reports omit sensitive entry details, passwords, private file links, storage paths, and signed file URLs.
+            Privacy reminder: reports omit sensitive entry details, passwords, private file links, and file access details.
           </p>
           <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
-            Before future sharing is enabled, review who should see each report type in Sharing & Access Review.
+            Before future sharing is enabled, review who should see each report type in Sharing Review.
           </p>
-          <Link href="/sharing">
-            <Button type="button" variant="secondary" style={{ color: 'var(--text-inverse)', borderColor: 'rgba(236,226,207,0.42)', marginBottom: 16 }}>
-              Review sharing access
-            </Button>
-          </Link>
+          <ActionLink
+            href="/sharing"
+            variant="secondary"
+            style={{ color: 'var(--text-inverse)', borderColor: 'rgba(236,226,207,0.42)', marginBottom: 16 }}
+          >
+            Open sharing review
+          </ActionLink>
 
           {loadingContext ? <p style={darkSubtleText}>Loading report options...</p> : null}
           {error ? <p style={darkErrorText}>{error}</p> : null}
@@ -485,7 +487,7 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
     <article className="handover-report" style={{ ...reportSurfaceStyle, marginTop: 24 }}>
       <header style={{ borderBottom: '2px solid var(--color-espresso)', paddingBottom: 18, marginBottom: 20 }}>
         <div style={{ color: 'var(--color-brass-deep)', fontWeight: 800, letterSpacing: 0, textTransform: 'uppercase', fontSize: 12 }}>
-          Home Bible handover report
+          Home & Everything handover report
         </div>
         <h1 style={{ margin: '6px 0', fontSize: 34, lineHeight: 1.1 }}>
           {safeText(data.context.property?.nickname) || 'Home'} · {HANDOVER_REPORT_TYPE_LABELS[data.reportType]}
@@ -496,7 +498,7 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
       <SummaryGrid>
         <SummaryTile label="Report type" value={HANDOVER_REPORT_TYPE_LABELS[data.reportType]} />
         <SummaryTile label="Property" value={safeText(data.context.property?.nickname) || 'Property'} />
-        <SummaryTile label="Mode" value={data.context.mode === 'supabase' ? 'Signed-in Supabase' : 'Demo'} />
+        <SummaryTile label="Saved" value={data.context.mode === 'supabase' ? 'Saved to your account.' : 'Demo data is stored only in this browser.'} />
         <SummaryTile label="Included sections" value={data.sections.length} />
       </SummaryGrid>
 
@@ -703,14 +705,14 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
       ) : null}
 
       {selectedSections.has('service_records') ? (
-        <SectionShell title="Service records">
+        <SectionShell title="Service History">
           {data.serviceRecords.length === 0 ? (
-            <EmptySection label="Service records" />
+            <EmptySection label="Service History" />
           ) : (
             <ItemList>
               {data.serviceRecords.map((record) => (
                 <li key={record.id}>
-                  <strong>{safeText(record.service_title) || 'Service record'}</strong> · {formatEnumLabel(record.service_type)}
+                  <strong>{safeText(record.service_title) || 'Service History'}</strong> · {formatEnumLabel(record.service_type)}
                   <DetailLine value={`Date: ${formatDate(record.service_date)}`} />
                   <DetailLine value={safeText(record.provider_name) ? `Provider: ${safeText(record.provider_name)}` : null} />
                   <DetailLine value={linkedLabel(record, lookups)} />
@@ -743,14 +745,14 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
       ) : null}
 
       {selectedSections.has('trend_flags') ? (
-        <SectionShell title="Trend flags">
+        <SectionShell title="Trends">
           {data.trendFlags.length === 0 ? (
-            <EmptySection label="Trend flags" />
+            <EmptySection label="Trends" />
           ) : (
             <ItemList>
               {data.trendFlags.map((flag) => (
                 <li key={flag.id}>
-                  <strong>{safeText(flag.title) || 'Trend flag'}</strong> · {formatEnumLabel(flag.flag_type)} · {formatEnumLabel(flag.status)} · {formatEnumLabel(flag.severity)}
+                  <strong>{safeText(flag.title) || 'Trend'}</strong> · {formatEnumLabel(flag.flag_type)} · {formatEnumLabel(flag.status)} · {formatEnumLabel(flag.severity)}
                   <DetailLine value={`First detected: ${formatDate(flag.first_detected_at)}`} />
                   <DetailLine value={linkedLabel(flag, lookups)} />
                   <DetailLine value={safeText(flag.description)} />

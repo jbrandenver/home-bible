@@ -58,4 +58,12 @@ export const MEMBER_ROLES = [
   'maintenance_guest'
 ] as const;
 
+export const VISIBILITY_CONTEXTS = [
+  'family',
+  'buyer',
+  'maintenance',
+  'insurance',
+  'personal_archive'
+] as const;
+
 export const PLAN_NAMES = ['free', 'pro', 'team'] as const;

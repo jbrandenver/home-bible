@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { PageHeader, Card, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
@@ -10,6 +11,7 @@ import { getReminderDataContext, getRemindersForContext, type ReminderRow } from
 import { formatReceiptAmount, getReceiptDataContext, getReceiptsForContext, type ReceiptRow } from '../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getFloorsForProperty, getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation, formatRoomTypeLabel, getRoomSpaceSummary } from '../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
@@ -254,6 +256,7 @@ export default function DashboardPage() {
   }, []);
 
   const floors = floorCount || Array.from(new Set(rooms.map((room) => room.floor_name))).length;
+  const roomSpaceSummary = useMemo(() => getRoomSpaceSummary(rooms), [rooms]);
 
   const topAssetCategories = useMemo(() => {
     const counts = assets.reduce<Record<string, number>>((acc, asset) => {
@@ -374,19 +377,91 @@ export default function DashboardPage() {
     [repairs]
   );
 
+  const nextStep = useMemo(() => {
+    if (!hasProperty) {
+      return {
+        title: 'Start your home record.',
+        description: 'Create the property first. Then map rooms, utilities, assets, maintenance records, and files.',
+        href: '/create-property',
+        action: 'Create property'
+      };
+    }
+
+    if (rooms.length === 0) {
+      return {
+        title: 'No rooms yet — let’s map the house.',
+        description: 'Rooms and spaces are the foundation for utilities, assets, receipts, warranties, repairs, and documents.',
+        href: '/add-rooms',
+        action: 'Add rooms & spaces'
+      };
+    }
+
+    if (utilities.length === 0) {
+      return {
+        title: 'Add the shut-offs and systems you’ll want to find fast.',
+        description: 'Start with water, electrical, gas, HVAC, router, and safety devices.',
+        href: '/utilities',
+        action: 'Add utility'
+      };
+    }
+
+    if (assets.length === 0) {
+      return {
+        title: 'Add the appliances, tools, and systems that belong to this home.',
+        description: 'Assets connect purchases, warranties, reminders, repairs, and documents.',
+        href: '/assets',
+        action: 'Add asset'
+      };
+    }
+
+    if (reminders.length === 0) {
+      return {
+        title: 'Add the care tasks you do again and again.',
+        description: 'Use reminders for filters, seasonal work, inspections, and recurring upkeep.',
+        href: '/reminders',
+        action: 'Add reminder'
+      };
+    }
+
+    if (documents.length === 0) {
+      return {
+        title: 'Keep manuals, warranties, reports, and files in one place.',
+        description: 'Documents stay private and can be linked to rooms, utilities, assets, repairs, and issues.',
+        href: '/documents',
+        action: 'Upload document'
+      };
+    }
+
+    return {
+      title: 'Ready for a fuller review.',
+      description: 'Build a handover later from the rooms, utilities, assets, records, and files you have saved.',
+      href: '/handover',
+      action: 'Build handover'
+    };
+  }, [assets.length, documents.length, hasProperty, reminders.length, rooms.length, utilities.length]);
+
   return (
     <>
       <PageHeader
-        title={propertyNickname}
-        description="Next actions & key records."
+        title="Dashboard"
+        description={`${propertyNickname} command center. See what is saved, what needs attention, and what to add next.`}
       />
 
         <div style={{ display: 'grid', gap: 24 }}>
+          <Card tone="dark">
+            <h2 style={{ marginTop: 0 }}>{nextStep.title}</h2>
+            <p style={{ color: 'rgba(255,248,234,0.78)' }}>{nextStep.description}</p>
+            <ActionLink href={nextStep.href}>{nextStep.action}</ActionLink>
+          </Card>
+
           <Card>
-            <h2 style={{ marginTop: 0 }}>Home map summary</h2>
+            <h2 style={{ marginTop: 0 }}>Rooms & spaces</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <UtilityBadge label={`${floors} floor${floors === 1 ? '' : 's'}`} />
-              <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? ' or space' : 's & spaces'}`} />
+              {roomSpaceSummary.map((item) => (
+                <UtilityBadge key={item.roomType} label={item.label} />
+              ))}
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${openRepairCount} open repair${openRepairCount === 1 ? '' : 's'}`} />
@@ -458,30 +533,14 @@ export default function DashboardPage() {
             ) : null}
 
             <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Link href="/home-map">
-                <Button type="button">Home Map</Button>
-              </Link>
-              <Link href="/add-rooms">
-                <Button type="button">Add Room</Button>
-              </Link>
-              <Link href="/utilities">
-                <Button type="button">Utilities</Button>
-              </Link>
-              <Link href="/assets">
-                <Button type="button">Assets</Button>
-              </Link>
-              <Link href="/maintenance">
-                <Button type="button">Maintenance</Button>
-              </Link>
-              <Link href="/documents">
-                <Button type="button">Documents</Button>
-              </Link>
-              <Link href="/handover">
-                <Button type="button">Handover</Button>
-              </Link>
-              <Link href="/more">
-                <Button type="button">More</Button>
-              </Link>
+              <ActionLink href="/home-map" variant="secondary">Home Map</ActionLink>
+              <ActionLink href="/add-rooms" variant="secondary">Add room or space</ActionLink>
+              <ActionLink href="/utilities" variant="secondary">Utilities</ActionLink>
+              <ActionLink href="/assets" variant="secondary">Assets</ActionLink>
+              <ActionLink href="/maintenance" variant="secondary">Maintenance</ActionLink>
+              <ActionLink href="/documents" variant="secondary">Documents</ActionLink>
+              <ActionLink href="/handover" variant="secondary">Handover</ActionLink>
+              <ActionLink href="/more" variant="secondary">More</ActionLink>
             </div>
           </Card>
 
@@ -492,10 +551,8 @@ export default function DashboardPage() {
             </p>
             {criticalUtilities.length === 0 ? (
               <div>
-                <p style={{ color: 'rgba(255,248,234,0.78)' }}>No critical utilities added yet.</p>
-                <Link href="/utilities">
-                  <Button type="button">Add utilities</Button>
-                </Link>
+                <p style={{ color: 'rgba(255,248,234,0.78)' }}>Add the shut-offs and systems you’ll want to find fast.</p>
+                <ActionLink href="/utilities" variant="secondary">Add utility</ActionLink>
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
@@ -516,9 +573,9 @@ export default function DashboardPage() {
               </div>
             )}
             <div style={{ marginTop: 12 }}>
-              <Link href="/utilities">
-                <Button type="button">Open utilities</Button>
-              </Link>
+              <ActionLink href="/utilities" variant="secondary" style={{ color: 'var(--text-inverse)', borderColor: 'rgba(236,226,207,0.42)' }}>
+                Open utilities
+              </ActionLink>
             </div>
           </Card>
 
@@ -530,22 +587,18 @@ export default function DashboardPage() {
             <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
               No public link, email, background job, or stored report file is created.
             </p>
-            <Link href="/handover">
-              <Button type="button">Open handover builder</Button>
-            </Link>
+            <ActionLink href="/handover" variant="secondary">Build handover</ActionLink>
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Sharing & Access Review</h2>
+            <h2 style={{ marginTop: 0 }}>Sharing Review</h2>
             <p style={{ color: '#6b7280' }}>
               Preview role-based access before future invitations, guests, or share links are enabled.
             </p>
             <p style={{ color: '#6b7280', marginTop: 0 }}>
               This is review-only and does not create public links, emails, guests, or background jobs.
             </p>
-            <Link href="/sharing">
-              <Button type="button">Open sharing review</Button>
-            </Link>
+            <ActionLink href="/sharing" variant="secondary">Open sharing review</ActionLink>
           </Card>
 
           <Card>
@@ -599,9 +652,7 @@ export default function DashboardPage() {
               </div>
             )}
             <div style={{ marginTop: 12 }}>
-              <Link href="/documents">
-                <Button type="button">Open documents</Button>
-              </Link>
+              <ActionLink href="/documents" variant="secondary">Open documents</ActionLink>
             </div>
           </Card>
 
@@ -630,9 +681,7 @@ export default function DashboardPage() {
               </div>
             )}
             <div style={{ marginTop: 12 }}>
-              <Link href="/receipts">
-                <Button type="button">Open receipts</Button>
-              </Link>
+              <ActionLink href="/receipts" variant="secondary">Open receipts</ActionLink>
             </div>
           </Card>
 
@@ -697,20 +746,16 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Rooms</h2>
+            <h2 style={{ marginTop: 0 }}>Rooms & spaces</h2>
             {!hasProperty ? (
               <div>
-                <p style={{ color: '#6b7280' }}>No property found yet.</p>
-                <Link href="/create-property">
-                  <Button type="button">Create property</Button>
-                </Link>
+                <p style={{ color: '#6b7280' }}>Start your home record.</p>
+                <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
               </div>
             ) : rooms.length === 0 ? (
               <div>
-                <p style={{ color: '#6b7280' }}>No rooms added yet.</p>
-                <Link href="/add-rooms">
-                  <Button type="button">Add rooms</Button>
-                </Link>
+                <p style={{ color: '#6b7280' }}>No rooms yet — let’s map the house.</p>
+                <ActionLink href="/add-rooms" variant="secondary">Add rooms & spaces</ActionLink>
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
@@ -730,7 +775,7 @@ export default function DashboardPage() {
                     >
                       <strong>{room.name}</strong>
                       <div style={{ color: '#6b7280' }}>
-                        {formatEnumLabel(room.room_type)} • {room.floor_name}
+                        {formatRoomTypeLabel(room.room_type)} • {formatRoomLocation(room)}
                       </div>
                     </div>
                   </Link>

@@ -1,9 +1,10 @@
-import { ASSET_TYPES, VISIBILITY_OPTIONS } from '@home-bible/shared';
+import { ASSET_TYPES, VISIBILITY_OPTIONS, type VisibilityContext } from '@home-bible/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { normalizeVisibilityContexts, visibilityFromContexts } from './visibility';
 
 const DEMO_ASSETS_KEY = 'homeBible.assets';
 
@@ -29,6 +30,7 @@ export type AssetRow = {
   support_url: string | null;
   notes: string | null;
   visibility: AssetVisibility;
+  visibility_contexts: VisibilityContext[];
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -50,6 +52,7 @@ export type AssetInput = {
   support_url?: string | null;
   notes?: string | null;
   visibility?: AssetVisibility;
+  visibility_contexts?: VisibilityContext[];
 };
 
 export type AssetUpdateInput = Partial<AssetInput>;
@@ -62,7 +65,7 @@ export type AssetDataContext = {
 };
 
 const ASSET_SELECT =
-  'id, property_id, room_id, asset_type, name, brand, model, serial_number, purchase_date, purchase_price, retailer, warranty_length_months, warranty_expires_at, manual_url, support_url, notes, visibility, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, asset_type, name, brand, model, serial_number, purchase_date, purchase_price, retailer, warranty_length_months, warranty_expires_at, manual_url, support_url, notes, visibility, visibility_contexts, created_at, updated_at, deleted_at';
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
@@ -85,6 +88,7 @@ function normalizeAsset(raw: Partial<AssetRow>): AssetRow {
   const visibility = VISIBILITY_OPTIONS.includes(raw.visibility as AssetVisibility)
     ? (raw.visibility as AssetVisibility)
     : 'private';
+  const visibilityContexts = normalizeVisibilityContexts(raw.visibility_contexts, visibility);
 
   return {
     id: raw.id || crypto.randomUUID(),
@@ -104,6 +108,7 @@ function normalizeAsset(raw: Partial<AssetRow>): AssetRow {
     support_url: nullableString(raw.support_url),
     notes: nullableString(raw.notes),
     visibility,
+    visibility_contexts: visibilityContexts,
     created_at: createdAt,
     updated_at: raw.updated_at || createdAt,
     deleted_at: raw.deleted_at || null
@@ -135,7 +140,14 @@ function cleanInput(input: AssetUpdateInput) {
   if (input.manual_url !== undefined) cleaned.manual_url = input.manual_url?.trim() || null;
   if (input.support_url !== undefined) cleaned.support_url = input.support_url?.trim() || null;
   if (input.notes !== undefined) cleaned.notes = input.notes?.trim() || null;
-  if (input.visibility !== undefined) cleaned.visibility = input.visibility;
+  if (input.visibility_contexts !== undefined) {
+    const visibilityContexts = normalizeVisibilityContexts(input.visibility_contexts, input.visibility);
+    cleaned.visibility_contexts = visibilityContexts;
+    cleaned.visibility = visibilityFromContexts(visibilityContexts);
+  } else if (input.visibility !== undefined) {
+    cleaned.visibility = input.visibility;
+    cleaned.visibility_contexts = normalizeVisibilityContexts(undefined, input.visibility);
+  }
 
   return cleaned;
 }

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState, type ReactNode } from 'react';
 import { formatEnumLabel, ISSUE_STATUSES } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
@@ -188,9 +189,7 @@ export default function IssueDetailPage() {
           <p style={{ color: error ? '#b91c1c' : '#6b7280', fontWeight: error ? 700 : 400 }}>
             {error || 'This issue may have been removed, or it may not belong to the current property.'}
           </p>
-          <Link href="/issues">
-            <Button type="button">Back to issues</Button>
-          </Link>
+          <ActionLink href="/issues" variant="secondary">Back to issues</ActionLink>
         </Card>
       </>
     );
@@ -290,12 +289,8 @@ export default function IssueDetailPage() {
         </RelatedList>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link href="/issues">
-            <Button type="button">Back to issues</Button>
-          </Link>
-          <Link href="/dashboard">
-            <Button type="button">Back to dashboard</Button>
-          </Link>
+          <ActionLink href="/issues" variant="secondary">Back to issues</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
     </>

@@ -1,5 +1,5 @@
-import Link from 'next/link';
-import { PageHeader, Card, Button } from '@home-bible/ui';
+import { PageHeader, Card } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 
 export default function AuthPlaceholder() {
   return (
@@ -8,12 +8,8 @@ export default function AuthPlaceholder() {
       <Card>
         <p style={{ marginBottom: 16 }}>Auth is now available through dedicated pages.</p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <Link href="/sign-in">
-            <Button type="button">Go to sign in</Button>
-          </Link>
-          <Link href="/sign-up">
-            <Button type="button">Go to sign up</Button>
-          </Link>
+          <ActionLink href="/sign-in">Go to sign in</ActionLink>
+          <ActionLink href="/sign-up" variant="secondary">Go to sign up</ActionLink>
         </div>
       </Card>
     </>

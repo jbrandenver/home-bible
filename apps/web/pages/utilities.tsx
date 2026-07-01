@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
-import { PageHeader, Card, Button, EmptyState, UtilityBadge } from '@home-bible/ui';
+import { PageHeader, Card, EmptyState, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation } from '../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import {
@@ -171,7 +172,7 @@ export default function UtilitiesPage() {
         setServiceRecords(nextServiceRecords);
         setIssues(nextIssues);
         setTrendFlags(nextTrendFlags);
-        setRooms(new Map(roomList.map((room) => [room.id, room.name])));
+        setRooms(new Map(roomList.map((room) => [room.id, formatRoomLocation(room)])));
       } catch (loadError) {
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load utilities.');
@@ -317,9 +318,7 @@ export default function UtilitiesPage() {
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ margin: 0 }}>All Utilities ({filteredUtilities.length})</h2>
-            <Link href="/add-utility">
-              <Button>Add Utility</Button>
-            </Link>
+            <ActionLink href="/add-utility">Add utility</ActionLink>
           </div>
 
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 16 }}>
@@ -363,15 +362,21 @@ export default function UtilitiesPage() {
           ) : error ? (
             <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>{error}</p>
           ) : dataMode === 'supabase' && context && !context.property ? (
-            <EmptyState
-              title="No property found"
-              description="Create a property before adding utilities."
-            />
+            <div>
+              <EmptyState
+                title="Start your home record."
+                description="Create a property before adding utilities."
+              />
+              <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
+            </div>
           ) : utilities.length === 0 ? (
-            <EmptyState
-              title="No utilities yet"
-              description="Add key utility locations like water shutoff, electrical panel, and HVAC to get started."
-            />
+            <div>
+              <EmptyState
+                title="No utilities yet"
+                description="Add the shut-offs and systems you'll want to find fast."
+              />
+              <ActionLink href="/add-utility" variant="secondary">Add utility</ActionLink>
+            </div>
           ) : filteredUtilities.length === 0 ? (
             <EmptyState
               title="No utilities match"
@@ -426,9 +431,7 @@ export default function UtilitiesPage() {
                     )}
                   </div>
                   <div style={{ display: 'grid', gap: 8 }}>
-                    <Link href={`/utilities/${utility.id}`}>
-                      <Button type="button">View</Button>
-                    </Link>
+                    <ActionLink href={`/utilities/${utility.id}`} variant="secondary">View</ActionLink>
                     <button
                       onClick={() => handleDelete(utility.id)}
                       disabled={deletingId === utility.id}
@@ -454,9 +457,7 @@ export default function UtilitiesPage() {
         </Card>
 
         <div>
-          <Link href="/dashboard">
-            <Button type="button">Back to dashboard</Button>
-          </Link>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
     </>

@@ -1,14 +1,14 @@
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   DOCUMENT_TYPES,
-  DOCUMENT_VISIBILITIES,
   formatEnumLabel,
   type DocumentType,
-  type DocumentVisibility
+  type VisibilityContext
 } from '@home-bible/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
+import { VisibilityContextPicker } from '../components/VisibilityContextPicker';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import {
@@ -27,9 +27,11 @@ import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation } from '../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
+import { formatVisibilityContextList } from '../lib/visibility';
 
 type LinkKind = 'property' | DocumentLinkField;
 
@@ -41,6 +43,8 @@ type LinkOption = {
 type RoomOption = {
   id: string;
   name: string;
+  room_type?: string | null;
+  floor_name?: string | null;
 };
 
 const fieldStyle = {
@@ -95,9 +99,9 @@ function getDocumentLinkLabel(document: DocumentRow, optionsByKind: Record<LinkK
   if (document.asset_id) return `Asset: ${labelFromOptions(optionsByKind.asset_id, document.asset_id)}`;
   if (document.reminder_id) return `Reminder: ${labelFromOptions(optionsByKind.reminder_id, document.reminder_id)}`;
   if (document.repair_id) return `Repair: ${labelFromOptions(optionsByKind.repair_id, document.repair_id)}`;
-  if (document.service_record_id) return `Service record: ${labelFromOptions(optionsByKind.service_record_id, document.service_record_id)}`;
+  if (document.service_record_id) return `Service History: ${labelFromOptions(optionsByKind.service_record_id, document.service_record_id)}`;
   if (document.issue_id) return `Issue: ${labelFromOptions(optionsByKind.issue_id, document.issue_id)}`;
-  if (document.trend_flag_id) return `Trend flag: ${labelFromOptions(optionsByKind.trend_flag_id, document.trend_flag_id)}`;
+  if (document.trend_flag_id) return `Trend: ${labelFromOptions(optionsByKind.trend_flag_id, document.trend_flag_id)}`;
   return 'Property';
 }
 
@@ -132,7 +136,7 @@ export default function DocumentsPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [documentType, setDocumentType] = useState<DocumentType>('other');
-  const [visibility, setVisibility] = useState<DocumentVisibility>('private');
+  const [visibilityContexts, setVisibilityContexts] = useState<VisibilityContext[]>(['personal_archive']);
   const [linkKind, setLinkKind] = useState<LinkKind>('property');
   const [linkId, setLinkId] = useState('');
 
@@ -140,7 +144,7 @@ export default function DocumentsPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editType, setEditType] = useState<DocumentType>('other');
-  const [editVisibility, setEditVisibility] = useState<DocumentVisibility>('private');
+  const [editVisibilityContexts, setEditVisibilityContexts] = useState<VisibilityContext[]>(['personal_archive']);
 
   useEffect(() => {
     if (!router.isReady) {
@@ -211,7 +215,7 @@ export default function DocumentsPage() {
 
         setContext(nextContext);
         setDocuments(nextDocuments);
-        setRooms(roomRows.map((room) => ({ id: room.id, name: room.name })));
+        setRooms(roomRows);
         setUtilities(utilityRows);
         setAssets(assetRows);
         setReminders(reminderRows);
@@ -240,7 +244,7 @@ export default function DocumentsPage() {
   const optionsByKind = useMemo<Record<LinkKind, LinkOption[]>>(
     () => ({
       property: context?.property ? [{ id: context.property.id, label: context.property.nickname }] : [],
-      room_id: rooms.map((room) => ({ id: room.id, label: room.name })),
+      room_id: rooms.map((room) => ({ id: room.id, label: formatRoomLocation(room) })),
       utility_id: utilities.map((utility) => ({ id: utility.id, label: utility.name })),
       asset_id: assets.map((asset) => ({ id: asset.id, label: asset.name })),
       reminder_id: reminders.map((reminder) => ({ id: reminder.id, label: reminder.title })),
@@ -260,7 +264,7 @@ export default function DocumentsPage() {
     setTitle('');
     setDescription('');
     setDocumentType('other');
-    setVisibility('private');
+    setVisibilityContexts(['personal_archive']);
   };
 
   const handleFileChange = (nextFile: File | null) => {
@@ -275,7 +279,7 @@ export default function DocumentsPage() {
     event.preventDefault();
 
     if (!context) {
-      setError('Document storage is still loading. Please try again.');
+      setError('File details are still loading. Please try again.');
       return;
     }
 
@@ -299,7 +303,7 @@ export default function DocumentsPage() {
         title,
         description,
         document_type: documentType,
-        visibility,
+        visibility_contexts: visibilityContexts,
         ...buildLinkPayload(linkKind, linkId)
       });
 
@@ -353,7 +357,7 @@ export default function DocumentsPage() {
     setEditTitle(document.title);
     setEditDescription(document.description || '');
     setEditType(document.document_type);
-    setEditVisibility(document.visibility);
+    setEditVisibilityContexts(document.visibility_contexts);
   };
 
   const saveMetadata = async (event: React.FormEvent) => {
@@ -372,7 +376,7 @@ export default function DocumentsPage() {
         title: editTitle,
         description: editDescription,
         document_type: editType,
-        visibility: editVisibility
+        visibility_contexts: editVisibilityContexts
       });
 
       if (updated) {
@@ -399,7 +403,7 @@ export default function DocumentsPage() {
         <Card>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
-            <UtilityBadge label={context?.mode === 'supabase' ? 'Private storage' : 'Demo data'} />
+            <UtilityBadge label={context?.mode === 'supabase' ? 'Private files' : 'Demo data'} />
             {context?.property ? <UtilityBadge label={context.property.nickname} /> : null}
           </div>
           {loading ? <p style={{ color: '#6b7280' }}>Loading documents...</p> : null}
@@ -412,11 +416,9 @@ export default function DocumentsPage() {
           {!canUpload ? (
             <div>
               <p style={{ color: '#6b7280' }}>
-                Sign in and create a property to upload private files.
+                Sign in and create a property to upload private files. No public file link is created.
               </p>
-              <Link href="/sign-in">
-                <Button type="button">Sign in</Button>
-              </Link>
+              <ActionLink href="/sign-in">Sign in</ActionLink>
             </div>
           ) : (
             <form onSubmit={uploadDocument} style={{ display: 'grid', gap: 12 }}>
@@ -445,14 +447,12 @@ export default function DocumentsPage() {
                   </select>
                 </label>
 
-                <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontWeight: 600 }}>Visibility</span>
-                  <select value={visibility} onChange={(event) => setVisibility(event.target.value as DocumentVisibility)} style={fieldStyle}>
-                    {DOCUMENT_VISIBILITIES.map((option) => (
-                      <option key={option} value={option}>{formatEnumLabel(option)}</option>
-                    ))}
-                  </select>
-                </label>
+                <VisibilityContextPicker
+                  idPrefix="document-visibility-contexts"
+                  value={visibilityContexts}
+                  onChange={setVisibilityContexts}
+                  disabled={uploading}
+                />
               </div>
 
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
@@ -502,7 +502,7 @@ export default function DocumentsPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Document library</h2>
           {documents.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No documents uploaded yet.</p>
+            <p style={{ color: '#6b7280' }}>Keep manuals, warranties, reports, and files in one place.</p>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {documents.map((document) => {
@@ -526,14 +526,12 @@ export default function DocumentsPage() {
                               ))}
                             </select>
                           </label>
-                          <label style={{ display: 'grid', gap: 6 }}>
-                            <span style={{ fontWeight: 600 }}>Visibility</span>
-                            <select value={editVisibility} onChange={(event) => setEditVisibility(event.target.value as DocumentVisibility)} style={fieldStyle}>
-                              {DOCUMENT_VISIBILITIES.map((option) => (
-                                <option key={option} value={option}>{formatEnumLabel(option)}</option>
-                              ))}
-                            </select>
-                          </label>
+                          <VisibilityContextPicker
+                            idPrefix={`document-${document.id}-visibility-contexts`}
+                            value={editVisibilityContexts}
+                            onChange={setEditVisibilityContexts}
+                            disabled={isActing}
+                          />
                         </div>
                         <label style={{ display: 'grid', gap: 6 }}>
                           <span style={{ fontWeight: 600 }}>Description</span>
@@ -557,7 +555,7 @@ export default function DocumentsPage() {
                           </div>
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                             <UtilityBadge label={formatEnumLabel(document.document_type)} />
-                            <UtilityBadge label={formatEnumLabel(document.visibility)} />
+                            <UtilityBadge label={formatVisibilityContextList(document.visibility_contexts)} />
                           </div>
                         </div>
 
@@ -577,11 +575,9 @@ export default function DocumentsPage() {
                             Edit details
                           </Button>
                           {document.document_type === 'receipt' ? (
-                            <Link href={`/receipts?documentId=${document.id}`}>
-                              <Button type="button" style={{ background: '#065f46' }}>
-                                Review receipt
-                              </Button>
-                            </Link>
+                            <ActionLink href={`/receipts?documentId=${document.id}`} variant="secondary">
+                              Review receipt
+                            </ActionLink>
                           ) : null}
                           <button
                             type="button"
@@ -611,12 +607,8 @@ export default function DocumentsPage() {
         </Card>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Link href="/dashboard">
-            <Button type="button">Back to dashboard</Button>
-          </Link>
-          <Link href="/home-map">
-            <Button type="button">Back to home map</Button>
-          </Link>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+          <ActionLink href="/home-map" variant="secondary">Back to home map</ActionLink>
         </div>
       </div>
     </>

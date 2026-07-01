@@ -1,6 +1,6 @@
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getCurrentUser } from '../lib/auth';
 
 const routeGroups = [
@@ -44,7 +44,7 @@ const walkthroughSteps = [
   'Create Maple House with address skipped.',
   'Add rooms, utilities, assets, reminders, repairs, service history, issues, and trends manually.',
   'Upload a few small placeholder documents and receipts.',
-  'Approve receipt details before saving receipt rows.',
+  'Approve receipt details before saving.',
   'Generate Family and Buyer handover reports in the browser.',
   'Review viewer, maintenance_guest, and buyer_preview sharing previews.',
   'Repeat the main navigation and forms on a mobile viewport.',
@@ -90,7 +90,7 @@ export default function MvpTestPage() {
     <>
       <PageHeader
         title="Private MVP Test"
-        description="Manual test checklist for validating Home Bible with realistic homeowner data before adding more features."
+        description="Development-only checklist for validating Home & Everything with realistic homeowner data before adding more features."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
@@ -126,9 +126,7 @@ export default function MvpTestPage() {
               <h2 style={{ marginTop: 0 }}>{group.title}</h2>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 {group.routes.map(([label, href]) => (
-                  <Link key={href} href={href}>
-                    <Button type="button">{label}</Button>
-                  </Link>
+                  <ActionLink key={href} href={href} variant="secondary">{label}</ActionLink>
                 ))}
               </div>
             </Card>
@@ -164,12 +162,8 @@ export default function MvpTestPage() {
             Capture route, steps to reproduce, expected result, actual result, browser/device, signed-in versus demo mode, data involved, severity, and whether there is a security or cost concern.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            <Link href="/dashboard">
-              <Button type="button">Start from dashboard</Button>
-            </Link>
-            <Link href="/settings">
-              <Button type="button">Open settings</Button>
-            </Link>
+            <ActionLink href="/dashboard">Start from dashboard</ActionLink>
+            <ActionLink href="/settings" variant="secondary">Open settings</ActionLink>
           </div>
         </Card>
       </div>

@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import {
   formatEnumLabel,
   REPAIR_PRIORITIES,
@@ -8,6 +7,7 @@ import {
   SERVICE_TYPES
 } from '@home-bible/shared';
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
@@ -30,6 +30,7 @@ import {
   type ServiceRecordRow
 } from '../lib/serviceRecords';
 import { getRoomsForProperty } from '../lib/rooms';
+import { formatRoomLocation } from '../lib/roomLabels';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import { getDemoUtilities, getUtilitiesForProperty, type UtilityRow } from '../lib/utilities';
 
@@ -177,11 +178,11 @@ export default function RepairsPage() {
             getUtilitiesForProperty(nextRepairContext.property.id)
           ]);
 
-          nextRooms = roomRows.map((room) => ({ id: room.id, name: room.name }));
+          nextRooms = roomRows.map((room) => ({ id: room.id, name: formatRoomLocation(room) }));
           nextAssets = assetRows.map((asset: AssetRow) => ({ id: asset.id, name: asset.name }));
           nextUtilities = utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name }));
         } else {
-          nextRooms = getDemoRooms().map((room) => ({ id: room.id, name: room.name }));
+          nextRooms = getDemoRooms().map((room) => ({ id: room.id, name: formatRoomLocation(room) }));
           nextAssets = getDemoAssets().map((asset) => ({ id: asset.id, name: asset.name }));
           nextUtilities = getDemoUtilities().map((utility) => ({ id: utility.id, name: utility.name }));
         }
@@ -867,7 +868,7 @@ export default function RepairsPage() {
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Trend flags</h2>
+          <h2 style={{ marginTop: 0 }}>Trends</h2>
           {trendFlags.length === 0 ? (
             <p style={{ color: '#6b7280', margin: 0 }}>No trends currently. Keep logging service history for better trend insight.</p>
           ) : (
@@ -923,9 +924,7 @@ export default function RepairsPage() {
                     </div>
 
                     <div style={{ display: 'grid', gap: 8, minWidth: 140 }}>
-                      <Link href={`/repairs/${repair.id}`}>
-                        <Button type="button">View</Button>
-                      </Link>
+                      <ActionLink href={`/repairs/${repair.id}`} variant="secondary">View</ActionLink>
                       <select
                         value={repair.status}
                         onChange={(event) => changeRepairStatus(repair.id, event.target.value as RepairStatus)}
@@ -963,7 +962,7 @@ export default function RepairsPage() {
 
         {serviceRecords.length > 0 ? (
           <Card>
-            <h2 style={{ marginTop: 0 }}>Service Records ({filteredServiceRecords.length})</h2>
+            <h2 style={{ marginTop: 0 }}>Service History ({filteredServiceRecords.length})</h2>
             {filteredServiceRecords.length === 0 ? (
               <p style={{ color: '#6b7280', margin: 0 }}>No service history matches the current filters.</p>
             ) : (
