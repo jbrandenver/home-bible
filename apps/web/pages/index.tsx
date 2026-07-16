@@ -25,7 +25,7 @@ export default function Home() {
                 letterSpacing: '-0.03em'
               }}
             >
-              Home <span style={{ fontStyle: 'italic', fontWeight: 400, color: 'var(--color-brass-pale)' }}>Folder</span>
+              Our Home <span style={{ fontStyle: 'italic', fontWeight: 400, color: 'var(--color-brass-pale)' }}>Folder</span>
             </h1>
             <p
               style={{

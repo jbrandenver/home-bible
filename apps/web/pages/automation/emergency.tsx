@@ -164,7 +164,7 @@ export default function AutomationEmergencyPage() {
       </div>
 
       <div className="print-only" style={{ marginBottom: 16 }}>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.16em', margin: 0 }}>Home Folder — Smart Home Emergency & Handover</p>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.16em', margin: 0 }}>Our Home Folder — Smart Home Emergency & Handover</p>
         <h1 style={{ margin: '4px 0 2px' }}>{guide.propertyName}</h1>
         <div className="hb-double-rule" style={{ marginTop: 10 }} />
       </div>
@@ -243,7 +243,7 @@ export default function AutomationEmergencyPage() {
         </Card>
 
         <footer style={{ color: 'var(--text-muted)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
-          Generated from Home Folder · Passwords, codes, and secrets are excluded by design.
+          Generated from Our Home Folder · Passwords, codes, and secrets are excluded by design.
         </footer>
       </div>
     </>

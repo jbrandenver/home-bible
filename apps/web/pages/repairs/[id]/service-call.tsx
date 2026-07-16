@@ -368,7 +368,7 @@ export default function ServiceCallSheetPage() {
         ) : null}
 
         <footer style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 8, color: 'var(--text-muted)', fontSize: 12, fontFamily: 'var(--font-mono)' }}>
-          Shared from Home Folder · Sensitive codes and passwords are intentionally omitted.
+          Shared from Our Home Folder · Sensitive codes and passwords are intentionally omitted.
         </footer>
       </article>
 

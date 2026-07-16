@@ -421,7 +421,7 @@ export default function HomeMapPage() {
             <Card>
               <h2 style={{ marginTop: 0 }}>No rooms yet - let's map the house.</h2>
               <p style={{ color: 'var(--text-muted)' }}>
-                Add rooms first so Home Folder can build your home map.
+                Add rooms first so Our Home Folder can build your home map.
               </p>
               <ActionLink href="/add-rooms">Add rooms</ActionLink>
             </Card>

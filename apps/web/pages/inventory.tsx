@@ -205,7 +205,7 @@ export default function InventoryPage() {
       {/* print-only letterhead */}
       <div className="print-only" style={{ marginBottom: 20 }}>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.18em', margin: 0 }}>
-          Home Folder — Home Inventory Record
+          Our Home Folder — Home Inventory Record
         </p>
         <h1 style={{ margin: '4px 0 2px' }}>{propertyNickname}</h1>
         <p style={{ color: 'var(--text-muted)', margin: 0 }}>

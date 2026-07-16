@@ -90,7 +90,7 @@ export default function MvpTestPage() {
     <>
       <PageHeader
         title="Private MVP Test"
-        description="Development-only checklist for validating Home Folder with realistic homeowner data before adding more features."
+        description="Development-only checklist for validating Our Home Folder with realistic homeowner data before adding more features."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>

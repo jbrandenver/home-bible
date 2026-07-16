@@ -58,7 +58,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
           <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
             <Link href="/" className="brand-lockup">
               <span className="brand-wordmark">
-                <span>Home</span>
+                <span>Our Home</span>
                 <span className="brand-wordmark-accent">Folder</span>
               </span>
               <span className="brand-tagline">A home, documented.</span>
@@ -104,6 +104,20 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
       <main className="p-6 app-main">
         <div className="max-w-6xl mx-auto">{children}</div>
       </main>
+
+      {/* Legal footer */}
+      <footer className="app-footer">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="app-footer-inner">
+            <span className="app-footer-copy">© {new Date().getFullYear()} JBran LLC. Our Home Folder™ — all rights reserved.</span>
+            <nav className="app-footer-links" aria-label="Legal">
+              <Link href="/terms">Terms of Service</Link>
+              <Link href="/privacy">Privacy Policy</Link>
+              <Link href="/settings">Account</Link>
+            </nav>
+          </div>
+        </div>
+      </footer>
 
       <nav className="mobile-bottom-nav bg-white shadow-sm border-t border-gray-200">
         {mobileSections.map((section) => (

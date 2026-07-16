@@ -540,11 +540,11 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
         style={{ display: 'none' }}
         aria-hidden="true"
       >
-        {safeText(data.context.property?.nickname) || 'Home'} · {HANDOVER_REPORT_TYPE_LABELS[data.reportType]} · Generated {formatDateTime(data.generatedAt)} · Home Folder
+        {safeText(data.context.property?.nickname) || 'Home'} · {HANDOVER_REPORT_TYPE_LABELS[data.reportType]} · Generated {formatDateTime(data.generatedAt)} · Our Home Folder
       </div>
       <header style={{ borderBottom: '2px solid var(--color-espresso)', paddingBottom: 18, marginBottom: 20 }}>
         <div style={{ color: 'var(--color-brass-deep)', fontWeight: 800, letterSpacing: 0, textTransform: 'uppercase', fontSize: 12 }}>
-          Home Folder handover report
+          Our Home Folder handover report
         </div>
         <h1 style={{ margin: '6px 0', fontSize: 34, lineHeight: 1.1 }}>
           {safeText(data.context.property?.nickname) || 'Home'} · {HANDOVER_REPORT_TYPE_LABELS[data.reportType]}

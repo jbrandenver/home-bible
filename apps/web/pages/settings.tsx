@@ -84,12 +84,12 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Privacy, account, and safe testing controls for Home Folder."
+        description="Privacy, account, and safe testing controls for Our Home Folder."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
           <Card tone="dark">
-            <h2 style={{ marginTop: 0 }}>Home Folder</h2>
+            <h2 style={{ marginTop: 0 }}>Our Home Folder</h2>
             <p style={{ color: 'rgba(255,248,234,0.78)', marginBottom: 0 }}>
               A home, documented. Keep the record calm, private, and complete enough to hand on.
             </p>

@@ -288,7 +288,7 @@ export function serviceCallToPlainText(sheet: ServiceCallSheet): string {
   }
 
   lines.push(rule);
-  lines.push('Shared from Home Folder');
+  lines.push('Shared from Our Home Folder');
 
   return lines.join('\n');
 }

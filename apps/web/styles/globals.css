@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
 
 /* ============================================================
-   HOME FOLDER — the heirloom house ledger
+   OUR HOME FOLDER — the heirloom house ledger
    Every page should read like a page from a beautifully kept
    family record book: ruled margins, letterpress-warm type,
    gilt edges, and quiet paper.
@@ -405,10 +405,33 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--color-brass);outlin
 .shortcut-link-subtle:hover{background:rgba(227,194,136,0.32);border-color:var(--color-brass)}
 .shortcut-tag-on-dark{--shortcut-tag-bg:#E3C288;--shortcut-tag-color:#2C1F18;--shortcut-tag-border:#C8923F;transition:background-color 160ms ease,color 160ms ease,border-color 160ms ease}
 
+/* ---------- legal footer ---------- */
+.app-footer{
+  border-top:1px solid var(--border-subtle);
+  background:var(--surface-card);
+  margin-top:2.5rem;
+  padding:1.4rem 0 1.6rem;
+}
+.app-footer-inner{
+  display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+}
+.app-footer-copy{
+  font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.04em;color:var(--text-muted);
+}
+.app-footer-links{display:flex;gap:1.1rem;flex-wrap:wrap}
+.app-footer-links a{
+  font-family:var(--font-mono);font-size:0.72rem;font-weight:600;letter-spacing:0.06em;
+  text-transform:uppercase;color:var(--color-brass-deep);text-decoration:none;
+}
+.app-footer-links a:hover{color:var(--color-ink);text-decoration:underline}
+@media (max-width: 640px){
+  .app-footer{margin-bottom:5.5rem}
+}
+
 /* ---------- print (inventory & handover records) ---------- */
 .print-only{display:none}
 @media print{
-  .app-gilt,.app-header,.mobile-bottom-nav,.print-hide{display:none !important}
+  .app-gilt,.app-header,.app-footer,.mobile-bottom-nav,.print-hide{display:none !important}
   .print-only{display:block}
   body::before{display:none}
   body{background:#fff;font-size:13px}

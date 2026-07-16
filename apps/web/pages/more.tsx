@@ -50,6 +50,20 @@ const moreLinks = [
     href: '/settings',
     action: 'Open settings',
     group: 'Account'
+  },
+  {
+    title: 'Terms of Service',
+    description: 'The terms that govern your use of Our Home Folder.',
+    href: '/terms',
+    action: 'Read terms',
+    group: 'Legal'
+  },
+  {
+    title: 'Privacy Policy',
+    description: 'How Our Home Folder handles and protects your information.',
+    href: '/privacy',
+    action: 'Read privacy policy',
+    group: 'Legal'
   }
 ];
 

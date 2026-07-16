@@ -47,7 +47,7 @@ export default function AcceptInvitePage() {
     <>
       <PageHeader
         title="Accept Invitation"
-        description="Join a shared Home Folder property with the role chosen by the inviter."
+        description="Join a shared Our Home Folder property with the role chosen by the inviter."
       />
 
       <Card>
