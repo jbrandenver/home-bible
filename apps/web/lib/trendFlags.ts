@@ -1,3 +1,4 @@
+import { formatDataError } from './errors';
 import {
   ISSUE_SEVERITIES,
   TREND_FLAG_DETECTED_FROM,
@@ -130,11 +131,11 @@ function formatTrendFlagError(action: string, message?: string) {
     lowerMessage.includes('policy') ||
     lowerMessage.includes('invalid input value');
 
-  if (!needsMigration) {
-    return detail;
-  }
-
-  return `Failed to ${action}. Apply ${PHASE_6G_MIGRATION} to your Supabase project, then try again. Original error: ${detail}`;
+  return formatDataError(
+    action,
+    detail,
+    needsMigration ? `Apply ${PHASE_6G_MIGRATION} to your Supabase project, then try again.` : undefined
+  );
 }
 
 function buildTrendFlagPayload(input: TrendFlagInput, propertyId: string) {

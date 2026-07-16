@@ -114,6 +114,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               <Link href="/terms">Terms of Service</Link>
               <Link href="/privacy">Privacy Policy</Link>
               <Link href="/settings">Account</Link>
+              <a href="mailto:support@ourhomefolder.com?subject=Our%20Home%20Folder%20problem%20report">Report a problem</a>
             </nav>
           </div>
         </div>

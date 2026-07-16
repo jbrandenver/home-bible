@@ -1,3 +1,4 @@
+import { formatDataError } from './errors';
 import { PROPERTY_TYPES } from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from './supabase/client';
@@ -38,11 +39,13 @@ function formatPropertySetupError(step: string, message?: string) {
     lowerMessage.includes('column') ||
     lowerMessage.includes('policy');
 
-  if (!looksLikeSchemaOrRls) {
-    return message;
-  }
-
-  return `${fallback} Apply supabase/migrations/003_phase6d_household_rls_repair.sql to your Supabase project, then try again. Original error: ${message}`;
+  return formatDataError(
+    step,
+    message,
+    looksLikeSchemaOrRls
+      ? 'Apply supabase/migrations/003_phase6d_household_rls_repair.sql to your Supabase project, then try again.'
+      : undefined
+  );
 }
 
 // Formatted single-line address for a property, respecting the owner's

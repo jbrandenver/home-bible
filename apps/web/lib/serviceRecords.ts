@@ -1,3 +1,4 @@
+import { formatDataError } from './errors';
 import { SERVICE_TYPES } from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
@@ -171,11 +172,11 @@ function formatServiceRecordError(action: string, message?: string) {
     lowerMessage.includes('policy') ||
     lowerMessage.includes('invalid input value');
 
-  if (!needsMigration) {
-    return detail;
-  }
-
-  return `Failed to ${action}. Apply ${PHASE_6F_MIGRATION} to your Supabase project, then try again. Original error: ${detail}`;
+  return formatDataError(
+    action,
+    detail,
+    needsMigration ? `Apply ${PHASE_6F_MIGRATION} to your Supabase project, then try again.` : undefined
+  );
 }
 
 function buildServiceRecordPayload(input: ServiceRecordInput, propertyId: string) {

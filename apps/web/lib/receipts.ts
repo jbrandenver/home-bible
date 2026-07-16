@@ -1,3 +1,4 @@
+import { formatDataError } from './errors';
 import {
   RECEIPT_APPROVAL_STATUSES,
   RECEIPT_CATEGORIES,
@@ -167,15 +168,12 @@ function formatReceiptError(action: string, message?: string) {
     lowerMessage.includes('violates row-level security') ||
     lowerMessage.includes('policy');
 
-  if (needsSchemaMigration) {
-    return `Failed to ${action}. Apply ${PHASE_6J_MIGRATION} to your Supabase project, then try again. Original error: ${detail}`;
-  }
-
-  if (needsPolicyUpdate) {
-    return `Failed to ${action}. Receipt permissions or RLS policies blocked this action. Reapply ${PHASE_6J_MIGRATION} and confirm your account is owner, co_owner, or editor for this property. Original error: ${detail}`;
-  }
-
-  return detail;
+  const devHint = needsSchemaMigration
+    ? `Apply ${PHASE_6J_MIGRATION} to your Supabase project, then try again.`
+    : needsPolicyUpdate
+      ? `Receipt permissions or RLS policies blocked this action. Reapply ${PHASE_6J_MIGRATION} and confirm your account is owner, co_owner, or editor for this property.`
+      : undefined;
+  return formatDataError(action, detail, devHint);
 }
 
 function cleanLinkInput(input: ReceiptLinkInput) {

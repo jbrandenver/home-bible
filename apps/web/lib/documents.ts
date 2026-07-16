@@ -1,3 +1,4 @@
+import { formatDataError } from './errors';
 import {
   DOCUMENT_SOURCES,
   DOCUMENT_TYPES,
@@ -162,11 +163,11 @@ function formatDocumentError(action: string, message?: string) {
     lowerMessage.includes('policy') ||
     lowerMessage.includes('invalid input value');
 
-  if (!needsMigration) {
-    return detail;
-  }
-
-  return `Failed to ${action}. Apply ${PHASE_6I_MIGRATION} to your Supabase project, then try again. Original error: ${detail}`;
+  return formatDataError(
+    action,
+    detail,
+    needsMigration ? `Apply ${PHASE_6I_MIGRATION} to your Supabase project, then try again.` : undefined
+  );
 }
 
 function getExtension(fileName: string) {

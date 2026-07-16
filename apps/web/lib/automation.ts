@@ -1,3 +1,4 @@
+import { formatDataError } from './errors';
 // Home Automation data-access layer.
 // Follows the existing lib idiom: getAutomationContext() resolves demo vs
 // supabase; reads/writes go through the anon client under RLS. Like documents
@@ -193,10 +194,11 @@ function formatAutomationError(action: string, message?: string) {
     lower.includes('column') ||
     lower.includes('schema cache');
 
-  if (needsMigration) {
-    return `Failed to ${action}. Apply ${AUTOMATION_MIGRATION} to your Supabase project, then try again. Original error: ${detail}`;
-  }
-  return `Failed to ${action}. ${detail}`;
+  return formatDataError(
+    action,
+    detail,
+    needsMigration ? `Apply ${AUTOMATION_MIGRATION} to your Supabase project, then try again.` : undefined
+  );
 }
 
 function firstZodMessage(error: unknown, fallback: string) {
