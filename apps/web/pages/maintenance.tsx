@@ -1,4 +1,4 @@
-import { Card, PageHeader } from '@home-bible/ui';
+import { Card, PageHeader } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ShortcutLink } from '../components/ShortcutLink';
 
@@ -22,16 +22,10 @@ const maintenanceLinks = [
     action: 'Open reminders'
   },
   {
-    title: 'Repairs',
-    description: 'Follow open work, scheduled visits, contractors, and completion notes.',
+    title: 'Repairs & Service History',
+    description: 'Track open work, contractors, and completion notes alongside past tune-ups and visits — plus print or text a service call sheet to a repair pro.',
     href: '/repairs',
-    action: 'Open repairs'
-  },
-  {
-    title: 'Service History',
-    description: 'Review completed tune-ups, inspections, contractor visits, and maintenance history.',
-    href: '/repairs',
-    action: 'View service history'
+    action: 'Open repairs & service history'
   },
   {
     title: 'Issues',
@@ -51,8 +45,7 @@ const maintenanceShortcuts = [
   { label: 'Warranties', href: '/warranties' },
   { label: 'Receipts', href: '/receipts' },
   { label: 'Reminders', href: '/reminders' },
-  { label: 'Repairs', href: '/repairs' },
-  { label: 'Service History', href: '/repairs' },
+  { label: 'Repairs & Service History', href: '/repairs' },
   { label: 'Issues', href: '/issues' },
   { label: 'Trends', href: '/issues' }
 ];

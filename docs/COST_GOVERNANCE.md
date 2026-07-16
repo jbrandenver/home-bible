@@ -1,6 +1,6 @@
 # Cost Governance
 
-Home Bible is cost-aware during MVP. Cost strategy must not compromise product quality, security, or the core MVP.
+Home Folder is cost-aware during MVP. Cost strategy must not compromise product quality, security, or the core MVP.
 
 The goal is not to avoid all cost. The goal is to avoid unnecessary, accidental, premature, stale, or usage-based cost.
 
@@ -96,3 +96,44 @@ Every phase plan must choose exactly one:
 - Potential cost increase, requires user approval before implementation
 
 If the choice is "Potential cost increase," do not implement the cost-increasing part until approval is explicit.
+
+## Photo Storage Cost Controls (added 2026-07-13)
+
+Photos ride the existing private `home-documents` bucket. Costs are controlled at
+upload time, in the browser, with no paid services:
+
+- **Client-side compression** (`apps/web/lib/images.ts`): images are resized to a
+  1600 px maximum edge and re-encoded as JPEG (~0.82 quality) before upload. A
+  typical 3 MB phone photo lands at ~250 KB (~10x storage savings). The original
+  is kept only when compression does not reduce size.
+- **Client-side thumbnails**: a ~240 px JPEG (~15 KB) is stored alongside each
+  photo (`documents.thumbnail_path`, migration 011). Lists and galleries load
+  thumbnails via batched signed URLs; the full image downloads only when opened.
+  This is the primary egress control. Supabase image transformations (a paid
+  Pro feature) are intentionally NOT used.
+- **Hard cap**: photos over 5 MB after compression are rejected
+  (`MAX_PHOTO_FILE_SIZE_BYTES`); other documents keep the 10 MB bucket cap.
+- **Deletes free storage** (migration 011): deleting a document removes its file
+  and thumbnail from storage via a scoped `storage.objects` DELETE policy, so
+  storage no longer grows monotonically.
+
+Budget rule of thumb with these controls: ~200 photos per home ≈ 50 MB, so the
+free tier (1 GB) covers ~20 documented homes and the Pro plan's included 100 GB
+covers ~2,000. Review storage and egress in the Supabase dashboard quarterly.
+
+## Home Automation Cost Controls (added 2026-07-16)
+
+The Home Automation module (migration `012`) adds no recurring cost:
+
+- Manual status tracking only — no vendor APIs, no polling, no scheduled jobs.
+- No new storage buckets; device/location photos reuse the existing private
+  `home-documents` bucket and its compressed-upload pipeline.
+- History tables (`automation_health_checks`, `automation_battery_events`,
+  `automation_firmware_events`) are written only on explicit user action; keep
+  only useful history and prune periodically if they grow.
+- Category/protocol/ecosystem are app-validated text, so expanding the taxonomy
+  needs no migration.
+
+Future features that WOULD add recurring cost (defer until approved): live
+vendor/device-cloud integrations, scheduled battery/firmware reminders, and any
+always-running sync process. See `docs/HOME_AUTOMATION.md`.

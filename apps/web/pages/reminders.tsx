@@ -6,8 +6,8 @@ import {
   REMINDER_PRIORITIES,
   REMINDER_STATUSES,
   REMINDER_TYPES
-} from '@home-bible/shared';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+} from '@home-folder/shared';
+import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
@@ -124,7 +124,12 @@ export default function RemindersPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -297,6 +302,10 @@ export default function RemindersPage() {
   const removeReminder = async (id: string) => {
     if (!context) return;
 
+    if (!window.confirm('Delete this reminder?')) {
+      return;
+    }
+
     setActingId(id);
     setError('');
 
@@ -320,13 +329,13 @@ export default function RemindersPage() {
       />
 
       <Card>
-        <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+        <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
           {dataMode === 'supabase'
             ? 'Saved to your account.'
             : 'Demo data is stored only in this browser.'}
         </p>
         {error ? (
-          <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+          <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
             {error}
           </p>
         ) : null}
@@ -336,7 +345,7 @@ export default function RemindersPage() {
         <h2 style={{ marginTop: 0 }}>Add reminder</h2>
         {dataMode === 'supabase' && !context?.property ? (
           <div>
-            <p style={{ color: '#6b7280' }}>Create a property before adding reminders.</p>
+            <p style={{ color: 'var(--text-muted)' }}>Create a property before adding reminders.</p>
             <ActionLink href="/create-property">Create property</ActionLink>
           </div>
         ) : (
@@ -349,7 +358,7 @@ export default function RemindersPage() {
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder="Change HVAC filter"
                 disabled={formDisabled}
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
               />
             </label>
 
@@ -361,7 +370,7 @@ export default function RemindersPage() {
                 placeholder="Optional notes"
                 disabled={formDisabled}
                 rows={3}
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db', resize: 'vertical' }}
+                style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)', resize: 'vertical' }}
               />
             </label>
 
@@ -372,7 +381,7 @@ export default function RemindersPage() {
                   value={reminderType}
                   onChange={(event) => setReminderType(event.target.value as ReminderType)}
                   disabled={formDisabled}
-                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
                 >
                   {REMINDER_TYPES.map((type) => (
                     <option key={type} value={type}>
@@ -389,7 +398,7 @@ export default function RemindersPage() {
                   value={dueDate}
                   onChange={(event) => setDueDate(event.target.value)}
                   disabled={formDisabled}
-                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
                 />
               </label>
 
@@ -399,7 +408,7 @@ export default function RemindersPage() {
                   value={frequency}
                   onChange={(event) => setFrequency(event.target.value as ReminderFrequency)}
                   disabled={formDisabled}
-                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
                 >
                   {REMINDER_FREQUENCIES.map((option) => (
                     <option key={option} value={option}>
@@ -417,7 +426,7 @@ export default function RemindersPage() {
                   value={linkedType}
                   onChange={(event) => setLinkedType(event.target.value as LinkTypeOption)}
                   disabled={formDisabled}
-                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
                 >
                   <option value="">Not linked</option>
                   {REMINDER_LINKED_TYPES.map((type) => (
@@ -434,7 +443,7 @@ export default function RemindersPage() {
                   value={linkedId}
                   onChange={(event) => setLinkedId(event.target.value)}
                   disabled={formDisabled || !linkedType}
-                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
                 >
                   <option value="">Not linked</option>
                   {linkedOptions.map((option) => (
@@ -451,7 +460,7 @@ export default function RemindersPage() {
                   value={priority}
                   onChange={(event) => setPriority(event.target.value as ReminderPriority)}
                   disabled={formDisabled}
-                  style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                  style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
                 >
                   {REMINDER_PRIORITIES.map((option) => (
                     <option key={option} value={option}>
@@ -468,7 +477,7 @@ export default function RemindersPage() {
                 value={status}
                 onChange={(event) => setStatus(event.target.value as ReminderStatus)}
                 disabled={formDisabled}
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
               >
                 {REMINDER_STATUSES.map((statusOption) => (
                   <option key={statusOption} value={statusOption}>
@@ -501,7 +510,7 @@ export default function RemindersPage() {
         <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ fontWeight: 600 }}>Status</span>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
               <option value="">All statuses</option>
               {REMINDER_STATUSES.map((value) => (
                 <option key={value} value={value}>{formatEnumLabel(value)}</option>
@@ -510,7 +519,7 @@ export default function RemindersPage() {
           </label>
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ fontWeight: 600 }}>Type</span>
-            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
               <option value="">All types</option>
               {REMINDER_TYPES.map((value) => (
                 <option key={value} value={value}>{formatEnumLabel(value)}</option>
@@ -519,7 +528,7 @@ export default function RemindersPage() {
           </label>
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ fontWeight: 600 }}>Linked to</span>
-            <select value={linkedFilter} onChange={(event) => setLinkedFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+            <select value={linkedFilter} onChange={(event) => setLinkedFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
               <option value="">Any item</option>
               {REMINDER_LINKED_TYPES.map((value) => (
                 <option key={value} value={value}>{formatEnumLabel(value)}</option>
@@ -528,7 +537,7 @@ export default function RemindersPage() {
           </label>
           <label style={{ display: 'grid', gap: 6 }}>
             <span style={{ fontWeight: 600 }}>Sort</span>
-            <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'due_date' | 'priority' | 'status')} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'due_date' | 'priority' | 'status')} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
               <option value="due_date">Due date</option>
               <option value="priority">Priority</option>
               <option value="status">Status</option>
@@ -539,17 +548,17 @@ export default function RemindersPage() {
 
       {loading ? (
         <Card>
-          <p style={{ color: '#6b7280', margin: 0 }}>Loading reminders...</p>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading reminders...</p>
         </Card>
       ) : reminders.length === 0 ? (
         <Card>
           <h3 style={{ marginTop: 0 }}>No reminders yet</h3>
-          <p style={{ color: '#6b7280' }}>Add your first reminder to track upcoming home tasks.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Add your first reminder to track upcoming home tasks.</p>
         </Card>
       ) : filteredReminders.length === 0 ? (
         <Card>
           <h3 style={{ marginTop: 0 }}>No reminders match</h3>
-          <p style={{ color: '#6b7280' }}>Adjust the filters to see more reminders.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Adjust the filters to see more reminders.</p>
         </Card>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
@@ -564,7 +573,7 @@ export default function RemindersPage() {
                     <UtilityBadge label={formatEnumLabel(reminder.priority)} />
                     {reminder.linked_type && <UtilityBadge label={formatEnumLabel(reminder.linked_type)} />}
                   </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.9rem', lineHeight: 1.6 }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>
                     <div>
                       <strong>Due:</strong> {formatDateLabel(reminder.due_date)}
                     </div>
@@ -577,7 +586,7 @@ export default function RemindersPage() {
                       </div>
                     )}
                     {reminder.description && (
-                      <div style={{ marginTop: 4, color: '#4b5563' }}>{reminder.description}</div>
+                      <div style={{ marginTop: 4, color: 'var(--text-muted)' }}>{reminder.description}</div>
                     )}
                   </div>
                 </div>
@@ -590,7 +599,7 @@ export default function RemindersPage() {
                     style={{
                       padding: '8px 10px',
                       borderRadius: 6,
-                      border: '1px solid #d1d5db',
+                      border: '1px solid var(--border-subtle)',
                       background: '#ffffff',
                       cursor: actingId === reminder.id ? 'not-allowed' : 'pointer'
                     }}
@@ -604,7 +613,7 @@ export default function RemindersPage() {
                     style={{
                       padding: '8px 10px',
                       borderRadius: 6,
-                      border: '1px solid #d1d5db',
+                      border: '1px solid var(--border-subtle)',
                       background: '#ffffff',
                       cursor: actingId === reminder.id ? 'not-allowed' : 'pointer'
                     }}
@@ -618,7 +627,7 @@ export default function RemindersPage() {
                     style={{
                       padding: '8px 10px',
                       borderRadius: 6,
-                      border: '1px solid #d1d5db',
+                      border: '1px solid var(--border-subtle)',
                       background: '#ffffff',
                       cursor: actingId === reminder.id ? 'not-allowed' : 'pointer'
                     }}
@@ -632,9 +641,9 @@ export default function RemindersPage() {
                     style={{
                       padding: '8px 10px',
                       borderRadius: 6,
-                      border: '1px solid #fecaca',
-                      background: '#fef2f2',
-                      color: '#b91c1c',
+                      border: '1px solid rgba(163,78,51,0.30)',
+                      background: 'rgba(163,78,51,0.08)',
+                      color: 'var(--status-urgent)',
                       cursor: actingId === reminder.id ? 'not-allowed' : 'pointer'
                     }}
                   >

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
-import { Button, Card, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel } from '@home-folder/shared';
+import { Button, Card, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from './ActionLink';
 import {
   createDocumentSignedUrlForContext,
@@ -49,27 +49,27 @@ export function RelatedDocuments({
   return (
     <Card>
       <h2 style={{ marginTop: 0 }}>{title}</h2>
-      {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
+      {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p> : null}
       {documents.length === 0 ? (
-        <p style={{ color: '#6b7280' }}>{empty}</p>
+        <p style={{ color: 'var(--text-muted)' }}>{empty}</p>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
           {documents.map((document) => {
             const isActing = actingDocumentId === document.id;
 
             return (
-              <div key={document.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+              <div key={document.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'start' }}>
                   <div>
                     <div style={{ fontWeight: 700 }}>{document.title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {document.file_name} • {formatFileSize(document.file_size_bytes)}
                     </div>
                   </div>
                   <UtilityBadge label={formatEnumLabel(document.document_type)} />
                 </div>
                 {document.description ? (
-                  <p style={{ color: '#4b5563', marginBottom: 8 }}>{document.description}</p>
+                  <p style={{ color: 'var(--text-muted)', marginBottom: 8 }}>{document.description}</p>
                 ) : null}
                 <div style={{ marginTop: 10 }}>
                   <Button type="button" onClick={() => openDocument(document.id)} disabled={isActing}>

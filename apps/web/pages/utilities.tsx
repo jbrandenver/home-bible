@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
-import { PageHeader, Card, EmptyState, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel, UTILITY_TYPES } from '@home-folder/shared';
+import { PageHeader, Card, EmptyState, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
@@ -184,7 +184,12 @@ export default function UtilitiesPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -201,6 +206,10 @@ export default function UtilitiesPage() {
 
   const handleDelete = async (id: string) => {
     if (!context) {
+      return;
+    }
+
+    if (!window.confirm('Delete this utility location?')) {
       return;
     }
 
@@ -283,33 +292,33 @@ export default function UtilitiesPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {reminderError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {reminderError}
             </p>
           ) : null}
           {repairError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {repairError}
             </p>
           ) : null}
           {serviceRecordError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {serviceRecordError}
             </p>
           ) : null}
           {issueError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {issueError}
             </p>
           ) : null}
           {trendFlagError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {trendFlagError}
             </p>
           ) : null}
@@ -328,12 +337,12 @@ export default function UtilitiesPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Utility name"
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
               />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Type</span>
-              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as UtilityTypeFilter)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as UtilityTypeFilter)} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 {utilityTypeFilterOptions.map((option) => (
                   <option key={option.value || 'all'} value={option.value}>{option.label}</option>
                 ))}
@@ -341,7 +350,7 @@ export default function UtilitiesPage() {
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Room</span>
-              <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <option value="">All rooms</option>
                 {roomOptions.map((room) => (
                   <option key={room.id} value={room.id}>{room.name}</option>
@@ -350,7 +359,7 @@ export default function UtilitiesPage() {
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Sort</span>
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'name' | 'utility_type')} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'name' | 'utility_type')} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <option value="name">Name</option>
                 <option value="utility_type">Utility type</option>
               </select>
@@ -358,9 +367,9 @@ export default function UtilitiesPage() {
           </div>
 
           {loading ? (
-            <p style={{ color: '#6b7280', margin: 0 }}>Loading utilities...</p>
+            <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading utilities...</p>
           ) : error ? (
-            <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>{error}</p>
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }}>{error}</p>
           ) : dataMode === 'supabase' && context && !context.property ? (
             <div>
               <EmptyState
@@ -389,7 +398,7 @@ export default function UtilitiesPage() {
                   key={utility.id}
                   style={{
                     padding: 12,
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: 8,
                     display: 'grid',
                     gridTemplateColumns: '1fr auto',
@@ -399,7 +408,7 @@ export default function UtilitiesPage() {
                 >
                   <div>
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>{utility.name}</div>
-                    <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: 8 }}>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 8 }}>
                       <UtilityBadge label={formatEnumLabel(utility.utility_type)} />
                       <span style={{ marginLeft: 8 }}>
                         <UtilityBadge label={`${getReminderCount(utility.id)} reminder${getReminderCount(utility.id) === 1 ? '' : 's'}`} />
@@ -425,7 +434,7 @@ export default function UtilitiesPage() {
                       </div>
                     )}
                     {utility.emergency_notes && (
-                      <div style={{ fontSize: '0.875rem', color: '#dc2626' }}>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--status-urgent)' }}>
                         <strong>Emergency:</strong> {utility.emergency_notes}
                       </div>
                     )}
@@ -436,8 +445,8 @@ export default function UtilitiesPage() {
                       onClick={() => handleDelete(utility.id)}
                       disabled={deletingId === utility.id}
                       style={{
-                        background: '#fee2e2',
-                        color: '#991b1b',
+                        background: 'rgba(163,78,51,0.12)',
+                        color: 'var(--status-urgent)',
                         border: 'none',
                         borderRadius: 4,
                         padding: '8px 10px',

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
-import { Button, Card, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel } from '@home-folder/shared';
+import { Button, Card, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from './ActionLink';
 import { createDocumentSignedUrlForContext, type DocumentDataContext } from '../lib/documents';
 import { formatReceiptAmount, type ReceiptDataContext, type ReceiptRow } from '../lib/receipts';
@@ -47,9 +47,9 @@ export function RelatedReceipts({
   return (
     <Card>
       <h2 style={{ marginTop: 0 }}>{title}</h2>
-      {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
+      {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p> : null}
       {receipts.length === 0 ? (
-        <p style={{ color: '#6b7280' }}>{empty}</p>
+        <p style={{ color: 'var(--text-muted)' }}>{empty}</p>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
           {receipts.map((receipt) => {
@@ -57,18 +57,18 @@ export function RelatedReceipts({
             const titleText = receipt.vendor_name || receipt.description || 'Receipt';
 
             return (
-              <div key={receipt.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+              <div key={receipt.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'start' }}>
                   <div>
                     <div style={{ fontWeight: 700 }}>{titleText}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {receipt.purchase_date || 'No date'} • {formatReceiptAmount(receipt)}
                     </div>
                   </div>
                   <UtilityBadge label={formatEnumLabel(receipt.category)} />
                 </div>
                 {receipt.notes ? (
-                  <p style={{ color: '#4b5563', marginBottom: 8 }}>{receipt.notes}</p>
+                  <p style={{ color: 'var(--text-muted)', marginBottom: 8 }}>{receipt.notes}</p>
                 ) : null}
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
                   {receipt.document_id ? (

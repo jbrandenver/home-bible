@@ -77,5 +77,5 @@ git status
 git fetch --prune
 git branch --merged main
 git branch -r --merged origin/main
-corepack pnpm --filter @home-bible/web build
+corepack pnpm --filter @home-folder/web build
 ```

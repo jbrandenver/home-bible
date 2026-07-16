@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { UTILITY_TYPES, formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Input, Select, Button } from '@home-bible/ui';
+import { UTILITY_TYPES, formatEnumLabel } from '@home-folder/shared';
+import { PageHeader, Card, Input, Select, Button } from '@home-folder/ui';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getRoomsForProperty } from '../lib/rooms';
 import {
@@ -69,7 +69,12 @@ export default function AddUtilityPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -144,18 +149,18 @@ export default function AddUtilityPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {dataMode === 'demo' && !context?.supabaseConfigured ? (
-            <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
+            <p style={{ marginTop: 10, marginBottom: 0, color: 'var(--color-clay)' }}>
               Account saving is not available in this local build. Demo data stays only in this browser.
             </p>
           ) : null}
           {dataMode === 'supabase' && context && !context.property ? (
-            <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
+            <p style={{ marginTop: 10, marginBottom: 0, color: 'var(--color-clay)' }}>
               Create a property before adding utilities to your account.
             </p>
           ) : null}
@@ -271,7 +276,7 @@ export default function AddUtilityPage() {
           </div>
 
           {error ? (
-            <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }}>
               {error}
             </p>
           ) : null}
@@ -285,9 +290,9 @@ export default function AddUtilityPage() {
               onClick={() => router.push('/utilities')}
               style={{
                 padding: '8px 16px',
-                background: '#f3f4f6',
-                color: '#374151',
-                border: '1px solid #d1d5db',
+                background: 'var(--surface-page)',
+                color: 'var(--text-primary)',
+                border: '1px solid var(--border-subtle)',
                 borderRadius: '6px',
                 cursor: 'pointer',
                 fontWeight: 500

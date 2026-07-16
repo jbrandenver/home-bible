@@ -1,6 +1,6 @@
 # Pre-Commit Checklist
 
-Run this checklist before committing Home Bible changes.
+Run this checklist before committing Home Folder changes.
 
 ## Security
 
@@ -36,7 +36,7 @@ Run this checklist before committing Home Bible changes.
 
 ## Verification
 
-- Did `corepack pnpm --filter @home-bible/web build` pass?
+- Did `corepack pnpm --filter @home-folder/web build` pass?
 - Did affected routes or workflows get smoke tested?
 - Did docs mention any manual Supabase SQL steps if needed?
 - Did migrations avoid dropping production data?

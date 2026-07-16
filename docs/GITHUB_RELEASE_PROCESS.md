@@ -78,7 +78,7 @@ v0.1.0-rc1
 After the release-candidate commit is approved:
 
 ```bash
-git tag -a v0.1.0-rc1 -m "Home Bible private MVP release candidate 1"
+git tag -a v0.1.0-rc1 -m "Home Folder private MVP release candidate 1"
 ```
 
 ## Push A Tag

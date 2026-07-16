@@ -4,9 +4,10 @@ import {
   REPAIR_PRIORITIES,
   REPAIR_STATUSES,
   REPAIR_TYPES,
-  SERVICE_TYPES
-} from '@home-bible/shared';
-import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-bible/ui';
+  SERVICE_TYPES,
+  toLocalDateString
+} from '@home-folder/shared';
+import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
@@ -98,7 +99,7 @@ export default function RepairsPage() {
   const [repairType, setRepairType] = useState<(typeof REPAIR_TYPES)[number]>('general');
   const [repairStatus, setRepairStatus] = useState<(typeof REPAIR_STATUSES)[number]>('open');
   const [repairPriority, setRepairPriority] = useState<(typeof REPAIR_PRIORITIES)[number]>('normal');
-  const [reportedDate, setReportedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [reportedDate, setReportedDate] = useState(toLocalDateString());
   const [completedDate, setCompletedDate] = useState('');
   const [contractorName, setContractorName] = useState('');
   const [contractorPhone, setContractorPhone] = useState('');
@@ -112,7 +113,7 @@ export default function RepairsPage() {
 
   const [serviceTitle, setServiceTitle] = useState('');
   const [serviceType, setServiceType] = useState<(typeof SERVICE_TYPES)[number]>('maintenance');
-  const [serviceDate, setServiceDate] = useState(new Date().toISOString().slice(0, 10));
+  const [serviceDate, setServiceDate] = useState(toLocalDateString());
   const [providerName, setProviderName] = useState('');
   const [providerPhone, setProviderPhone] = useState('');
   const [providerEmail, setProviderEmail] = useState('');
@@ -209,7 +210,12 @@ export default function RepairsPage() {
       setLoading(false);
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -331,7 +337,7 @@ export default function RepairsPage() {
     setRepairType('general');
     setRepairStatus('open');
     setRepairPriority('normal');
-    setReportedDate(new Date().toISOString().slice(0, 10));
+    setReportedDate(toLocalDateString());
     setCompletedDate('');
     setContractorName('');
     setContractorPhone('');
@@ -347,7 +353,7 @@ export default function RepairsPage() {
   const resetServiceRecordForm = () => {
     setServiceTitle('');
     setServiceType('maintenance');
-    setServiceDate(new Date().toISOString().slice(0, 10));
+    setServiceDate(toLocalDateString());
     setProviderName('');
     setProviderPhone('');
     setProviderEmail('');
@@ -489,6 +495,10 @@ export default function RepairsPage() {
       return;
     }
 
+    if (!window.confirm('Delete this repair?')) {
+      return;
+    }
+
     setDeletingId(repairId);
     setFormError('');
 
@@ -504,6 +514,10 @@ export default function RepairsPage() {
 
   const deleteServiceRecord = async (recordId: string) => {
     if (!serviceContext) {
+      return;
+    }
+
+    if (!window.confirm('Delete this service history item?')) {
       return;
     }
 
@@ -577,24 +591,24 @@ export default function RepairsPage() {
             <UtilityBadge label={`${openIssueCount} open issue${openIssueCount === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${activeTrendFlagCount} active trend${activeTrendFlagCount === 1 ? '' : 's'}`} />
           </div>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {loading ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>Loading repairs and service history...</p>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--text-muted)' }}>Loading repairs and service history...</p>
           ) : null}
           {loadError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>{loadError}</p>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>{loadError}</p>
           ) : null}
           {dataMode === 'supabase' && !hasProperty ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--text-muted)' }}>
               Create a property before adding repairs or service history.
             </p>
           ) : null}
           {formError ? (
-            <div style={{ marginTop: 12, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: 8, padding: 10 }}>
+            <div style={{ marginTop: 12, background: 'rgba(163,78,51,0.08)', color: 'var(--status-urgent)', border: '1px solid rgba(163,78,51,0.30)', borderRadius: 8, padding: 10 }}>
               {formError}
             </div>
           ) : null}
@@ -870,13 +884,13 @@ export default function RepairsPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Trends</h2>
           {trendFlags.length === 0 ? (
-            <p style={{ color: '#6b7280', margin: 0 }}>No trends currently. Keep logging service history for better trend insight.</p>
+            <p style={{ color: 'var(--text-muted)', margin: 0 }}>No trends currently. Keep logging service history for better trend insight.</p>
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {trendFlags.map((flag) => (
-                <div key={flag.id} style={{ padding: 10, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <div key={flag.id} style={{ padding: 10, border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
                   <strong>{flag.title}</strong>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                     {flag.description || `${formatEnumLabel(flag.flag_type)} • ${formatEnumLabel(flag.status)} • ${formatEnumLabel(flag.severity)}`}
                   </div>
                 </div>
@@ -896,11 +910,11 @@ export default function RepairsPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Repairs ({filteredRepairs.length})</h2>
             {filteredRepairs.length === 0 ? (
-              <p style={{ color: '#6b7280', margin: 0 }}>No repairs match the current filters.</p>
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No repairs match the current filters.</p>
             ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {filteredRepairs.map((repair) => (
-                <div key={repair.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                <div key={repair.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
                     <div>
                       <h3 style={{ margin: '0 0 8px 0' }}>{repair.title}</h3>
@@ -912,7 +926,7 @@ export default function RepairsPage() {
                         {repair.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, repair.asset_id) || 'Unknown'}`} />}
                         {repair.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, repair.utility_id) || 'Unknown'}`} />}
                       </div>
-                      <div style={{ color: '#6b7280', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
                         <div><strong>Reported:</strong> {repair.reported_date || 'Not set'}</div>
                         {repair.completed_date && <div><strong>Completed:</strong> {repair.completed_date}</div>}
                         {repair.contractor_name && <div><strong>Contractor:</strong> {repair.contractor_name}</div>}
@@ -925,6 +939,7 @@ export default function RepairsPage() {
 
                     <div style={{ display: 'grid', gap: 8, minWidth: 140 }}>
                       <ActionLink href={`/repairs/${repair.id}`} variant="secondary">View</ActionLink>
+                      <ActionLink href={`/repairs/${repair.id}/service-call`} variant="secondary">Service call sheet</ActionLink>
                       <select
                         value={repair.status}
                         onChange={(event) => changeRepairStatus(repair.id, event.target.value as RepairStatus)}
@@ -942,9 +957,9 @@ export default function RepairsPage() {
                         style={{
                           padding: '8px 12px',
                           borderRadius: 6,
-                          border: '1px solid #fecaca',
-                          background: '#fef2f2',
-                          color: '#b91c1c',
+                          border: '1px solid rgba(163,78,51,0.30)',
+                          background: 'rgba(163,78,51,0.08)',
+                          color: 'var(--status-urgent)',
                           cursor: deletingId === repair.id ? 'not-allowed' : 'pointer',
                           opacity: deletingId === repair.id ? 0.7 : 1
                         }}
@@ -964,11 +979,11 @@ export default function RepairsPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Service History ({filteredServiceRecords.length})</h2>
             {filteredServiceRecords.length === 0 ? (
-              <p style={{ color: '#6b7280', margin: 0 }}>No service history matches the current filters.</p>
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No service history matches the current filters.</p>
             ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {filteredServiceRecords.map((record) => (
-                <div key={record.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                <div key={record.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
                     <div>
                       <h3 style={{ margin: '0 0 8px 0' }}>{record.service_title}</h3>
@@ -978,7 +993,7 @@ export default function RepairsPage() {
                         {record.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, record.asset_id) || 'Unknown'}`} />}
                         {record.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, record.utility_id) || 'Unknown'}`} />}
                       </div>
-                      <div style={{ color: '#6b7280', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
                         <div><strong>Date:</strong> {record.service_date}</div>
                         {record.cost !== null && <div><strong>Cost:</strong> ${record.cost}</div>}
                         {record.provider_name && <div><strong>Provider:</strong> {record.provider_name}</div>}
@@ -995,9 +1010,9 @@ export default function RepairsPage() {
                       style={{
                         padding: '8px 12px',
                         borderRadius: 6,
-                        border: '1px solid #fecaca',
-                        background: '#fef2f2',
-                        color: '#b91c1c',
+                        border: '1px solid rgba(163,78,51,0.30)',
+                        background: 'rgba(163,78,51,0.08)',
+                        color: 'var(--status-urgent)',
                         cursor: deletingId === record.id ? 'not-allowed' : 'pointer',
                         height: 'fit-content',
                         opacity: deletingId === record.id ? 0.7 : 1

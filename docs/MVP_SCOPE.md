@@ -1,6 +1,6 @@
 # MVP Scope
 
-This document defines the Home Bible private MVP release-candidate scope.
+This document defines the Home Folder private MVP release-candidate scope.
 
 ## Current MVP Capabilities
 

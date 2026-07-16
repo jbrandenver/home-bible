@@ -1,4 +1,4 @@
-import { Card, PageHeader } from '@home-bible/ui';
+import { Card, PageHeader } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ShortcutLink } from '../components/ShortcutLink';
 
@@ -20,6 +20,12 @@ const homeLinks = [
     description: 'Find shutoffs, panels, HVAC, water heater, router, and safety devices quickly.',
     href: '/utilities',
     action: 'Open utilities'
+  },
+  {
+    title: 'Smart Home',
+    description: 'Document every connected device, how it communicates, what it depends on, and what to do when something fails.',
+    href: '/automation',
+    action: 'Open smart home'
   },
   {
     title: 'Property',

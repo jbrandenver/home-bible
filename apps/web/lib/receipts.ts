@@ -6,7 +6,7 @@ import {
   type ReceiptCategory,
   type ReceiptRow as SharedReceiptRow,
   type ReceiptSource
-} from '@home-bible/shared';
+} from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { ensureProfileForUser, getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import {

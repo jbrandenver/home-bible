@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState, type ReactNode } from 'react';
-import { formatEnumLabel, ISSUE_STATUSES } from '@home-bible/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel, ISSUE_STATUSES } from '@home-folder/shared';
+import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
@@ -132,7 +132,12 @@ export default function IssueDetailPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -158,6 +163,10 @@ export default function IssueDetailPage() {
   const deleteIssue = async () => {
     if (!context || !issue) return;
 
+    if (!window.confirm('Delete this issue?')) {
+      return;
+    }
+
     setActing(true);
     setError('');
 
@@ -175,7 +184,7 @@ export default function IssueDetailPage() {
       <>
         <PageHeader title="Issue" />
         <Card>
-          <p style={{ color: '#6b7280', margin: 0 }}>Loading issue...</p>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading issue...</p>
         </Card>
       </>
     );
@@ -186,7 +195,7 @@ export default function IssueDetailPage() {
       <>
         <PageHeader title={error ? 'Issue error' : 'Issue not found'} />
         <Card>
-          <p style={{ color: error ? '#b91c1c' : '#6b7280', fontWeight: error ? 700 : 400 }}>
+          <p style={{ color: error ? 'var(--status-urgent)' : 'var(--text-muted)', fontWeight: error ? 700 : 400 }}>
             {error || 'This issue may have been removed, or it may not belong to the current property.'}
           </p>
           <ActionLink href="/issues" variant="secondary">Back to issues</ActionLink>
@@ -201,12 +210,12 @@ export default function IssueDetailPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
-          {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
+          {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p> : null}
         </Card>
 
         <Card>
@@ -220,7 +229,7 @@ export default function IssueDetailPage() {
             {issue.repair_id && <UtilityBadge label={`Repair: ${nameFromId(repairs, issue.repair_id) || 'Unknown'}`} />}
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
           </div>
-          <div style={{ color: '#4b5563', display: 'grid', gap: 6 }}>
+          <div style={{ color: 'var(--text-muted)', display: 'grid', gap: 6 }}>
             <div><strong>First seen:</strong> {issue.first_seen_date || 'Not set'}</div>
             {issue.last_seen_date && <div><strong>Last seen:</strong> {issue.last_seen_date}</div>}
             {issue.resolved_date && <div><strong>Resolved:</strong> {issue.resolved_date}</div>}
@@ -244,9 +253,9 @@ export default function IssueDetailPage() {
               style={{
                 padding: '10px 14px',
                 borderRadius: 6,
-                border: '1px solid #fecaca',
-                background: '#fef2f2',
-                color: '#b91c1c',
+                border: '1px solid rgba(163,78,51,0.30)',
+                background: 'rgba(163,78,51,0.08)',
+                color: 'var(--status-urgent)',
                 cursor: acting ? 'not-allowed' : 'pointer',
                 fontWeight: 700,
                 opacity: acting ? 0.7 : 1
@@ -261,9 +270,9 @@ export default function IssueDetailPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Linked repair</h2>
             <Link href={`/repairs/${issue.repair_id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+              <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                 <div style={{ fontWeight: 700 }}>{nameFromId(repairs, issue.repair_id) || 'Repair'}</div>
-                <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>Open repair detail</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Open repair detail</div>
               </div>
             </Link>
           </Card>
@@ -303,16 +312,16 @@ function RelatedList({ title, empty, children }: { title: string; empty: string;
   return (
     <Card>
       <h2 style={{ marginTop: 0 }}>{title}</h2>
-      {hasItems ? <div style={{ display: 'grid', gap: 10 }}>{children}</div> : <p style={{ color: '#6b7280', margin: 0 }}>{empty}</p>}
+      {hasItems ? <div style={{ display: 'grid', gap: 10 }}>{children}</div> : <p style={{ color: 'var(--text-muted)', margin: 0 }}>{empty}</p>}
     </Card>
   );
 }
 
 function RelatedItem({ title, detail }: { title: string; detail: string }) {
   return (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+    <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
       <div style={{ fontWeight: 700 }}>{title}</div>
-      <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{detail}</div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{detail}</div>
     </div>
   );
 }

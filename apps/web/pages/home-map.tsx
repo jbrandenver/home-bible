@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { PageHeader, Card, FloorSection, RoomCard, UtilityBadge } from '@home-bible/ui';
+import { PageHeader, Card, FloorSection, RoomCard, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
@@ -45,6 +45,7 @@ export default function HomeMapPage() {
   const [receiptError, setReceiptError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
+  const [roomError, setRoomError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -183,19 +184,27 @@ export default function HomeMapPage() {
         setPropertyNickname(utilityContext.property?.nickname || 'Your property');
 
         if (utilityContext.property) {
-          const remoteRooms = await getRoomsForProperty(utilityContext.property.id);
-          if (!isMounted) {
-            return;
-          }
+          try {
+            const remoteRooms = await getRoomsForProperty(utilityContext.property.id);
+            if (!isMounted) {
+              return;
+            }
 
-          setRooms(
-            remoteRooms.map((room) => ({
-              id: room.id,
-              name: room.name,
-              room_type: room.room_type,
-              floor_name: room.floor_name
-            }))
-          );
+            setRooms(
+              remoteRooms.map((room) => ({
+                id: room.id,
+                name: room.name,
+                room_type: room.room_type,
+                floor_name: room.floor_name
+              }))
+            );
+          } catch (loadError) {
+            if (!isMounted) {
+              return;
+            }
+            setRooms([]);
+            setRoomError(loadError instanceof Error ? loadError.message : 'Failed to load rooms.');
+          }
         } else {
           setRooms([]);
         }
@@ -209,7 +218,11 @@ export default function HomeMapPage() {
 
     }
 
-    load();
+    load().catch((loadError) => {
+      if (isMounted) {
+        setRoomError(loadError instanceof Error ? loadError.message : 'Failed to load home map data.');
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -341,53 +354,58 @@ export default function HomeMapPage() {
               <UtilityBadge label={`${issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length} open issue${issues.filter((issue) => issue.status !== 'resolved' && issue.status !== 'dismissed').length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${trendFlags.filter((flag) => flag.status === 'active').length} active trend${trendFlags.filter((flag) => flag.status === 'active').length === 1 ? '' : 's'}`} />
             </div>
-            <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
+            <p style={{ marginTop: 12, marginBottom: 0, color: 'var(--text-muted)' }}>
               {dataMode === 'supabase'
                 ? 'Saved to your account.'
                 : 'Demo data is stored only in this browser.'}
             </p>
+            {roomError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
+                {roomError}
+              </p>
+            ) : null}
             {utilityError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {utilityError}
               </p>
             ) : null}
             {assetError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {assetError}
               </p>
             ) : null}
             {reminderError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {reminderError}
               </p>
             ) : null}
             {repairError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {repairError}
               </p>
             ) : null}
             {serviceRecordError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {serviceRecordError}
               </p>
             ) : null}
             {documentError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {documentError}
               </p>
             ) : null}
             {receiptError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {receiptError}
               </p>
             ) : null}
             {issueError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {issueError}
               </p>
             ) : null}
             {trendFlagError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {trendFlagError}
               </p>
             ) : null}
@@ -396,14 +414,14 @@ export default function HomeMapPage() {
           {!hasProperty ? (
             <Card>
               <h2 style={{ marginTop: 0 }}>Start your home record.</h2>
-              <p style={{ color: '#6b7280' }}>Create the property first. Your rooms, utilities, assets, and files will save to that home.</p>
+              <p style={{ color: 'var(--text-muted)' }}>Create the property first. Your rooms, utilities, assets, and files will save to that home.</p>
               <ActionLink href="/create-property">Create property</ActionLink>
             </Card>
           ) : rooms.length === 0 ? (
             <Card>
               <h2 style={{ marginTop: 0 }}>No rooms yet - let's map the house.</h2>
-              <p style={{ color: '#6b7280' }}>
-                Add rooms first so Home & Everything can build your home map.
+              <p style={{ color: 'var(--text-muted)' }}>
+                Add rooms first so Home Folder can build your home map.
               </p>
               <ActionLink href="/add-rooms">Add rooms</ActionLink>
             </Card>

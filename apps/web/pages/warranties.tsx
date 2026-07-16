@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel, safeHttpUrl, toLocalDateString } from '@home-folder/shared';
+import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   getAssetDataContext,
@@ -44,7 +44,7 @@ function getWarrantyMeta(asset: AssetRow): {
     return {
       status: 'expired',
       daysRemaining,
-      expirationDate: expirationDate.toISOString().slice(0, 10)
+      expirationDate: toLocalDateString(expirationDate)
     };
   }
 
@@ -52,40 +52,40 @@ function getWarrantyMeta(asset: AssetRow): {
     return {
       status: 'expiring_soon',
       daysRemaining,
-      expirationDate: expirationDate.toISOString().slice(0, 10)
+      expirationDate: toLocalDateString(expirationDate)
     };
   }
 
   return {
     status: 'active',
     daysRemaining,
-    expirationDate: expirationDate.toISOString().slice(0, 10)
+    expirationDate: toLocalDateString(expirationDate)
   };
 }
 
 function getStatusColor(status: string): string {
   switch (status) {
     case 'active':
-      return '#d1fae5';
+      return 'rgba(95,107,72,0.15)';
     case 'expiring_soon':
-      return '#fef3c7';
+      return 'rgba(227,194,136,0.22)';
     case 'expired':
-      return '#fee2e2';
+      return 'rgba(163,78,51,0.12)';
     default:
-      return '#f3f4f6';
+      return 'var(--surface-page)';
   }
 }
 
 function getStatusTextColor(status: string): string {
   switch (status) {
     case 'active':
-      return '#065f46';
+      return 'var(--status-good)';
     case 'expiring_soon':
-      return '#92400e';
+      return 'var(--color-brass-deep)';
     case 'expired':
-      return '#7f1d1d';
+      return 'var(--status-urgent)';
     default:
-      return '#4b5563';
+      return 'var(--text-muted)';
   }
 }
 
@@ -148,7 +148,12 @@ export default function WarrantiesPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -303,7 +308,7 @@ export default function WarrantiesPage() {
                       <UtilityBadge label={`${warrantyDocumentCountsByAsset[asset.id] || 0} doc${warrantyDocumentCountsByAsset[asset.id] === 1 ? '' : 's'}`} />
                     </div>
 
-                    <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.6 }}>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
                       {expirationDate && (
                         <div>
                           <strong>Expires:</strong> {expirationDate}
@@ -314,25 +319,25 @@ export default function WarrantiesPage() {
                           <strong>Coverage:</strong> {asset.warranty_length_months} months from {asset.purchase_date}
                         </div>
                       )}
-                      {asset.manual_url && (
+                      {safeHttpUrl(asset.manual_url) && (
                         <div>
                           <a
-                            href={asset.manual_url}
+                            href={safeHttpUrl(asset.manual_url) || undefined}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ color: '#3b82f6', textDecoration: 'none' }}
+                            style={{ color: 'var(--accent-strong)', textDecoration: 'none' }}
                           >
                             📄 Manual
                           </a>
                         </div>
                       )}
-                      {asset.support_url && (
+                      {safeHttpUrl(asset.support_url) && (
                         <div>
                           <a
-                            href={asset.support_url}
+                            href={safeHttpUrl(asset.support_url) || undefined}
                             target="_blank"
                             rel="noopener noreferrer"
-                            style={{ color: '#3b82f6', textDecoration: 'none' }}
+                            style={{ color: 'var(--accent-strong)', textDecoration: 'none' }}
                           >
                             🔗 Support
                           </a>
@@ -344,9 +349,9 @@ export default function WarrantiesPage() {
                           style={{
                             marginTop: 12,
                             padding: 12,
-                            border: '1px solid #e5e7eb',
+                            border: '1px solid var(--border-subtle)',
                             borderRadius: 8,
-                            background: '#f9fafb',
+                            background: 'var(--surface-page)',
                             display: 'grid',
                             gap: 8
                           }}
@@ -357,7 +362,7 @@ export default function WarrantiesPage() {
                               type="date"
                               value={draft.purchase_date}
                               onChange={(e) => setDraft((prev) => ({ ...prev, purchase_date: e.target.value }))}
-                              style={{ padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                              style={{ padding: 8, borderRadius: 6, border: '1px solid var(--border-subtle)' }}
                             />
                           </label>
                           <label style={{ display: 'grid', gap: 4 }}>
@@ -369,7 +374,7 @@ export default function WarrantiesPage() {
                               onChange={(e) =>
                                 setDraft((prev) => ({ ...prev, warranty_length_months: e.target.value }))
                               }
-                              style={{ padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                              style={{ padding: 8, borderRadius: 6, border: '1px solid var(--border-subtle)' }}
                             />
                           </label>
                           <label style={{ display: 'grid', gap: 4 }}>
@@ -380,7 +385,7 @@ export default function WarrantiesPage() {
                               onChange={(e) =>
                                 setDraft((prev) => ({ ...prev, warranty_expires_at: e.target.value }))
                               }
-                              style={{ padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                              style={{ padding: 8, borderRadius: 6, border: '1px solid var(--border-subtle)' }}
                             />
                           </label>
                           <label style={{ display: 'grid', gap: 4 }}>
@@ -390,7 +395,7 @@ export default function WarrantiesPage() {
                               value={draft.support_url}
                               onChange={(e) => setDraft((prev) => ({ ...prev, support_url: e.target.value }))}
                               placeholder="https://"
-                              style={{ padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                              style={{ padding: 8, borderRadius: 6, border: '1px solid var(--border-subtle)' }}
                             />
                           </label>
                           <label style={{ display: 'grid', gap: 4 }}>
@@ -400,7 +405,7 @@ export default function WarrantiesPage() {
                               value={draft.manual_url}
                               onChange={(e) => setDraft((prev) => ({ ...prev, manual_url: e.target.value }))}
                               placeholder="https://"
-                              style={{ padding: 8, borderRadius: 6, border: '1px solid #d1d5db' }}
+                              style={{ padding: 8, borderRadius: 6, border: '1px solid var(--border-subtle)' }}
                             />
                           </label>
                           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
@@ -416,9 +421,9 @@ export default function WarrantiesPage() {
                               onClick={() => setEditingAssetId(null)}
                               style={{
                                 padding: '10px 16px',
-                                backgroundColor: '#f3f4f6',
-                                color: '#111827',
-                                border: '1px solid #d1d5db',
+                                backgroundColor: 'var(--surface-page)',
+                                color: 'var(--text-primary)',
+                                border: '1px solid var(--border-subtle)',
                                 borderRadius: 6,
                                 cursor: 'pointer',
                                 fontWeight: 600
@@ -463,7 +468,7 @@ export default function WarrantiesPage() {
           description="Coverage, dates, and proof for the things in your home."
         />
         <Card>
-          <p style={{ color: '#6b7280', margin: 0 }}>Loading warranties...</p>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading warranties...</p>
         </Card>
       </>
     );
@@ -478,18 +483,18 @@ export default function WarrantiesPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {error ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {error}
             </p>
           ) : null}
           {notice ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#065f46', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-good)', fontWeight: 700 }}>
               {notice}
             </p>
           ) : null}
@@ -499,7 +504,7 @@ export default function WarrantiesPage() {
           <Card>
             <div style={{ textAlign: 'center', padding: 24 }}>
               <h2>No assets with warranty info yet</h2>
-              <p style={{ color: '#6b7280', marginBottom: 16 }}>
+              <p style={{ color: 'var(--text-muted)', marginBottom: 16 }}>
                 Add assets and enter warranty information to track coverage here.
               </p>
               <ActionLink href="/add-asset">Add your first asset</ActionLink>

@@ -1,4 +1,4 @@
-import { PageHeader, Card } from '@home-bible/ui';
+import { PageHeader, Card } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 
 export default function AuthPlaceholder() {

@@ -1,4 +1,10 @@
-import { ASSET_TYPES, VISIBILITY_OPTIONS, type VisibilityContext } from '@home-bible/shared';
+import {
+  ASSET_TYPES,
+  VISIBILITY_OPTIONS,
+  createAssetSchema,
+  safeHttpUrl,
+  type VisibilityContext
+} from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
@@ -6,7 +12,7 @@ import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 import { normalizeVisibilityContexts, visibilityFromContexts } from './visibility';
 
-const DEMO_ASSETS_KEY = 'homeBible.assets';
+const DEMO_ASSETS_KEY = 'homeFolder.assets';
 
 export type AssetType = (typeof ASSET_TYPES)[number];
 export type AssetVisibility = (typeof VISIBILITY_OPTIONS)[number];
@@ -31,6 +37,7 @@ export type AssetRow = {
   notes: string | null;
   visibility: AssetVisibility;
   visibility_contexts: VisibilityContext[];
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -65,7 +72,7 @@ export type AssetDataContext = {
 };
 
 const ASSET_SELECT =
-  'id, property_id, room_id, asset_type, name, brand, model, serial_number, purchase_date, purchase_price, retailer, warranty_length_months, warranty_expires_at, manual_url, support_url, notes, visibility, visibility_contexts, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, asset_type, name, brand, model, serial_number, purchase_date, purchase_price, retailer, warranty_length_months, warranty_expires_at, manual_url, support_url, notes, visibility, visibility_contexts, created_by, created_at, updated_at, deleted_at';
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
@@ -104,11 +111,12 @@ function normalizeAsset(raw: Partial<AssetRow>): AssetRow {
     retailer: nullableString(raw.retailer),
     warranty_length_months: nullableNumber(raw.warranty_length_months),
     warranty_expires_at: nullableString(raw.warranty_expires_at),
-    manual_url: nullableString(raw.manual_url),
-    support_url: nullableString(raw.support_url),
+    manual_url: safeHttpUrl(raw.manual_url),
+    support_url: safeHttpUrl(raw.support_url),
     notes: nullableString(raw.notes),
     visibility,
     visibility_contexts: visibilityContexts,
+    created_by: nullableString(raw.created_by),
     created_at: createdAt,
     updated_at: raw.updated_at || createdAt,
     deleted_at: raw.deleted_at || null
@@ -137,8 +145,8 @@ function cleanInput(input: AssetUpdateInput) {
   if (input.retailer !== undefined) cleaned.retailer = input.retailer?.trim() || null;
   if (input.warranty_length_months !== undefined) cleaned.warranty_length_months = input.warranty_length_months ?? null;
   if (input.warranty_expires_at !== undefined) cleaned.warranty_expires_at = input.warranty_expires_at || null;
-  if (input.manual_url !== undefined) cleaned.manual_url = input.manual_url?.trim() || null;
-  if (input.support_url !== undefined) cleaned.support_url = input.support_url?.trim() || null;
+  if (input.manual_url !== undefined) cleaned.manual_url = input.manual_url ? safeHttpUrl(input.manual_url) : null;
+  if (input.support_url !== undefined) cleaned.support_url = input.support_url ? safeHttpUrl(input.support_url) : null;
   if (input.notes !== undefined) cleaned.notes = input.notes?.trim() || null;
   if (input.visibility_contexts !== undefined) {
     const visibilityContexts = normalizeVisibilityContexts(input.visibility_contexts, input.visibility);
@@ -150,6 +158,35 @@ function cleanInput(input: AssetUpdateInput) {
   }
 
   return cleaned;
+}
+
+function formatAssetValidationError(error: unknown) {
+  if (error && typeof error === 'object' && 'issues' in error) {
+    const firstIssue = (error as { issues?: Array<{ message?: string }> }).issues?.[0];
+    if (firstIssue?.message) {
+      return firstIssue.message;
+    }
+  }
+
+  return 'Asset details are invalid.';
+}
+
+function parseAssetInput(input: AssetInput) {
+  const result = createAssetSchema.safeParse(input);
+  if (!result.success) {
+    throw new Error(formatAssetValidationError(result.error));
+  }
+
+  return result.data as AssetInput;
+}
+
+function parseAssetUpdateInput(input: AssetUpdateInput) {
+  const result = createAssetSchema.partial().safeParse(input);
+  if (!result.success) {
+    throw new Error(formatAssetValidationError(result.error));
+  }
+
+  return result.data as AssetUpdateInput;
 }
 
 export function getDemoAssets() {
@@ -270,11 +307,12 @@ export async function getAssetByIdForContext(context: AssetDataContext, assetId:
 
 export async function createAssetForContext(context: AssetDataContext, input: AssetInput) {
   const now = new Date().toISOString();
+  const parsedInput = parseAssetInput(input);
 
   if (context.mode === 'demo') {
     const demoProperty = getDemoActiveProperty();
     const asset: AssetRow = normalizeAsset({
-      ...input,
+      ...parsedInput,
       id: crypto.randomUUID(),
       property_id: demoProperty?.id || null,
       created_at: now,
@@ -299,7 +337,7 @@ export async function createAssetForContext(context: AssetDataContext, input: As
     .from('assets')
     .insert({
       property_id: context.property.id,
-      ...cleanInput(input)
+      ...cleanInput(parsedInput)
     })
     .select(ASSET_SELECT)
     .single();
@@ -316,12 +354,14 @@ export async function updateAssetForContext(
   assetId: string,
   input: AssetUpdateInput
 ) {
+  const parsedInput = parseAssetUpdateInput(input);
+
   if (context.mode === 'demo') {
     const updatedAssets = getDemoAssets().map((asset) =>
       asset.id === assetId
         ? normalizeAsset({
             ...asset,
-            ...cleanInput(input),
+            ...cleanInput(parsedInput),
             updated_at: new Date().toISOString()
           })
         : asset
@@ -342,7 +382,7 @@ export async function updateAssetForContext(
 
   const { data, error } = await supabase
     .from('assets')
-    .update(cleanInput(input))
+    .update(cleanInput(parsedInput))
     .eq('id', assetId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

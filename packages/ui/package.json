@@ -1,5 +1,5 @@
 {
-  "name": "@home-bible/ui",
+  "name": "@home-folder/ui",
   "version": "0.0.1",
   "private": true,
   "main": "./src/index.tsx",

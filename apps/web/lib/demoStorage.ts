@@ -24,12 +24,35 @@ function parseJson<T>(value: string | null, fallback: T): T {
   }
 }
 
+function isDemoProperty(value: unknown): value is DemoProperty {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      typeof (value as DemoProperty).id === 'string' &&
+      typeof (value as DemoProperty).nickname === 'string' &&
+      typeof (value as DemoProperty).property_type === 'string' &&
+      typeof (value as DemoProperty).created_at === 'string'
+  );
+}
+
+function isDemoRoom(value: unknown): value is DemoRoom {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      typeof (value as DemoRoom).id === 'string' &&
+      typeof (value as DemoRoom).name === 'string' &&
+      typeof (value as DemoRoom).room_type === 'string' &&
+      typeof (value as DemoRoom).floor_name === 'string'
+  );
+}
+
 export function getDemoActiveProperty() {
   if (typeof window === 'undefined') {
     return null;
   }
 
-  return parseJson<DemoProperty | null>(window.localStorage.getItem('homeBible.activeProperty'), null);
+  const parsed = parseJson<unknown>(window.localStorage.getItem('homeFolder.activeProperty'), null);
+  return isDemoProperty(parsed) ? parsed : null;
 }
 
 export function setDemoActiveProperty(property: DemoProperty) {
@@ -37,7 +60,7 @@ export function setDemoActiveProperty(property: DemoProperty) {
     return;
   }
 
-  window.localStorage.setItem('homeBible.activeProperty', JSON.stringify(property));
+  window.localStorage.setItem('homeFolder.activeProperty', JSON.stringify(property));
 }
 
 export function getDemoRooms() {
@@ -45,7 +68,8 @@ export function getDemoRooms() {
     return [] as DemoRoom[];
   }
 
-  return parseJson<DemoRoom[]>(window.localStorage.getItem('homeBible.rooms'), []);
+  const parsed = parseJson<unknown>(window.localStorage.getItem('homeFolder.rooms'), []);
+  return Array.isArray(parsed) ? parsed.filter(isDemoRoom) : [];
 }
 
 export function setDemoRooms(rooms: DemoRoom[]) {
@@ -53,7 +77,7 @@ export function setDemoRooms(rooms: DemoRoom[]) {
     return;
   }
 
-  window.localStorage.setItem('homeBible.rooms', JSON.stringify(rooms));
+  window.localStorage.setItem('homeFolder.rooms', JSON.stringify(rooms));
 }
 
 export function getDemoCollection<T>(storageKey: string) {
@@ -61,5 +85,6 @@ export function getDemoCollection<T>(storageKey: string) {
     return [] as T[];
   }
 
-  return parseJson<T[]>(window.localStorage.getItem(storageKey), []);
+  const parsed = parseJson<unknown>(window.localStorage.getItem(storageKey), []);
+  return Array.isArray(parsed) ? (parsed as T[]) : [];
 }

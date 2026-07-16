@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import { formatEnumLabel, UTILITY_TYPES } from '@home-bible/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel, UTILITY_TYPES } from '@home-folder/shared';
+import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
@@ -150,7 +150,12 @@ export default function UtilityDetailPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -195,6 +200,10 @@ export default function UtilityDetailPage() {
   const deleteUtility = async () => {
     if (!context || !utility) return;
 
+    if (!window.confirm('Delete this utility location?')) {
+      return;
+    }
+
     setDeleting(true);
     setFormError('');
 
@@ -212,7 +221,7 @@ export default function UtilityDetailPage() {
       <>
         <PageHeader title="Utility" />
         <Card>
-          <p style={{ margin: 0, color: '#6b7280' }}>Loading utility...</p>
+          <p style={{ margin: 0, color: 'var(--text-muted)' }}>Loading utility...</p>
         </Card>
       </>
     );
@@ -223,7 +232,7 @@ export default function UtilityDetailPage() {
       <>
         <PageHeader title="Utility error" />
         <Card>
-          <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p>
+          <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p>
           <ActionLink href="/utilities" variant="secondary">Back to utilities</ActionLink>
         </Card>
       </>
@@ -235,7 +244,7 @@ export default function UtilityDetailPage() {
       <>
         <PageHeader title="Utility not found" />
         <Card>
-          <p style={{ color: '#6b7280' }}>
+          <p style={{ color: 'var(--text-muted)' }}>
             This utility may have been removed, or it may not belong to the current property.
           </p>
           <ActionLink href="/utilities" variant="secondary">Back to utilities</ActionLink>
@@ -250,13 +259,13 @@ export default function UtilityDetailPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {formError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>{formError}</p>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>{formError}</p>
           ) : null}
         </Card>
 
@@ -274,7 +283,7 @@ export default function UtilityDetailPage() {
             <UtilityBadge label={`${trendFlags.length} trend${trendFlags.length === 1 ? '' : 's'}`} />
           </div>
           {utility.location_notes ? <p><strong>Location:</strong> {utility.location_notes}</p> : null}
-          {utility.emergency_notes ? <p style={{ color: '#b91c1c' }}><strong>Emergency:</strong> {utility.emergency_notes}</p> : null}
+          {utility.emergency_notes ? <p style={{ color: 'var(--status-urgent)' }}><strong>Emergency:</strong> {utility.emergency_notes}</p> : null}
         </Card>
 
         <Card>
@@ -320,9 +329,9 @@ export default function UtilityDetailPage() {
                 style={{
                   padding: '10px 14px',
                   borderRadius: 6,
-                  border: '1px solid #fecaca',
-                  background: '#fef2f2',
-                  color: '#b91c1c',
+                  border: '1px solid rgba(163,78,51,0.30)',
+                  background: 'rgba(163,78,51,0.08)',
+                  color: 'var(--status-urgent)',
                   cursor: deleting ? 'not-allowed' : 'pointer',
                   fontWeight: 700,
                   opacity: deleting ? 0.7 : 1
@@ -393,16 +402,16 @@ function RelatedList({ title, empty, children }: { title: string; empty: string;
   return (
     <Card>
       <h2 style={{ marginTop: 0 }}>{title}</h2>
-      {hasItems ? <div style={{ display: 'grid', gap: 10 }}>{children}</div> : <p style={{ color: '#6b7280', margin: 0 }}>{empty}</p>}
+      {hasItems ? <div style={{ display: 'grid', gap: 10 }}>{children}</div> : <p style={{ color: 'var(--text-muted)', margin: 0 }}>{empty}</p>}
     </Card>
   );
 }
 
 function RelatedItem({ title, detail, href }: { title: string; detail: string; href?: string }) {
   const content = (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+    <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
       <div style={{ fontWeight: 700 }}>{title}</div>
-      <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{detail}</div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{detail}</div>
     </div>
   );
 

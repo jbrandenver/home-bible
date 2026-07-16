@@ -1,15 +1,16 @@
 import {
   ISSUE_SEVERITIES,
   ISSUE_STATUSES,
-  ISSUE_TYPES
-} from '@home-bible/shared';
+  ISSUE_TYPES,
+  toLocalDateString
+} from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 
-const DEMO_ISSUES_KEY = 'homeBible.issues';
+const DEMO_ISSUES_KEY = 'homeFolder.issues';
 const PHASE_6G_MIGRATION = 'supabase/migrations/006_phase6g_issues_trend_flags.sql';
 
 export type IssueType = (typeof ISSUE_TYPES)[number];
@@ -417,7 +418,7 @@ export async function updateIssueStatusForContext(
         ? {
             ...issue,
             status,
-            resolved_date: status === 'resolved' ? issue.resolved_date || new Date().toISOString().slice(0, 10) : issue.resolved_date,
+            resolved_date: status === 'resolved' ? issue.resolved_date || toLocalDateString() : issue.resolved_date,
             updated_at: new Date().toISOString()
           }
         : issue
@@ -440,14 +441,62 @@ export async function updateIssueStatusForContext(
     status === 'resolved'
       ? {
           status,
-          resolved_date: new Date().toISOString().slice(0, 10),
-          resolution_date: new Date().toISOString().slice(0, 10)
+          resolved_date: toLocalDateString(),
+          resolution_date: toLocalDateString()
         }
       : { status };
 
   const { data, error } = await supabase
     .from('issues')
     .update(payload)
+    .eq('id', issueId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .select(ISSUE_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw new Error(formatIssueError('update issue', error?.message));
+  }
+
+  return normalizeIssue(data as RawIssue);
+}
+
+export async function updateIssueForContext(
+  context: IssueDataContext,
+  issueId: string,
+  input: IssueInput
+) {
+  if (context.mode === 'demo') {
+    const demoProperty = getDemoActiveProperty();
+    const updated = getDemoIssues().map((issue) =>
+      issue.id === issueId
+        ? normalizeIssue({
+            ...issue,
+            ...buildIssuePayload(input, demoProperty?.id || issue.property_id || ''),
+            id: issue.id,
+            property_id: issue.property_id,
+            updated_at: new Date().toISOString()
+          })
+        : issue
+    );
+
+    writeDemoIssues(updated);
+    return updated.find((issue) => issue.id === issueId) || null;
+  }
+
+  if (!context.property) {
+    throw new Error('Create a property before editing issues.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('issues')
+    .update(buildIssuePayload(input, context.property.id))
     .eq('id', issueId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

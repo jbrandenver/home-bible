@@ -50,6 +50,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
 
   return (
     <div className="app-shell">
+      {/* gilt page edge */}
+      <div className="app-gilt" aria-hidden="true" />
       {/* Navigation header */}
       <nav className="app-header shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-4">
@@ -57,7 +59,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             <Link href="/" className="brand-lockup">
               <span className="brand-wordmark">
                 <span>Home</span>
-                <span className="brand-wordmark-accent">& Everything</span>
+                <span className="brand-wordmark-accent">Folder</span>
               </span>
               <span className="brand-tagline">A home, documented.</span>
             </Link>
@@ -138,13 +140,13 @@ const desktopSections: NavSection[] = [
     href: '/home',
     label: 'Home',
     icon: 'H',
-    activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms', '/utilities']
+    activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms', '/utilities', '/automation']
   },
   {
     href: '/assets',
     label: 'Assets',
     icon: 'A',
-    activeRoutes: ['/assets']
+    activeRoutes: ['/assets', '/tools', '/inventory']
   },
   {
     href: '/maintenance',

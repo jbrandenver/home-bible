@@ -1,15 +1,16 @@
 import {
   REPAIR_PRIORITIES,
   REPAIR_STATUSES,
-  REPAIR_TYPES
-} from '@home-bible/shared';
+  REPAIR_TYPES,
+  toLocalDateString
+} from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 
-const DEMO_REPAIRS_KEY = 'homeBible.repairs';
+const DEMO_REPAIRS_KEY = 'homeFolder.repairs';
 const PHASE_6F_MIGRATION = 'supabase/migrations/005_phase6f_repairs_service_records.sql';
 
 export type RepairType = (typeof REPAIR_TYPES)[number];
@@ -404,7 +405,7 @@ export async function updateRepairStatusForContext(
         ? {
             ...repair,
             status,
-            completed_date: status === 'completed' ? repair.completed_date || new Date().toISOString().slice(0, 10) : repair.completed_date,
+            completed_date: status === 'completed' ? repair.completed_date || toLocalDateString() : repair.completed_date,
             updated_at: new Date().toISOString()
           }
         : repair
@@ -425,12 +426,60 @@ export async function updateRepairStatusForContext(
 
   const payload =
     status === 'completed'
-      ? { status, completed_date: new Date().toISOString().slice(0, 10) }
+      ? { status, completed_date: toLocalDateString() }
       : { status };
 
   const { data, error } = await supabase
     .from('repairs')
     .update(payload)
+    .eq('id', repairId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .select(REPAIR_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw new Error(formatRepairError('update repair', error?.message));
+  }
+
+  return normalizeRepair(data as Partial<RepairRow>);
+}
+
+export async function updateRepairForContext(
+  context: RepairDataContext,
+  repairId: string,
+  input: RepairInput
+) {
+  if (context.mode === 'demo') {
+    const demoProperty = getDemoActiveProperty();
+    const updated = getDemoRepairs().map((repair) =>
+      repair.id === repairId
+        ? normalizeRepair({
+            ...repair,
+            ...buildRepairPayload(input, demoProperty?.id || repair.property_id || ''),
+            id: repair.id,
+            property_id: repair.property_id,
+            updated_at: new Date().toISOString()
+          })
+        : repair
+    );
+
+    writeDemoRepairs(updated);
+    return updated.find((repair) => repair.id === repairId) || null;
+  }
+
+  if (!context.property) {
+    throw new Error('Create a property before editing repairs.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('repairs')
+    .update(buildRepairPayload(input, context.property.id))
     .eq('id', repairId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

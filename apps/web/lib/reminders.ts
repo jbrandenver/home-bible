@@ -5,14 +5,14 @@ import {
   REMINDER_SOURCES,
   REMINDER_STATUSES,
   REMINDER_TYPES
-} from '@home-bible/shared';
+} from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 
-const DEMO_REMINDERS_KEY = 'homeBible.reminders';
+const DEMO_REMINDERS_KEY = 'homeFolder.reminders';
 const PHASE_6E_MIGRATION = 'supabase/migrations/004_phase6e_reminders.sql';
 
 export type ReminderType = (typeof REMINDER_TYPES)[number];
@@ -459,6 +459,54 @@ export async function updateReminderStatusForContext(
   const { data, error } = await supabase
     .from('reminders')
     .update({ status })
+    .eq('id', reminderId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .select(REMINDER_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw new Error(formatReminderError('update reminder', error?.message));
+  }
+
+  return normalizeReminder(data as Partial<ReminderRow>);
+}
+
+export async function updateReminderForContext(
+  context: ReminderDataContext,
+  reminderId: string,
+  input: ReminderInput
+) {
+  if (context.mode === 'demo') {
+    const demoProperty = getDemoActiveProperty();
+    const updated = getDemoReminders().map((reminder) =>
+      reminder.id === reminderId
+        ? normalizeReminder({
+            ...reminder,
+            ...buildReminderPayload(input, demoProperty?.id || reminder.property_id || ''),
+            id: reminder.id,
+            property_id: reminder.property_id,
+            updated_at: new Date().toISOString()
+          })
+        : reminder
+    );
+
+    writeDemoReminders(updated);
+    return updated.find((reminder) => reminder.id === reminderId) || null;
+  }
+
+  if (!context.property) {
+    throw new Error('Create a property before editing reminders.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('reminders')
+    .update(buildReminderPayload(input, context.property.id))
     .eq('id', reminderId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

@@ -1,11 +1,11 @@
-import { SERVICE_TYPES } from '@home-bible/shared';
+import { SERVICE_TYPES } from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 
-const DEMO_SERVICE_RECORDS_KEY = 'homeBible.serviceRecords';
+const DEMO_SERVICE_RECORDS_KEY = 'homeFolder.serviceRecords';
 const PHASE_6F_MIGRATION = 'supabase/migrations/005_phase6f_repairs_service_records.sql';
 
 export type ServiceRecordType = (typeof SERVICE_TYPES)[number];
@@ -400,6 +400,54 @@ export async function createServiceRecordForContext(
 
   if (error || !data) {
     throw new Error(formatServiceRecordError('create service record', error?.message));
+  }
+
+  return normalizeServiceRecord(data as RawServiceRecord);
+}
+
+export async function updateServiceRecordForContext(
+  context: ServiceRecordDataContext,
+  serviceRecordId: string,
+  input: ServiceRecordInput
+) {
+  if (context.mode === 'demo') {
+    const demoProperty = getDemoActiveProperty();
+    const updated = getDemoServiceRecords().map((record) =>
+      record.id === serviceRecordId
+        ? normalizeServiceRecord({
+            ...record,
+            ...buildServiceRecordPayload(input, demoProperty?.id || record.property_id || ''),
+            id: record.id,
+            property_id: record.property_id,
+            updated_at: new Date().toISOString()
+          })
+        : record
+    );
+
+    writeDemoServiceRecords(updated);
+    return updated.find((record) => record.id === serviceRecordId) || null;
+  }
+
+  if (!context.property) {
+    throw new Error('Create a property before editing service records.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('service_records')
+    .update(buildServiceRecordPayload(input, context.property.id))
+    .eq('id', serviceRecordId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .select(SERVICE_RECORD_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw new Error(formatServiceRecordError('update service record', error?.message));
   }
 
   return normalizeServiceRecord(data as RawServiceRecord);

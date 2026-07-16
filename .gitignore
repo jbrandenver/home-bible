@@ -3,6 +3,7 @@ node_modules
 .expo
 dist
 build
+*.tsbuildinfo
 .env
 .env.local
 .env.*.local

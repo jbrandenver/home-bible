@@ -1,4 +1,4 @@
-import { PROPERTY_TYPES } from '@home-bible/shared';
+import { PROPERTY_TYPES } from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from './supabase/client';
 import { ensureProfileForUser } from './auth';
@@ -43,6 +43,33 @@ function formatPropertySetupError(step: string, message?: string) {
   }
 
   return `${fallback} Apply supabase/migrations/003_phase6d_household_rls_repair.sql to your Supabase project, then try again. Original error: ${message}`;
+}
+
+// Formatted single-line address for a property, respecting the owner's
+// address_is_enabled flag. Returns null if disabled, unset, or unreadable.
+export async function getPropertyAddressLine(propertyId: string): Promise<string | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('properties')
+    .select('address_is_enabled, address_line_1, address_line_2, city, state, postal_code')
+    .eq('id', propertyId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error || !data || !data.address_is_enabled) {
+    return null;
+  }
+
+  const cityState = [data.city, data.state].filter(Boolean).join(', ');
+  const parts = [data.address_line_1, data.address_line_2, cityState, data.postal_code].filter(
+    (part) => typeof part === 'string' && part.trim().length > 0
+  );
+
+  return parts.length > 0 ? parts.join(', ') : null;
 }
 
 export async function getPrimaryPropertyForUser(userId: string): Promise<PropertySummary | null> {
@@ -124,6 +151,20 @@ async function ensureHouseholdForUser(user: User, fallbackName: string) {
     });
 
   if (error) {
+    if ('code' in error && error.code === '23505') {
+      const { data: existingAfterConflict, error: conflictLoadError } = await supabase
+        .from('households')
+        .select('id, name')
+        .eq('owner_user_id', user.id)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true })
+        .limit(1);
+
+      if (!conflictLoadError && existingAfterConflict && existingAfterConflict.length > 0) {
+        return existingAfterConflict[0];
+      }
+    }
+
     throw new Error(formatPropertySetupError('create household', error?.message));
   }
 
@@ -152,8 +193,8 @@ export async function createPropertyForUser(user: User, input: PropertyInput) {
     throw new Error('Supabase is not configured');
   }
 
-  const { data: sessionData } = await supabase.auth.getSession();
-  const sessionUser = sessionData.session?.user;
+  const { data: userData } = await supabase.auth.getUser();
+  const sessionUser = userData.user;
 
   if (!sessionUser || sessionUser.id !== user.id) {
     throw new Error('Your session expired. Please sign in again before creating a property.');

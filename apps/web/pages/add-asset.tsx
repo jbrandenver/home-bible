@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { ASSET_TYPES, formatEnumLabel, type VisibilityContext } from '@home-bible/shared';
-import { PageHeader, Card, Button } from '@home-bible/ui';
+import { ASSET_TYPES, formatEnumLabel, type VisibilityContext } from '@home-folder/shared';
+import { PageHeader, Card, Button } from '@home-folder/ui';
 import { VisibilityContextPicker } from '../components/VisibilityContextPicker';
 import {
   createAssetForContext,
@@ -10,6 +10,7 @@ import {
   type AssetDataMode
 } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
+import { createReminderForContext, getReminderDataContext } from '../lib/reminders';
 import { getRoomsForProperty } from '../lib/rooms';
 import { formatRoomLocation } from '../lib/roomLabels';
 
@@ -97,12 +98,35 @@ export default function AddAssetPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  // Support deep links like /add-asset?type=tool&room=<id> from Tools & Inventory pages.
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const presetType = typeof router.query.type === 'string' ? router.query.type : '';
+    const presetRoom = typeof router.query.room === 'string' ? router.query.room : '';
+
+    setForm((prev) => ({
+      ...prev,
+      asset_type: (ASSET_TYPES as readonly string[]).includes(presetType)
+        ? (presetType as (typeof ASSET_TYPES)[number])
+        : prev.asset_type,
+      room_id: presetRoom || prev.room_id
+    }));
+  }, [router.isReady, router.query.type, router.query.room]);
 
   const handleInputChange = (field: keyof AssetFormData, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -126,7 +150,7 @@ export default function AddAssetPage() {
     }
 
     try {
-      await createAssetForContext(context, {
+      const createdAsset = await createAssetForContext(context, {
         asset_type: form.asset_type,
         name: form.name.trim(),
         brand: form.brand || null,
@@ -144,6 +168,26 @@ export default function AddAssetPage() {
         visibility_contexts: form.visibility_contexts
       });
 
+      // Warranty auto-reminder: saving an asset with a warranty end date creates
+      // a matching reminder. Best-effort — the asset save must never fail here.
+      if (form.warranty_expires_at) {
+        try {
+          const reminderContext = await getReminderDataContext();
+          await createReminderForContext(reminderContext, {
+            title: `Warranty expires: ${form.name.trim()}`,
+            description: 'Created automatically from the asset warranty date. Review coverage or plan a replacement before it lapses.',
+            reminder_type: 'warranty',
+            due_date: form.warranty_expires_at,
+            priority: 'normal',
+            source: 'warranty',
+            asset_id: createdAsset?.id || null,
+            room_id: form.room_id || null
+          });
+        } catch {
+          // non-fatal: the asset saved; the user can add a reminder manually
+        }
+      }
+
       router.push('/assets');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save asset');
@@ -157,7 +201,7 @@ export default function AddAssetPage() {
       width: '100%',
       padding: 8,
       borderRadius: 6,
-      border: '1px solid #d1d5db',
+      border: '1px solid var(--border-subtle)',
       fontFamily: 'inherit',
       fontSize: '0.875rem'
     }
@@ -169,18 +213,18 @@ export default function AddAssetPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {dataMode === 'demo' && !context?.supabaseConfigured ? (
-            <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
+            <p style={{ marginTop: 10, marginBottom: 0, color: 'var(--color-clay)' }}>
               Account saving is not available in this local build. Demo data stays only in this browser.
             </p>
           ) : null}
           {dataMode === 'supabase' && context && !context.property ? (
-            <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
+            <p style={{ marginTop: 10, marginBottom: 0, color: 'var(--color-clay)' }}>
               Create a property before adding assets to your account.
             </p>
           ) : null}
@@ -193,8 +237,8 @@ export default function AddAssetPage() {
               style={{
                 padding: 12,
                 marginBottom: 16,
-                backgroundColor: '#fee2e2',
-                color: '#dc2626',
+                backgroundColor: 'rgba(163,78,51,0.12)',
+                color: 'var(--status-urgent)',
                 borderRadius: 6,
                 fontSize: '0.875rem'
               }}
@@ -416,7 +460,7 @@ export default function AddAssetPage() {
                       width: '100%',
                       padding: 8,
                       borderRadius: 6,
-                      border: '1px solid #d1d5db',
+                      border: '1px solid var(--border-subtle)',
                       fontFamily: 'inherit',
                       fontSize: '0.875rem',
                       minHeight: 80
@@ -427,7 +471,7 @@ export default function AddAssetPage() {
             </div>
 
             {/* Form Actions */}
-            <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
               <Button type="submit" disabled={loading || roomsLoading}>
                 {loading ? 'Saving...' : 'Save asset'}
               </Button>
@@ -437,9 +481,9 @@ export default function AddAssetPage() {
                 onClick={() => router.push('/assets')}
                 style={{
                   padding: '10px 16px',
-                  backgroundColor: '#f3f4f6',
-                  color: '#1f2937',
-                  border: '1px solid #d1d5db',
+                  backgroundColor: 'var(--surface-page)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-subtle)',
                   borderRadius: 6,
                   cursor: 'pointer',
                   fontWeight: 500

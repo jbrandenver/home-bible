@@ -1,8 +1,17 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel } from '@home-folder/shared';
+import { PageHeader, Card, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import {
+  getAutomationContext,
+  getDevicesForContext,
+  getHubsForContext,
+  getNetworksForContext,
+  getRoutinesForContext
+} from '../lib/automation';
+import { computeAutomationOverview, type AutomationOverview } from '../lib/automationOverview';
+import { computeCompleteness, computeDigest } from '../lib/completeness';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
@@ -75,11 +84,38 @@ export default function DashboardPage() {
   const [receiptError, setReceiptError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
+  const [roomError, setRoomError] = useState('');
+  const [automationSummary, setAutomationSummary] = useState<AutomationOverview | null>(null);
+
+  // Isolated, best-effort automation summary — never blocks the main dashboard.
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAutomation() {
+      try {
+        const context = await getAutomationContext();
+        if (context.mode !== 'supabase') return;
+        const [d, h, n, r] = await Promise.all([
+          getDevicesForContext(context),
+          getHubsForContext(context),
+          getNetworksForContext(context),
+          getRoutinesForContext(context)
+        ]);
+        if (isMounted) setAutomationSummary(computeAutomationOverview({ devices: d, hubs: h, networks: n, routines: r }));
+      } catch {
+        /* automation summary is optional on the dashboard */
+      }
+    }
+    loadAutomation();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
 
     async function load() {
+      setRoomError('');
       setUtilityError('');
       setAssetError('');
       setReminderError('');
@@ -213,24 +249,33 @@ export default function DashboardPage() {
         setPropertyNickname(utilityContext.property?.nickname || 'Your property');
 
         if (utilityContext.property) {
-          const [floors, remoteRooms] = await Promise.all([
-            getFloorsForProperty(utilityContext.property.id),
-            getRoomsForProperty(utilityContext.property.id)
-          ]);
+          try {
+            const [floors, remoteRooms] = await Promise.all([
+              getFloorsForProperty(utilityContext.property.id),
+              getRoomsForProperty(utilityContext.property.id)
+            ]);
 
-          if (!isMounted) {
-            return;
+            if (!isMounted) {
+              return;
+            }
+
+            setFloorCount(floors.length);
+            setRooms(
+              remoteRooms.map((room) => ({
+                id: room.id,
+                name: room.name,
+                room_type: room.room_type,
+                floor_name: room.floor_name
+              }))
+            );
+          } catch (loadError) {
+            if (!isMounted) {
+              return;
+            }
+            setFloorCount(0);
+            setRooms([]);
+            setRoomError(loadError instanceof Error ? loadError.message : 'Failed to load rooms.');
           }
-
-          setFloorCount(floors.length);
-          setRooms(
-            remoteRooms.map((room) => ({
-              id: room.id,
-              name: room.name,
-              room_type: room.room_type,
-              floor_name: room.floor_name
-            }))
-          );
         } else {
           setFloorCount(0);
           setRooms([]);
@@ -248,7 +293,11 @@ export default function DashboardPage() {
 
     }
 
-    load();
+    load().catch((loadError) => {
+      if (isMounted) {
+        setRoomError(loadError instanceof Error ? loadError.message : 'Failed to load dashboard data.');
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -257,6 +306,23 @@ export default function DashboardPage() {
 
   const floors = floorCount || Array.from(new Set(rooms.map((room) => room.floor_name))).length;
   const roomSpaceSummary = useMemo(() => getRoomSpaceSummary(rooms), [rooms]);
+
+  const completeness = useMemo(
+    () =>
+      computeCompleteness({
+        roomCount: rooms.length,
+        utilities,
+        assets,
+        documents,
+        reminders
+      }),
+    [rooms.length, utilities, assets, documents, reminders]
+  );
+
+  const digest = useMemo(
+    () => computeDigest({ reminders, assets, serviceRecords, repairs }),
+    [reminders, assets, serviceRecords, repairs]
+  );
 
   const topAssetCategories = useMemo(() => {
     const counts = assets.reduce<Record<string, number>>((acc, asset) => {
@@ -454,6 +520,146 @@ export default function DashboardPage() {
             <ActionLink href={nextStep.href}>{nextStep.action}</ActionLink>
           </Card>
 
+          {hasProperty ? (
+            <div
+              style={{
+                display: 'grid',
+                gap: 24,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
+              }}
+            >
+              <Card>
+                <div className="hb-leader" style={{ marginBottom: 12 }}>
+                  <h2 style={{ margin: 0 }}>Home record</h2>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 34,
+                      fontWeight: 600,
+                      color:
+                        completeness.score >= 80
+                          ? 'var(--status-good)'
+                          : completeness.score >= 50
+                            ? 'var(--color-brass-deep)'
+                            : 'var(--status-urgent)'
+                    }}
+                  >
+                    {completeness.score}
+                    <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>/100</span>
+                  </span>
+                </div>
+                <div
+                  style={{
+                    height: 8,
+                    borderRadius: 999,
+                    background: 'rgba(44,31,24,0.12)',
+                    overflow: 'hidden',
+                    marginBottom: 14
+                  }}
+                >
+                  <div
+                    style={{
+                      width: `${completeness.score}%`,
+                      height: '100%',
+                      background:
+                        'linear-gradient(90deg, var(--color-brass-deep), var(--color-brass-pale))',
+                      transition: 'width 600ms cubic-bezier(0.22,0.9,0.3,1)'
+                    }}
+                  />
+                </div>
+                {completeness.nextActions.length > 0 ? (
+                  <>
+                    <p style={{ color: 'var(--text-muted)', marginTop: 0, marginBottom: 10, fontSize: 14 }}>
+                      Strengthen the record next:
+                    </p>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {completeness.nextActions.map((action) => (
+                        <Link
+                          key={action.id}
+                          href={action.href}
+                          className="hb-toc-row"
+                          style={{ padding: '8px 10px', border: '1px solid var(--border-subtle)' }}
+                        >
+                          <span className="hb-toc-num">+{action.possible - action.earned}</span>
+                          <span style={{ fontWeight: 600 }}>{action.label}</span>
+                          <span className="hb-toc-dots" aria-hidden="true" />
+                          <span className="hb-toc-detail">{action.detail}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }}>
+                    Your home record is complete. Beautifully kept.
+                  </p>
+                )}
+              </Card>
+
+              <Card>
+                <h2 style={{ marginTop: 0 }}>This week at home</h2>
+                {digest.length === 0 ? (
+                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                    Nothing needs attention in the next two weeks. Enjoy the quiet.
+                  </p>
+                ) : (
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {digest.map((item) => {
+                      const tone =
+                        item.kind === 'overdue'
+                          ? 'var(--status-urgent)'
+                          : item.kind === 'due_soon' || item.kind === 'service'
+                            ? 'var(--color-brass-deep)'
+                            : 'var(--text-muted)';
+                      return (
+                        <Link
+                          key={item.id}
+                          href={item.href}
+                          className="hb-toc-row"
+                          style={{ padding: '8px 10px' }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: 999,
+                              background: tone,
+                              flexShrink: 0,
+                              transform: 'translateY(-2px)'
+                            }}
+                          />
+                          <span style={{ fontWeight: 600 }}>{item.title}</span>
+                          <span className="hb-toc-dots" aria-hidden="true" />
+                          <span className="hb-toc-detail" style={{ color: tone }}>
+                            {item.detail}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </Card>
+            </div>
+          ) : null}
+
+          {automationSummary && (automationSummary.totalDevices > 0 || automationSummary.hubs > 0 || automationSummary.networks > 0 || automationSummary.routines > 0) ? (
+            <Card>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+                <h2 style={{ margin: 0 }}>Smart home</h2>
+                <ActionLink href="/automation" variant="secondary">Open</ActionLink>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                <UtilityBadge label={`${automationSummary.totalDevices} device${automationSummary.totalDevices === 1 ? '' : 's'}`} />
+                {automationSummary.needsAttention > 0 ? <UtilityBadge label={`${automationSummary.needsAttention} need attention`} tone="attention" /> : null}
+                {automationSummary.lowBattery > 0 ? <UtilityBadge label={`${automationSummary.lowBattery} low battery`} tone="attention" /> : null}
+                {automationSummary.offline > 0 ? <UtilityBadge label={`${automationSummary.offline} offline`} tone="urgent" /> : null}
+                {automationSummary.untestedCriticalRoutines > 0 ? <UtilityBadge label={`${automationSummary.untestedCriticalRoutines} critical automation${automationSummary.untestedCriticalRoutines === 1 ? '' : 's'} untested`} tone="attention" /> : null}
+                {automationSummary.cloudDependent > 0 ? <UtilityBadge label={`${automationSummary.cloudDependent} need internet`} /> : null}
+                {automationSummary.needsAttention === 0 && automationSummary.lowBattery === 0 && automationSummary.offline === 0 && automationSummary.untestedCriticalRoutines === 0 && automationSummary.brokenRoutines === 0 ? <UtilityBadge label="All good" tone="good" /> : null}
+              </div>
+            </Card>
+          ) : null}
+
           <Card>
             <h2 style={{ marginTop: 0 }}>Rooms & spaces</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -473,53 +679,58 @@ export default function DashboardPage() {
               <UtilityBadge label={`${activeTrendFlagCount} active trend${activeTrendFlagCount === 1 ? '' : 's'}`} />
             </div>
 
-            <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
+            <p style={{ marginTop: 12, marginBottom: 0, color: 'var(--text-muted)' }}>
               {dataMode === 'supabase'
                 ? 'Saved to your account.'
                 : 'Demo data is stored only in this browser.'}
             </p>
+            {roomError ? (
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
+                {roomError}
+              </p>
+            ) : null}
             {utilityError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {utilityError}
               </p>
             ) : null}
             {assetError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {assetError}
               </p>
             ) : null}
             {reminderError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {reminderError}
               </p>
             ) : null}
             {repairError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {repairError}
               </p>
             ) : null}
             {serviceRecordError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {serviceRecordError}
               </p>
             ) : null}
             {documentError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {documentError}
               </p>
             ) : null}
             {receiptError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {receiptError}
               </p>
             ) : null}
             {issueError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {issueError}
               </p>
             ) : null}
             {trendFlagError ? (
-              <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+              <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
                 {trendFlagError}
               </p>
             ) : null}
@@ -592,10 +803,10 @@ export default function DashboardPage() {
 
           <Card>
             <h2 style={{ marginTop: 0 }}>Sharing Review</h2>
-            <p style={{ color: '#6b7280' }}>
+            <p style={{ color: 'var(--text-muted)' }}>
               Preview role-based access before future invitations, guests, or share links are enabled.
             </p>
-            <p style={{ color: '#6b7280', marginTop: 0 }}>
+            <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
               This is review-only and does not create public links, emails, guests, or background jobs.
             </p>
             <ActionLink href="/sharing" variant="secondary">Open sharing review</ActionLink>
@@ -604,7 +815,7 @@ export default function DashboardPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Service History</h2>
             {recentServiceRecords.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No service history yet.</p>
+              <p style={{ color: 'var(--text-muted)' }}>No service history yet.</p>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {recentServiceRecords.map((record) => (
@@ -612,13 +823,13 @@ export default function DashboardPage() {
                     key={record.id}
                     style={{
                       padding: 12,
-                      border: '1px solid #e5e7eb',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: 10,
                       background: '#fff'
                     }}
                   >
                     <div style={{ fontWeight: 600 }}>{record.service_title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {record.service_date} • {formatEnumLabel(record.service_type)}
                     </div>
                   </div>
@@ -630,7 +841,7 @@ export default function DashboardPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Recent documents</h2>
             {recentDocuments.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No documents uploaded yet.</p>
+              <p style={{ color: 'var(--text-muted)' }}>No documents uploaded yet.</p>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {recentDocuments.map((document) => (
@@ -638,13 +849,13 @@ export default function DashboardPage() {
                     key={document.id}
                     style={{
                       padding: 12,
-                      border: '1px solid #e5e7eb',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: 10,
                       background: '#fff'
                     }}
                   >
                     <div style={{ fontWeight: 600 }}>{document.title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {document.file_name} • {formatEnumLabel(document.document_type)}
                     </div>
                   </div>
@@ -659,7 +870,7 @@ export default function DashboardPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Recent receipts</h2>
             {recentReceipts.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No approved receipts yet.</p>
+              <p style={{ color: 'var(--text-muted)' }}>No approved receipts yet.</p>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {recentReceipts.map((receipt) => (
@@ -667,13 +878,13 @@ export default function DashboardPage() {
                     key={receipt.id}
                     style={{
                       padding: 12,
-                      border: '1px solid #e5e7eb',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: 10,
                       background: '#fff'
                     }}
                   >
                     <div style={{ fontWeight: 600 }}>{receipt.vendor_name || receipt.description || 'Receipt'}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {receipt.purchase_date || 'No date'} • {formatReceiptAmount(receipt)} • {formatEnumLabel(receipt.category)}
                     </div>
                   </div>
@@ -688,13 +899,13 @@ export default function DashboardPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Trends</h2>
             {trendFlags.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No trends currently.</p>
+              <p style={{ color: 'var(--text-muted)' }}>No trends currently.</p>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {trendFlags.slice(0, 6).map((flag) => (
-                  <div key={flag.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 10 }}>
+                  <div key={flag.id} style={{ padding: 12, border: '1px solid var(--border-subtle)', borderRadius: 10 }}>
                     <div style={{ fontWeight: 600 }}>{flag.title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {flag.description || `${formatEnumLabel(flag.flag_type)} • ${formatEnumLabel(flag.status)} • ${formatEnumLabel(flag.severity)}`}
                     </div>
                   </div>
@@ -722,7 +933,7 @@ export default function DashboardPage() {
             </div>
 
             {upcomingReminders.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No reminders yet.</p>
+              <p style={{ color: 'var(--text-muted)' }}>No reminders yet.</p>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {upcomingReminders.map((reminder) => (
@@ -730,13 +941,13 @@ export default function DashboardPage() {
                     key={reminder.id}
                     style={{
                       padding: 12,
-                      border: '1px solid #e5e7eb',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: 10,
                       background: '#fff'
                     }}
                   >
                     <div style={{ fontWeight: 600 }}>{reminder.title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {reminder.due_date || 'No due date'} • {formatEnumLabel(reminder.reminder_type)}
                     </div>
                   </div>
@@ -749,12 +960,12 @@ export default function DashboardPage() {
             <h2 style={{ marginTop: 0 }}>Rooms & spaces</h2>
             {!hasProperty ? (
               <div>
-                <p style={{ color: '#6b7280' }}>Start your home record.</p>
+                <p style={{ color: 'var(--text-muted)' }}>Start your home record.</p>
                 <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
               </div>
             ) : rooms.length === 0 ? (
               <div>
-                <p style={{ color: '#6b7280' }}>No rooms yet — let’s map the house.</p>
+                <p style={{ color: 'var(--text-muted)' }}>No rooms yet — let’s map the house.</p>
                 <ActionLink href="/add-rooms" variant="secondary">Add rooms & spaces</ActionLink>
               </div>
             ) : (
@@ -767,14 +978,14 @@ export default function DashboardPage() {
                   >
                     <div
                       style={{
-                        border: '1px solid #e5e7eb',
+                        border: '1px solid var(--border-subtle)',
                         borderRadius: 14,
                         padding: 16,
                         background: '#fff'
                       }}
                     >
                       <strong>{room.name}</strong>
-                      <div style={{ color: '#6b7280' }}>
+                      <div style={{ color: 'var(--text-muted)' }}>
                         {formatRoomTypeLabel(room.room_type)} • {formatRoomLocation(room)}
                       </div>
                     </div>

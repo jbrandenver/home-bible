@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { RECEIPT_CATEGORIES, formatEnumLabel, type ReceiptCategory } from '@home-bible/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { RECEIPT_CATEGORIES, formatEnumLabel, type ReceiptCategory } from '@home-folder/shared';
+import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { createDocumentSignedUrlForContext, formatFileSize, getDocumentDataContext, getDocumentsForContext, type DocumentDataContext, type DocumentRow } from '../lib/documents';
@@ -225,7 +225,12 @@ export default function ReceiptsPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -465,6 +470,10 @@ export default function ReceiptsPage() {
   const deleteReceipt = async (receiptId: string) => {
     if (!context) return;
 
+    if (!window.confirm('Delete these receipt details? The original uploaded document will be kept.')) {
+      return;
+    }
+
     setActingReceiptId(receiptId);
     setError('');
     setNotice('');
@@ -495,11 +504,11 @@ export default function ReceiptsPage() {
             <UtilityBadge label={context?.mode === 'supabase' ? 'Private files' : 'Demo data'} />
             {context?.property ? <UtilityBadge label={context.property.nickname} /> : null}
           </div>
-          {loading ? <p style={{ color: '#6b7280' }}>Loading receipts...</p> : null}
-          {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
-          {notice ? <p style={{ color: '#065f46', fontWeight: 700 }}>{notice}</p> : null}
+          {loading ? <p style={{ color: 'var(--text-muted)' }}>Loading receipts...</p> : null}
+          {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p> : null}
+          {notice ? <p style={{ color: 'var(--status-good)', fontWeight: 700 }}>{notice}</p> : null}
           {context?.mode === 'demo' ? (
-            <p style={{ color: '#6b7280' }}>
+            <p style={{ color: 'var(--text-muted)' }}>
               Demo data is stored only in this browser. Receipt files and approved details require signing in.
             </p>
           ) : null}
@@ -509,7 +518,7 @@ export default function ReceiptsPage() {
           <h2 style={{ marginTop: 0 }}>Upload receipt file</h2>
           {!canUpload ? (
             <div>
-              <p style={{ color: '#6b7280' }}>Sign in and create a property to upload private receipt files. Review before saving.</p>
+              <p style={{ color: 'var(--text-muted)' }}>Sign in and create a property to upload private receipt files. Review before saving.</p>
               <ActionLink href="/sign-in">Sign in</ActionLink>
             </div>
           ) : (
@@ -575,9 +584,9 @@ export default function ReceiptsPage() {
               {editingReceiptId ? 'Edit receipt details' : 'Review the receipt before saving'}
             </h2>
             {pendingDocument ? (
-              <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+              <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
                 <div style={{ fontWeight: 700 }}>{pendingDocument.title}</div>
-                <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                   {pendingDocument.file_name} • {formatFileSize(pendingDocument.file_size_bytes)}
                 </div>
                 <div style={{ marginTop: 10 }}>
@@ -673,7 +682,7 @@ export default function ReceiptsPage() {
                 <Button type="submit" disabled={saving}>
                   {saving ? 'Saving...' : editingReceiptId ? 'Save Receipt Changes' : 'Approve and Save Receipt'}
                 </Button>
-                <Button type="button" onClick={cancelReview} style={{ background: '#6b7280' }}>
+                <Button type="button" onClick={cancelReview} style={{ background: 'var(--text-muted)' }}>
                   Cancel
                 </Button>
               </div>
@@ -686,14 +695,14 @@ export default function ReceiptsPage() {
             <h2 style={{ marginTop: 0 }}>Awaiting review</h2>
             <div style={{ display: 'grid', gap: 10 }}>
               {receiptDocumentsWithoutMetadata.map((document) => (
-                <div key={document.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                <div key={document.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                   <div style={{ fontWeight: 700 }}>{document.title}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                     {document.file_name} • {formatFileSize(document.file_size_bytes)} • {new Date(document.created_at).toLocaleDateString()}
                   </div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
                     <Button type="button" onClick={() => startReview(document)}>Review receipt</Button>
-                    <Button type="button" onClick={() => openDocument(document.id)} style={{ background: '#4b5563' }}>Preview</Button>
+                    <Button type="button" onClick={() => openDocument(document.id)} style={{ background: 'var(--text-muted)' }}>Preview</Button>
                   </div>
                 </div>
               ))}
@@ -704,7 +713,7 @@ export default function ReceiptsPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Approved receipts</h2>
           {receipts.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>Save receipts after you review the details.</p>
+            <p style={{ color: 'var(--text-muted)' }}>Save receipts after you review the details.</p>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {receipts.map((receipt) => {
@@ -713,15 +722,15 @@ export default function ReceiptsPage() {
                 const isActing = actingReceiptId === receipt.id;
 
                 return (
-                  <div key={receipt.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div key={receipt.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
                       <div>
                         <div style={{ fontWeight: 700 }}>{receipt.vendor_name || receipt.description || 'Receipt'}</div>
-                        <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                           {receipt.purchase_date || 'No purchase date'} • {formatReceiptAmount(receipt)} • {new Date(receipt.created_at).toLocaleDateString()}
                         </div>
                         {document ? (
-                          <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                             {document.file_name} • {formatFileSize(document.file_size_bytes)}
                           </div>
                         ) : null}
@@ -731,8 +740,8 @@ export default function ReceiptsPage() {
                         <UtilityBadge label={formatEnumLabel(receipt.approval_status)} />
                       </div>
                     </div>
-                    {receipt.notes ? <p style={{ color: '#4b5563' }}>{receipt.notes}</p> : null}
-                    <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: 8 }}>
+                    {receipt.notes ? <p style={{ color: 'var(--text-muted)' }}>{receipt.notes}</p> : null}
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 8 }}>
                       {getLinkLabel(receiptLink.linkKind, receiptLink.linkId, optionsByKind)}
                     </p>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
@@ -741,7 +750,7 @@ export default function ReceiptsPage() {
                           {actingDocumentId === receipt.document_id ? 'Opening...' : 'View / download'}
                         </Button>
                       ) : null}
-                      <Button type="button" onClick={() => startEditing(receipt)} style={{ background: '#4b5563' }}>
+                      <Button type="button" onClick={() => startEditing(receipt)} style={{ background: 'var(--text-muted)' }}>
                         Edit details
                       </Button>
                       <button
@@ -751,9 +760,9 @@ export default function ReceiptsPage() {
                         style={{
                           padding: '10px 14px',
                           borderRadius: 6,
-                          border: '1px solid #fecaca',
-                          background: '#fef2f2',
-                          color: '#b91c1c',
+                          border: '1px solid rgba(163,78,51,0.30)',
+                          background: 'rgba(163,78,51,0.08)',
+                          color: 'var(--status-urgent)',
                           cursor: isActing ? 'not-allowed' : 'pointer',
                           fontWeight: 700,
                           opacity: isActing ? 0.7 : 1

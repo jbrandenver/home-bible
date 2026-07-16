@@ -3,8 +3,8 @@ import { useRouter } from 'next/router';
 import {
   PROPERTY_TYPES,
   formatEnumLabel
-} from '@home-bible/shared';
-import { PageHeader, Card, Input, Select, Button } from '@home-bible/ui';
+} from '@home-folder/shared';
+import { PageHeader, Card, Input, Select, Button } from '@home-folder/ui';
 import { createPropertyForUser } from '../lib/properties';
 import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
 import { setDemoActiveProperty } from '../lib/demoStorage';
@@ -89,17 +89,17 @@ export default function CreatePropertyPage() {
 
         <Card>
           {userId ? (
-            <p style={{ marginTop: 0, color: '#065f46' }}>
+            <p style={{ marginTop: 0, color: 'var(--status-good)' }}>
               Saved to your account.
             </p>
           ) : (
-            <p style={{ marginTop: 0, color: '#6b7280' }}>
+            <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
               Demo data is stored only in this browser.
             </p>
           )}
 
           {!supabaseReady ? (
-            <p style={{ marginTop: 0, color: '#9a3412', background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, padding: 10 }}>
+            <p style={{ marginTop: 0, color: 'var(--color-clay)', background: 'rgba(227,194,136,0.14)', border: '1px solid var(--color-brass-pale)', borderRadius: 8, padding: 10 }}>
               Account saving is not available in this local build. Demo data stays only in this browser.
             </p>
           ) : null}
@@ -151,7 +151,7 @@ export default function CreatePropertyPage() {
             </div>
 
             {error ? (
-              <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>
+              <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }}>
                 {error}
               </p>
             ) : null}

@@ -1,10 +1,15 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
-import { Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { formatEnumLabel } from '@home-folder/shared';
+import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import {
+  createPropertyInvitation,
+  listPropertyInvitations,
   loadSharingPreview,
+  revokePropertyInvitation,
   SHARING_ROLES,
   sharingSectionLabel,
+  type InvitationRole,
+  type PropertyInvitation,
   type SharingPreview,
   type SharingRole
 } from '../lib/sharing';
@@ -39,6 +44,8 @@ const roleCopy: Record<SharingRole, string> = {
   buyer_preview: 'Planning preview for safe buyer handoff access.',
   insurance_view: 'Planning preview for insurance-oriented file details.'
 };
+
+const INVITABLE_ROLES = SHARING_ROLES.filter((role): role is InvitationRole => role !== 'owner');
 
 const forbiddenSensitivePatterns = [
   /access\s*codes?/i,
@@ -109,9 +116,18 @@ function roleLabel(role: SharingRole) {
 
 export default function SharingPage() {
   const [selectedRole, setSelectedRole] = useState<SharingRole>('owner');
+  const [inviteRole, setInviteRole] = useState<InvitationRole>('viewer');
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [invitations, setInvitations] = useState<PropertyInvitation[]>([]);
   const [preview, setPreview] = useState<SharingPreview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [invitesLoading, setInvitesLoading] = useState(true);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [revokingId, setRevokingId] = useState('');
   const [error, setError] = useState('');
+  const [inviteError, setInviteError] = useState('');
+  const [inviteNotice, setInviteNotice] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -143,13 +159,85 @@ export default function SharingPage() {
     };
   }, [selectedRole]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadInvites() {
+      setInvitesLoading(true);
+      setInviteError('');
+
+      try {
+        const nextInvitations = await listPropertyInvitations();
+        if (isMounted) {
+          setInvitations(nextInvitations);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setInviteError(loadError instanceof Error ? loadError.message : 'Failed to load invitations.');
+        }
+      } finally {
+        if (isMounted) {
+          setInvitesLoading(false);
+        }
+      }
+    }
+
+    loadInvites();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const createInvite = async (event: FormEvent) => {
+    event.preventDefault();
+    if (creatingInvite) return;
+
+    setCreatingInvite(true);
+    setInviteError('');
+    setInviteNotice('');
+    setInviteUrl('');
+
+    try {
+      const created = await createPropertyInvitation({
+        role: inviteRole,
+        invitedEmail: inviteEmail || null
+      });
+      setInviteUrl(created.inviteUrl);
+      setInviteNotice('Invitation link created. Copy and send it to the recipient.');
+      setInvitations(await listPropertyInvitations());
+    } catch (createError) {
+      setInviteError(createError instanceof Error ? createError.message : 'Failed to create invitation.');
+    } finally {
+      setCreatingInvite(false);
+    }
+  };
+
+  const revokeInvite = async (invitationId: string) => {
+    if (revokingId) return;
+
+    setRevokingId(invitationId);
+    setInviteError('');
+    setInviteNotice('');
+
+    try {
+      await revokePropertyInvitation(invitationId);
+      setInviteNotice('Invitation revoked.');
+      setInvitations(await listPropertyInvitations());
+    } catch (revokeError) {
+      setInviteError(revokeError instanceof Error ? revokeError.message : 'Failed to revoke invitation.');
+    } finally {
+      setRevokingId('');
+    }
+  };
+
   const modeLabel = preview?.mode === 'supabase' ? 'Saved to your account.' : 'Demo data is stored only in this browser.';
 
   return (
     <>
       <PageHeader
-        title="Sharing Review"
-        description="Preview what different roles could see before real sharing, invitations, or guest access are enabled."
+        title="Sharing"
+        description="Invite trusted people with role-scoped access, then preview what each role can see."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
@@ -157,14 +245,14 @@ export default function SharingPage() {
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
             <UtilityBadge label={modeLabel} />
             {preview?.propertyName ? <UtilityBadge label={preview.propertyName} /> : null}
-            <UtilityBadge label="Preview only" />
+            <UtilityBadge label="Invite links enabled" />
           </div>
 
           <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
-            This only previews access. No public link is created. No invitation is sent.
+            Invite links are single-use, expiring tokens. Access is granted only after the recipient signs in and accepts.
           </p>
           <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
-            Privacy reminder: sensitive entry details, passwords, private file access, invitation details, and public sharing links are not included.
+            Privacy reminder: sensitive entry details, passwords, and private personal archive records are not included for scoped guest roles.
           </p>
 
           {loading ? <p style={darkSubtleText}>Loading sharing preview...</p> : null}
@@ -180,6 +268,118 @@ export default function SharingPage() {
               </p>
             </div>
           ) : null}
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Invite someone</h2>
+          <form onSubmit={createInvite} style={{ display: 'grid', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Role</span>
+                <select
+                  value={inviteRole}
+                  onChange={(event) => setInviteRole(event.target.value as InvitationRole)}
+                  style={fieldStyle}
+                >
+                  {INVITABLE_ROLES.map((role) => (
+                    <option key={role} value={role}>{roleLabel(role)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Recipient email (optional)</span>
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  placeholder="name@example.com"
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Button type="submit" disabled={creatingInvite}>
+                {creatingInvite ? 'Creating...' : 'Create invite link'}
+              </Button>
+              {inviteUrl ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={async () => {
+                    await navigator.clipboard?.writeText(inviteUrl);
+                    setInviteNotice('Invitation link copied.');
+                  }}
+                >
+                  Copy link
+                </Button>
+              ) : null}
+            </div>
+
+            {inviteUrl ? (
+              <input
+                readOnly
+                value={inviteUrl}
+                aria-label="Invitation link"
+                style={{ ...fieldStyle, width: '100%' }}
+              />
+            ) : null}
+            {inviteNotice ? <p style={{ margin: 0, color: 'var(--status-good)' }}>{inviteNotice}</p> : null}
+            {inviteError ? <p style={{ margin: 0, color: 'var(--status-urgent)' }}>{inviteError}</p> : null}
+          </form>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Invitations</h2>
+          {invitesLoading ? <p style={subtleText}>Loading invitations...</p> : null}
+          {!invitesLoading && invitations.length === 0 ? (
+            <p style={subtleText}>No invitations yet.</p>
+          ) : null}
+          <div style={{ display: 'grid', gap: 12 }}>
+            {invitations.map((invitation) => {
+              const isExpired = new Date(invitation.expires_at).getTime() < Date.now();
+              const status = invitation.accepted_at
+                ? 'Accepted'
+                : invitation.revoked_at
+                  ? 'Revoked'
+                  : isExpired
+                    ? 'Expired'
+                    : 'Active';
+
+              return (
+                <div
+                  key={invitation.id}
+                  style={{
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 8,
+                    padding: 12,
+                    display: 'flex',
+                    gap: 12,
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap'
+                  }}
+                >
+                  <div>
+                    <strong>{roleLabel(invitation.role)}</strong>
+                    <div style={subtleText}>
+                      {invitation.invited_email || 'Anyone with the link'} · {status} · Expires {formatDate(invitation.expires_at)}
+                    </div>
+                  </div>
+                  {!invitation.accepted_at && !invitation.revoked_at && !isExpired ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={revokingId === invitation.id}
+                      onClick={() => revokeInvite(invitation.id)}
+                    >
+                      {revokingId === invitation.id ? 'Revoking...' : 'Revoke'}
+                    </Button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
         </Card>
 
         <Card>

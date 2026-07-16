@@ -1,21 +1,24 @@
 {
-  "name": "home-bible-monorepo",
+  "name": "home-folder-monorepo",
   "private": true,
   "version": "0.1.0",
-  "workspaces": [
-    "apps/*",
-    "packages/*",
-    "supabase",
-    "docs"
-  ],
+  "packageManager": "pnpm@10.25.0",
+  "engines": {
+    "node": ">=20.11.0"
+  },
   "scripts": {
-    "dev:web": "corepack pnpm --filter @home-bible/web dev",
-    "dev:mobile": "corepack pnpm --filter @home-bible/mobile dev",
+    "dev:web": "corepack pnpm --filter @home-folder/web dev",
     "build": "pnpm -r build",
+    "typecheck": "pnpm --filter @home-folder/web typecheck",
     "lint": "pnpm -r lint",
+    "test": "pnpm --filter @home-folder/web test",
     "security:audit": "bash scripts/security-cost-audit.sh"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.50.0",
+    "@typescript-eslint/parser": "^8.50.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
     "typescript": "^5.1.6"
   }
 }

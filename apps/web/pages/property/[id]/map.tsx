@@ -1,42 +1,10 @@
-import { PageHeader, Card, FloorSection, RoomCard } from '@home-bible/ui';
-import { useRouter } from 'next/router';
-import Link from 'next/link';
-import { ActionLink } from '../../../components/ActionLink';
+export const getServerSideProps = async () => ({
+  redirect: {
+    destination: '/home-map',
+    permanent: false
+  }
+});
 
-export default function HomeMap() {
-  const { query } = useRouter();
-  const id = query.id as string | undefined;
-  const propertyHref = id ? `/property/${id}` : '/dashboard';
-
-  // Local mock floors/rooms for phase 1
-  const floors = [
-    { id: 'f1', name: 'Ground Floor', rooms: [{ id: 'r1', name: 'Living Room' }, { id: 'r2', name: 'Kitchen' }] },
-    { id: 'f2', name: 'Second Floor', rooms: [{ id: 'r3', name: 'Master Bedroom' }] }
-  ];
-
-  return (
-    <>
-      <PageHeader title="Home Map" description="Organize floors, rooms, and utilities" />
-      <Card>
-        {floors.length > 0 ? (
-          floors.map((floor) => (
-            <FloorSection key={floor.id} title={floor.name}>
-              <div className="grid grid-cols-2 gap-2">
-                {floor.rooms.map((r) => (
-                  <Link key={r.id} href={id ? `/property/${id}/room/${r.id}` : '/home-map'}>
-                    <RoomCard name={r.name} type="Room" />
-                  </Link>
-                ))}
-              </div>
-            </FloorSection>
-          ))
-        ) : (
-          <p>No floors or rooms yet. Add them from the dashboard.</p>
-        )}
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <ActionLink href={propertyHref} variant="secondary">Back to dashboard</ActionLink>
-        </div>
-      </Card>
-    </>
-  );
+export default function LegacyPropertyMapRedirect() {
+  return null;
 }

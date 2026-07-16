@@ -1,4 +1,4 @@
-import { VISIBILITY_CONTEXTS, type VisibilityContext } from '@home-bible/shared';
+import { VISIBILITY_CONTEXTS, type VisibilityContext } from '@home-folder/shared';
 import { formatVisibilityContextLabel, normalizeVisibilityContexts } from '../lib/visibility';
 
 type VisibilityContextPickerProps = {
@@ -30,7 +30,7 @@ export function VisibilityContextPicker({
   return (
     <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
       <legend style={{ fontWeight: 600, marginBottom: 4 }}>Where should this appear?</legend>
-      <p id={`${idPrefix}-hint`} style={{ margin: '0 0 10px 0', color: '#6b7280', fontSize: '0.875rem' }}>
+      <p id={`${idPrefix}-hint`} style={{ margin: '0 0 10px 0', color: 'var(--text-muted)', fontSize: '0.875rem' }}>
         Choose every report or handover context where this belongs.
       </p>
       <div
@@ -52,9 +52,9 @@ export function VisibilityContextPicker({
                 gap: 8,
                 padding: '8px 10px',
                 borderRadius: 6,
-                border: checked ? '1px solid #2563eb' : '1px solid #d1d5db',
-                background: checked ? '#eff6ff' : '#fff',
-                color: checked ? '#1d4ed8' : '#374151',
+                border: checked ? '1px solid var(--accent-strong)' : '1px solid var(--border-subtle)',
+                background: checked ? 'rgba(227,194,136,0.14)' : '#fff',
+                color: checked ? 'var(--accent-strong)' : 'var(--text-primary)',
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 opacity: disabled ? 0.7 : 1,
                 fontWeight: 600

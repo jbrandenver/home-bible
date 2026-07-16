@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The private MVP test validates whether Home Bible helps a real homeowner collect, organize, retrieve, and safely hand over practical home knowledge before more features are added.
+The private MVP test validates whether Home Folder helps a real homeowner collect, organize, retrieve, and safely hand over practical home knowledge before more features are added.
 
 This test is manual and private. It should use existing Supabase auth, existing tables, existing RLS, and existing private storage only.
 
