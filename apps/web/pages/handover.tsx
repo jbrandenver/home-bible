@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel, toLocalDateString } from '@home-folder/shared';
+import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   getDefaultHandoverSections,
@@ -138,7 +138,7 @@ function warrantyExpiration(asset: HandoverReportData['assets'][number]) {
   }
 
   date.setMonth(date.getMonth() + asset.warranty_length_months);
-  return date.toISOString().slice(0, 10);
+  return toLocalDateString(date);
 }
 
 function warrantyStatus(asset: HandoverReportData['assets'][number]) {
@@ -415,24 +415,47 @@ export default function HandoverPage() {
 
       <style jsx global>{`
         @media print {
+          @page {
+            margin: 18mm 16mm 20mm;
+          }
+
           nav,
+          .app-gilt,
+          .mobile-bottom-nav,
           .handover-no-print {
             display: none !important;
           }
 
           body {
             background: #fff !important;
+            font-size: 12px !important;
+          }
+
+          body::before {
+            display: none !important;
           }
 
           main {
             padding: 0 !important;
           }
 
-          .handover-report {
+          .handover-report,
+          .handover-report.hb-card::before {
             border: 0 !important;
             border-radius: 0 !important;
             box-shadow: none !important;
             padding: 0 !important;
+            background: #fff !important;
+          }
+
+          .handover-report h1 {
+            font-size: 26px !important;
+          }
+
+          .handover-report h2 {
+            font-size: 16px !important;
+            break-after: avoid;
+            page-break-after: avoid;
           }
 
           .handover-major-section {
@@ -443,6 +466,33 @@ export default function HandoverPage() {
           .handover-major-section + .handover-major-section {
             break-before: page;
             page-break-before: always;
+          }
+
+          .handover-summary-grid {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* running footer on every printed page */
+          .handover-print-footer {
+            display: block !important;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            font-family: var(--font-mono);
+            font-size: 9px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #6b5f4e;
+            border-top: 1px solid rgba(44, 31, 24, 0.2);
+            padding-top: 4px;
+          }
+
+          tr,
+          li {
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
         }
       `}</style>
@@ -485,9 +535,16 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
 
   return (
     <article className="handover-report" style={{ ...reportSurfaceStyle, marginTop: 24 }}>
+      <div
+        className="handover-print-footer"
+        style={{ display: 'none' }}
+        aria-hidden="true"
+      >
+        {safeText(data.context.property?.nickname) || 'Home'} · {HANDOVER_REPORT_TYPE_LABELS[data.reportType]} · Generated {formatDateTime(data.generatedAt)} · Our Home Folder
+      </div>
       <header style={{ borderBottom: '2px solid var(--color-espresso)', paddingBottom: 18, marginBottom: 20 }}>
         <div style={{ color: 'var(--color-brass-deep)', fontWeight: 800, letterSpacing: 0, textTransform: 'uppercase', fontSize: 12 }}>
-          Home & Everything handover report
+          Our Home Folder handover report
         </div>
         <h1 style={{ margin: '6px 0', fontSize: 34, lineHeight: 1.1 }}>
           {safeText(data.context.property?.nickname) || 'Home'} · {HANDOVER_REPORT_TYPE_LABELS[data.reportType]}

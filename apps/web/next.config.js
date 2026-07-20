@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ['@home-bible/ui', '@home-bible/shared']
+  transpilePackages: ['@home-folder/ui', '@home-folder/shared']
 };
 
 module.exports = nextConfig;

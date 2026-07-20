@@ -61,6 +61,7 @@ export function Button({
   style,
   disabled,
   variant = 'primary',
+  className,
   ...rest
 }: ButtonProps) {
   return (
@@ -68,6 +69,7 @@ export function Button({
       type={type}
       disabled={disabled}
       {...rest}
+      className={`hb-control ${className || ''}`.trim()}
       style={getControlStyle({ variant, disabled, style })}
     >
       {children}
@@ -79,25 +81,27 @@ export function Card({
   children,
   className,
   style,
-  tone = 'default'
+  tone = 'default',
+  interactive = false
 }: {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
   tone?: 'default' | 'dark';
+  interactive?: boolean;
 }) {
   const isDark = tone === 'dark';
 
   return (
     <section
-      className={`${isDark ? 'brand-hero' : ''} ${className || ''}`.trim()}
+      className={`hb-card ${interactive ? 'hb-card-hover' : ''} ${isDark ? 'brand-hero' : ''} ${className || ''}`.trim()}
       style={{
         border: '1px solid var(--border-subtle)',
         borderRadius: 'var(--radius-card)',
-        padding: 24,
-        background: isDark ? 'var(--surface-dark)' : 'var(--surface-card)',
+        padding: '24px 24px 24px 28px',
+        background: isDark ? undefined : 'var(--surface-card)',
         color: isDark ? 'var(--text-inverse)' : 'var(--text-primary)',
-        boxShadow: '0 1px 0 rgba(44,31,24,0.08)',
+        boxShadow: 'var(--shadow-card)',
         ...style
       }}
     >
@@ -118,23 +122,31 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <header style={{ marginBottom: 24 }}>
+    <header style={{ marginBottom: 28 }}>
       <div
         style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
           fontFamily: 'var(--font-mono)',
           fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: '0.18em',
           textTransform: 'uppercase',
           color: 'var(--color-brass-deep)',
-          marginBottom: 6
+          marginBottom: 10
         }}
       >
+        <span aria-hidden="true" style={{ width: 26, height: 1, background: 'var(--color-brass)' }} />
         {eyebrow}
       </div>
       <h1
         style={{
           fontFamily: 'var(--font-display)',
-          fontSize: 'clamp(2rem, 4vw, 3rem)',
-          lineHeight: 1.04,
+          fontSize: 'clamp(2.1rem, 4.5vw, 3.2rem)',
+          fontWeight: 600,
+          lineHeight: 1.03,
+          letterSpacing: '-0.02em',
           margin: 0,
           color: 'var(--color-ink)'
         }}
@@ -142,11 +154,12 @@ export function PageHeader({
         {title}
       </h1>
       {description ? (
-        <p style={{ fontSize: 17, color: 'var(--text-muted)', maxWidth: 760 }}>
+        <p style={{ fontSize: 18, color: 'var(--text-muted)', maxWidth: 720, marginBottom: 0 }}>
           {description}
         </p>
       ) : null}
       {children ? <div style={{ marginTop: 14 }}>{children}</div> : null}
+      <div className="hb-double-rule" aria-hidden="true" style={{ marginTop: 18 }} />
     </header>
   );
 }
@@ -157,12 +170,8 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
       {...props}
       style={{
         width: '100%',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 'var(--radius-control)',
         padding: '12px 14px',
         fontSize: 16,
-        background: 'var(--surface-card)',
-        color: 'var(--text-primary)',
         ...props.style
       }}
     />
@@ -175,12 +184,8 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
       {...props}
       style={{
         width: '100%',
-        border: '1px solid var(--border-subtle)',
-        borderRadius: 'var(--radius-control)',
         padding: '12px 14px',
         fontSize: 16,
-        background: 'var(--surface-card)',
-        color: 'var(--text-primary)',
         ...props.style
       }}
     />
@@ -210,9 +215,9 @@ export function RoomCard({
   type?: string;
 }) {
   return (
-    <Card>
+    <Card interactive>
       <h3 style={{ marginTop: 0 }}>{name}</h3>
-      {type ? <p style={{ color: 'var(--text-muted)' }}>{type}</p> : null}
+      {type ? <p style={{ color: 'var(--text-muted)', marginBottom: 0 }}>{type}</p> : null}
     </Card>
   );
 }
@@ -226,7 +231,7 @@ export function FloorSection({
 }) {
   return (
     <section style={{ marginBottom: 32 }}>
-      <h2 style={{ borderBottom: '1px solid var(--border-subtle)', paddingBottom: 8 }}>{title}</h2>
+      <h2 className="hb-leader" style={{ paddingBottom: 6, marginBottom: 16 }}>{title}</h2>
       <div style={{ display: 'grid', gap: 16 }}>{children}</div>
     </section>
   );
@@ -262,25 +267,217 @@ export function UtilityBadge({
       className={`utility-badge ${isBrassPale ? 'shortcut-tag-on-dark' : ''}`.trim()}
       style={{
         display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
         borderRadius: 'var(--radius-control)',
         padding: '6px 10px',
         background: isBrassPale
-          ? 'var(--shortcut-tag-bg, #E0BD83)'
-          : 'var(--utility-badge-bg, rgba(224,189,131,0.22))',
+          ? 'var(--shortcut-tag-bg, #E3C288)'
+          : 'var(--utility-badge-bg, rgba(227,194,136,0.22))',
         color: isBrassPale
           ? 'var(--shortcut-tag-color, #2C1F18)'
           : `var(--utility-badge-color, ${toneColor})`,
         border: isBrassPale
           ? '1px solid var(--shortcut-tag-border, #C8923F)'
-          : '1px solid var(--utility-badge-border, rgba(168,118,44,0.22))',
+          : '1px solid var(--utility-badge-border, rgba(156,109,38,0.22))',
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
-        fontWeight: 700,
+        fontWeight: 600,
+        letterSpacing: '0.06em',
         textTransform: 'uppercase',
-        transition: 'background-color 140ms ease, color 140ms ease, border-color 140ms ease'
+        transition: 'background-color 160ms ease, color 160ms ease, border-color 160ms ease'
       }}
     >
+      {!isBrassPale && inferredTone !== 'neutral' ? (
+        <span
+          aria-hidden="true"
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: 99,
+            background: toneColor,
+            flexShrink: 0
+          }}
+        />
+      ) : null}
       {label}
     </span>
   );
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel = 'Delete',
+  cancelLabel = 'Cancel',
+  destructive = true,
+  busy = false,
+  onConfirm,
+  onCancel
+}: {
+  open: boolean;
+  title: string;
+  description: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+  busy?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      role="presentation"
+      className="hb-backdrop"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 1000,
+        display: 'grid',
+        placeItems: 'center',
+        padding: 16,
+        background: 'rgba(34,22,16,0.5)'
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        className="hb-dialog"
+        style={{
+          width: 'min(420px, 100%)',
+          borderRadius: 'var(--radius-card)',
+          border: '1px solid var(--border-strong)',
+          borderTop: '3px solid var(--color-brass)',
+          background: 'var(--surface-card-raised)',
+          color: 'var(--text-primary)',
+          padding: 22,
+          boxShadow: 'var(--shadow-pop)'
+        }}
+      >
+        <h2 id="confirm-dialog-title" style={{ marginTop: 0 }}>{title}</h2>
+        <p style={{ color: 'var(--text-muted)' }}>{description}</p>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+          <Button type="button" variant="secondary" disabled={busy} onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+          <Button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            style={destructive ? { background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' } : undefined}
+          >
+            {busy ? 'Working...' : confirmLabel}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function UndoToast({
+  message,
+  actionLabel = 'Undo',
+  onAction,
+  onDismiss
+}: {
+  message: string;
+  actionLabel?: string;
+  onAction: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div
+      role="status"
+      className="hb-toast"
+      style={{
+        position: 'fixed',
+        right: 16,
+        bottom: 16,
+        zIndex: 900,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        maxWidth: 'min(420px, calc(100vw - 32px))',
+        padding: 12,
+        borderRadius: 'var(--radius-card)',
+        border: '1px solid var(--border-subtle)',
+        background: 'var(--surface-dark)',
+        color: 'var(--text-inverse)',
+        boxShadow: '0 14px 40px rgba(44,31,24,0.24)'
+      }}
+    >
+      <span>{message}</span>
+      <button
+        type="button"
+        onClick={onAction}
+        style={{ color: 'inherit', background: 'transparent', border: 0, fontWeight: 700, cursor: 'pointer' }}
+      >
+        {actionLabel}
+      </button>
+      <button
+        type="button"
+        aria-label="Dismiss"
+        onClick={onDismiss}
+        style={{ color: 'inherit', background: 'transparent', border: 0, cursor: 'pointer' }}
+      >
+        x
+      </button>
+    </div>
+  );
+}
+
+export function RelatedList({
+  title,
+  empty,
+  children
+}: {
+  title: string;
+  empty: string;
+  children: ReactNode;
+}) {
+  const hasChildren = Boolean(children);
+
+  return (
+    <Card>
+      <h2 style={{ marginTop: 0 }}>{title}</h2>
+      {hasChildren ? <div style={{ display: 'grid', gap: 10 }}>{children}</div> : <p style={{ color: 'var(--text-muted)' }}>{empty}</p>}
+    </Card>
+  );
+}
+
+export function RelatedItem({
+  title,
+  detail,
+  href
+}: {
+  title: string;
+  detail?: string | null;
+  href?: string;
+}) {
+  const content = (
+    <div
+      style={{
+        border: '1px solid var(--border-subtle)',
+        borderRadius: 8,
+        padding: 12,
+        color: 'inherit',
+        textDecoration: 'none'
+      }}
+    >
+      <strong>{title}</strong>
+      {detail ? <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>{detail}</div> : null}
+    </div>
+  );
+
+  return href ? (
+    <a href={href} style={{ color: 'inherit', textDecoration: 'none' }}>
+      {content}
+    </a>
+  ) : content;
 }

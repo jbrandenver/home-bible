@@ -1,6 +1,6 @@
-# Supabase Setup (Phase 6A)
+# Supabase Setup
 
-This project now includes Supabase schema + RLS foundations while UI persistence still uses localStorage.
+This project includes Supabase schema, RLS, private Storage, invitation-backed sharing, and an account-deletion Edge Function. Demo mode still uses localStorage when Supabase is not configured or the user is signed out.
 
 ## 1) Create a Supabase project
 
@@ -34,13 +34,26 @@ Using Supabase CLI:
 
 This applies migrations under [supabase/migrations](../supabase/migrations).
 
-## 5) Security warning
+## 5) Deploy Edge Functions
+
+Deploy `delete-account` before enabling account deletion in a hosted environment:
+
+1. `supabase functions deploy delete-account`
+2. Set function secrets:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+
+The service-role key must live only in Supabase function secrets, never in frontend env files.
+
+## 6) Security warning
 
 - Never commit real secrets.
 - Never expose `SUPABASE_SERVICE_ROLE_KEY` in frontend code.
 - Frontend must use anon key only.
+- Run the hosted `pg_policies` inventory query in `SECURITY.md` after applying `010_security_privacy_sharing.sql`.
 
-## 6) Current app behavior
+## 7) Current app behavior
 
-- Existing routes continue using localStorage.
-- Supabase integration for route-level persistence is planned for Phase 6B.
+- Signed-in users save MVP data to Supabase.
+- Demo mode stores browser-only localStorage data and is not encrypted.

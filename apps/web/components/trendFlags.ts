@@ -110,7 +110,7 @@ export function detectTrendFlags(serviceRecords: ServiceRecord[], issues: IssueR
   }
 
   for (const issue of issues) {
-    if (issue.severity === 'urgent' && issue.status !== 'resolved' && issue.status !== 'archived') {
+    if (issue.severity === 'urgent' && issue.status !== 'resolved' && issue.status !== 'dismissed') {
       flags.push({
         id: `urgent-issue-${issue.id}`,
         label: 'Urgent issue open',

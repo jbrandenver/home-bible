@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This checklist packages Home Bible as a local/private MVP release candidate. It is for controlled testing only. It does not approve production deployment, public sharing, paid services, background jobs, or external integrations.
+This checklist packages Home Folder as a local/private MVP release candidate. It is for controlled testing only. It does not approve production deployment, public sharing, paid services, background jobs, or external integrations.
 
 ## Current MVP Scope
 
@@ -38,7 +38,7 @@ This checklist packages Home Bible as a local/private MVP release candidate. It 
 Run:
 
 ```bash
-corepack pnpm --filter @home-bible/web build
+corepack pnpm --filter @home-folder/web build
 corepack pnpm security:audit
 ```
 
@@ -90,7 +90,8 @@ Each route should load without a blank screen or unhandled error.
 - Confirm auth is enabled for the intended test users.
 - Confirm tables exist for the current MVP schema.
 - Confirm RLS remains enabled on user-data tables.
-- Confirm migrations through `008_phase6j_receipts.sql` are applied.
+- Confirm migrations through `010_security_privacy_sharing.sql` are applied, including `009_visibility_contexts.sql`.
+- Run the hosted `pg_policies` inventory query from `SECURITY.md` and confirm no quarantined `001_init.sql` policy names remain.
 - Confirm the `home-documents` bucket exists and is private.
 - Confirm no public buckets exist for user files.
 

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { CSSProperties, ReactNode } from 'react';
-import { getControlStyle } from '@home-bible/ui';
+import { getControlStyle } from '@home-folder/ui';
 
 type ActionLinkProps = {
   href: string;

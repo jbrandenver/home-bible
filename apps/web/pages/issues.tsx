@@ -6,9 +6,10 @@ import {
   ISSUE_TYPES,
   TREND_FLAG_DETECTED_FROM,
   TREND_FLAG_STATUSES,
-  TREND_FLAG_TYPES
-} from '@home-bible/shared';
-import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-bible/ui';
+  TREND_FLAG_TYPES,
+  toLocalDateString
+} from '@home-folder/shared';
+import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
@@ -115,7 +116,7 @@ export default function IssuesPage() {
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<IssueStatus>('open');
   const [severity, setSeverity] = useState<IssueSeverity>('medium');
-  const [firstSeenDate, setFirstSeenDate] = useState(new Date().toISOString().slice(0, 10));
+  const [firstSeenDate, setFirstSeenDate] = useState(toLocalDateString());
   const [lastSeenDate, setLastSeenDate] = useState('');
   const [resolvedDate, setResolvedDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -208,7 +209,12 @@ export default function IssuesPage() {
       setLoading(false);
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setLoadError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -326,7 +332,7 @@ export default function IssuesPage() {
     setDescription('');
     setStatus('open');
     setSeverity('medium');
-    setFirstSeenDate(new Date().toISOString().slice(0, 10));
+    setFirstSeenDate(toLocalDateString());
     setLastSeenDate('');
     setResolvedDate('');
     setNotes('');
@@ -479,6 +485,10 @@ export default function IssuesPage() {
       return;
     }
 
+    if (!window.confirm('Delete this issue?')) {
+      return;
+    }
+
     setDeletingId(issueId);
     setFormError('');
 
@@ -494,6 +504,10 @@ export default function IssuesPage() {
 
   const deleteTrendFlag = async (flagId: string) => {
     if (!trendContext) {
+      return;
+    }
+
+    if (!window.confirm('Delete this trend flag?')) {
       return;
     }
 
@@ -566,24 +580,24 @@ export default function IssuesPage() {
             <UtilityBadge label={`${activeTrendFlagCount} active trend${activeTrendFlagCount === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${trendFlags.length} trend${trendFlags.length === 1 ? '' : 's'}`} />
           </div>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {loading ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>Loading issues and trends...</p>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--text-muted)' }}>Loading issues and trends...</p>
           ) : null}
           {loadError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>{loadError}</p>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>{loadError}</p>
           ) : null}
           {dataMode === 'supabase' && !hasProperty ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#6b7280' }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--text-muted)' }}>
               Create a property before adding issues or trends.
             </p>
           ) : null}
           {formError ? (
-            <div style={{ marginTop: 12, background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca', borderRadius: 8, padding: 10 }}>
+            <div style={{ marginTop: 12, background: 'rgba(163,78,51,0.08)', color: 'var(--status-urgent)', border: '1px solid rgba(163,78,51,0.30)', borderRadius: 8, padding: 10 }}>
               {formError}
             </div>
           ) : null}
@@ -864,11 +878,11 @@ export default function IssuesPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Issues ({filteredIssues.length})</h2>
             {filteredIssues.length === 0 ? (
-              <p style={{ color: '#6b7280', margin: 0 }}>No issues match the current filters.</p>
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No issues match the current filters.</p>
             ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {filteredIssues.map((issue) => (
-                <div key={issue.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                <div key={issue.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
                     <div>
                       <h3 style={{ margin: '0 0 8px 0' }}>{issue.title}</h3>
@@ -880,7 +894,7 @@ export default function IssuesPage() {
                         {issue.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, issue.utility_id) || 'Unknown'}`} />}
                         {issue.repair_id && <UtilityBadge label={`Repair: ${nameFromId(repairs, issue.repair_id) || 'Unknown'}`} />}
                       </div>
-                      <div style={{ color: '#6b7280', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
                         <div><strong>First seen:</strong> {issue.first_seen_date || 'Not set'}</div>
                         {issue.last_seen_date && <div><strong>Last seen:</strong> {issue.last_seen_date}</div>}
                         {issue.resolved_date && <div><strong>Resolved:</strong> {issue.resolved_date}</div>}
@@ -926,11 +940,11 @@ export default function IssuesPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Trends ({filteredTrendFlags.length})</h2>
             {filteredTrendFlags.length === 0 ? (
-              <p style={{ color: '#6b7280', margin: 0 }}>No trends match the current filters.</p>
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No trends match the current filters.</p>
             ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {filteredTrendFlags.map((flag) => (
-                <div key={flag.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                <div key={flag.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'start' }}>
                     <div>
                       <h3 style={{ margin: '0 0 8px 0' }}>{flag.title}</h3>
@@ -943,7 +957,7 @@ export default function IssuesPage() {
                         {flag.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, flag.utility_id) || 'Unknown'}`} />}
                         {flag.issue_id && <UtilityBadge label={`Issue: ${issueTitleFromId(issues, flag.issue_id) || 'Unknown'}`} />}
                       </div>
-                      <div style={{ color: '#6b7280', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
                         <div><strong>First detected:</strong> {flag.first_detected_at.slice(0, 10)}</div>
                         {flag.last_detected_at && <div><strong>Last detected:</strong> {flag.last_detected_at.slice(0, 10)}</div>}
                         {flag.resolved_at && <div><strong>Resolved:</strong> {flag.resolved_at.slice(0, 10)}</div>}

@@ -5,14 +5,16 @@ import {
   formatEnumLabel,
   type DocumentType,
   type VisibilityContext
-} from '@home-bible/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+} from '@home-folder/shared';
+import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { VisibilityContextPicker } from '../components/VisibilityContextPicker';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
+import { getAutomationContext, getDevicesForContext, type AutomationDeviceRow } from '../lib/automation';
 import { getDemoRooms } from '../lib/demoStorage';
 import {
   createDocumentSignedUrlForContext,
+  createDocumentThumbnailUrlsForContext,
   deleteDocumentForContext,
   formatFileSize,
   getDocumentDataContext,
@@ -63,7 +65,8 @@ const LINK_KINDS: Array<{ value: LinkKind; label: string }> = [
   { value: 'repair_id', label: 'Repair' },
   { value: 'service_record_id', label: 'Service History' },
   { value: 'issue_id', label: 'Issue' },
-  { value: 'trend_flag_id', label: 'Trend' }
+  { value: 'trend_flag_id', label: 'Trend' },
+  { value: 'automation_device_id', label: 'Smart device' }
 ];
 
 const QUERY_TO_LINK_KIND: Record<string, LinkKind> = {
@@ -74,7 +77,8 @@ const QUERY_TO_LINK_KIND: Record<string, LinkKind> = {
   repairId: 'repair_id',
   serviceRecordId: 'service_record_id',
   issueId: 'issue_id',
-  trendFlagId: 'trend_flag_id'
+  trendFlagId: 'trend_flag_id',
+  automationDeviceId: 'automation_device_id'
 };
 
 function getInitialLink(routerQuery: Record<string, string | string[] | undefined>) {
@@ -102,6 +106,7 @@ function getDocumentLinkLabel(document: DocumentRow, optionsByKind: Record<LinkK
   if (document.service_record_id) return `Service History: ${labelFromOptions(optionsByKind.service_record_id, document.service_record_id)}`;
   if (document.issue_id) return `Issue: ${labelFromOptions(optionsByKind.issue_id, document.issue_id)}`;
   if (document.trend_flag_id) return `Trend: ${labelFromOptions(optionsByKind.trend_flag_id, document.trend_flag_id)}`;
+  if (document.automation_device_id) return `Smart device: ${labelFromOptions(optionsByKind.automation_device_id, document.automation_device_id)}`;
   return 'Property';
 }
 
@@ -118,9 +123,35 @@ export default function DocumentsPage() {
 
   const [context, setContext] = useState<DocumentDataContext | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
+  const [thumbnailUrls, setThumbnailUrls] = useState<Map<string, string>>(new Map());
+
+  // Fetch signed thumbnail URLs in one batch whenever the list changes —
+  // thumbnails are ~15 KB, so browsing the file cabinet stays near-zero egress.
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!context || documents.every((document) => !document.thumbnail_path)) {
+      return;
+    }
+
+    createDocumentThumbnailUrlsForContext(context, documents)
+      .then((urls) => {
+        if (isMounted) {
+          setThumbnailUrls(urls);
+        }
+      })
+      .catch(() => {
+        // thumbnails are decorative — never surface an error for them
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [context, documents]);
   const [rooms, setRooms] = useState<RoomOption[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
+  const [automationDevices, setAutomationDevices] = useState<AutomationDeviceRow[]>([]);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
@@ -209,12 +240,16 @@ export default function DocumentsPage() {
           getTrendFlagsForContext(trendFlagContext)
         ]);
 
+        const automationContext = await getAutomationContext();
+        const automationDeviceRows = await getDevicesForContext(automationContext);
+
         if (!isMounted) {
           return;
         }
 
         setContext(nextContext);
         setDocuments(nextDocuments);
+        setAutomationDevices(automationDeviceRows);
         setRooms(roomRows);
         setUtilities(utilityRows);
         setAssets(assetRows);
@@ -234,7 +269,12 @@ export default function DocumentsPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -251,9 +291,10 @@ export default function DocumentsPage() {
       repair_id: repairs.map((repair) => ({ id: repair.id, label: repair.title })),
       service_record_id: serviceRecords.map((record) => ({ id: record.id, label: record.service_title })),
       issue_id: issues.map((issue) => ({ id: issue.id, label: issue.title })),
-      trend_flag_id: trendFlags.map((flag) => ({ id: flag.id, label: flag.title }))
+      trend_flag_id: trendFlags.map((flag) => ({ id: flag.id, label: flag.title })),
+      automation_device_id: automationDevices.map((device) => ({ id: device.id, label: device.nickname || device.name }))
     }),
-    [assets, context?.property, issues, reminders, repairs, rooms, serviceRecords, trendFlags, utilities]
+    [assets, automationDevices, context?.property, issues, reminders, repairs, rooms, serviceRecords, trendFlags, utilities]
   );
 
   const currentLinkOptions = optionsByKind[linkKind] || [];
@@ -337,6 +378,10 @@ export default function DocumentsPage() {
   const deleteDocument = async (documentId: string) => {
     if (!context) return;
 
+    if (!window.confirm('Delete this document? Its private file will be removed after the undo window in supported flows.')) {
+      return;
+    }
+
     setActingDocumentId(documentId);
     setError('');
     setNotice('');
@@ -406,16 +451,16 @@ export default function DocumentsPage() {
             <UtilityBadge label={context?.mode === 'supabase' ? 'Private files' : 'Demo data'} />
             {context?.property ? <UtilityBadge label={context.property.nickname} /> : null}
           </div>
-          {loading ? <p style={{ color: '#6b7280' }}>Loading documents...</p> : null}
-          {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
-          {notice ? <p style={{ color: '#065f46', fontWeight: 700 }}>{notice}</p> : null}
+          {loading ? <p style={{ color: 'var(--text-muted)' }}>Loading documents...</p> : null}
+          {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p> : null}
+          {notice ? <p style={{ color: 'var(--status-good)', fontWeight: 700 }}>{notice}</p> : null}
         </Card>
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Upload document</h2>
           {!canUpload ? (
             <div>
-              <p style={{ color: '#6b7280' }}>
+              <p style={{ color: 'var(--text-muted)' }}>
                 Sign in and create a property to upload private files. No public file link is created.
               </p>
               <ActionLink href="/sign-in">Sign in</ActionLink>
@@ -502,7 +547,7 @@ export default function DocumentsPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Document library</h2>
           {documents.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>Keep manuals, warranties, reports, and files in one place.</p>
+            <p style={{ color: 'var(--text-muted)' }}>Keep manuals, warranties, reports, and files in one place.</p>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               {documents.map((document) => {
@@ -510,7 +555,7 @@ export default function DocumentsPage() {
                 const isActing = actingDocumentId === document.id;
 
                 return (
-                  <div key={document.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div key={document.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                     {isEditing ? (
                       <form onSubmit={saveMetadata} style={{ display: 'grid', gap: 10 }}>
                         <label style={{ display: 'grid', gap: 6 }}>
@@ -539,7 +584,7 @@ export default function DocumentsPage() {
                         </label>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <Button type="submit" disabled={isActing}>{isActing ? 'Saving...' : 'Save'}</Button>
-                          <Button type="button" onClick={() => setEditingDocumentId(null)} style={{ background: '#6b7280' }}>
+                          <Button type="button" onClick={() => setEditingDocumentId(null)} style={{ background: 'var(--text-muted)' }}>
                             Cancel
                           </Button>
                         </div>
@@ -547,10 +592,29 @@ export default function DocumentsPage() {
                     ) : (
                       <>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
-                          <div>
-                            <div style={{ fontWeight: 700 }}>{document.title}</div>
-                            <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
-                              {document.file_name} • {formatFileSize(document.file_size_bytes)} • {new Date(document.created_at).toLocaleDateString()}
+                          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', minWidth: 0 }}>
+                            {thumbnailUrls.has(document.id) ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img
+                                src={thumbnailUrls.get(document.id)}
+                                alt=""
+                                width={52}
+                                height={52}
+                                style={{
+                                  width: 52,
+                                  height: 52,
+                                  objectFit: 'cover',
+                                  borderRadius: 4,
+                                  border: '1px solid var(--border-subtle)',
+                                  flexShrink: 0
+                                }}
+                              />
+                            ) : null}
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontWeight: 700 }}>{document.title}</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                                {document.file_name} • {formatFileSize(document.file_size_bytes)} • {new Date(document.created_at).toLocaleDateString()}
+                              </div>
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -560,10 +624,10 @@ export default function DocumentsPage() {
                         </div>
 
                         {document.description ? (
-                          <p style={{ color: '#4b5563', marginBottom: 8 }}>{document.description}</p>
+                          <p style={{ color: 'var(--text-muted)', marginBottom: 8 }}>{document.description}</p>
                         ) : null}
 
-                        <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: 8 }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 8 }}>
                           {getDocumentLinkLabel(document, optionsByKind)}
                         </p>
 
@@ -571,7 +635,7 @@ export default function DocumentsPage() {
                           <Button type="button" onClick={() => openDocument(document.id)} disabled={isActing}>
                             {isActing ? 'Opening...' : 'View / download'}
                           </Button>
-                          <Button type="button" onClick={() => startEditing(document)} style={{ background: '#4b5563' }}>
+                          <Button type="button" onClick={() => startEditing(document)} style={{ background: 'var(--text-muted)' }}>
                             Edit details
                           </Button>
                           {document.document_type === 'receipt' ? (
@@ -586,9 +650,9 @@ export default function DocumentsPage() {
                             style={{
                               padding: '10px 14px',
                               borderRadius: 6,
-                              border: '1px solid #fecaca',
-                              background: '#fef2f2',
-                              color: '#b91c1c',
+                              border: '1px solid rgba(163,78,51,0.30)',
+                              background: 'rgba(163,78,51,0.08)',
+                              color: 'var(--status-urgent)',
                               cursor: isActing ? 'not-allowed' : 'pointer',
                               fontWeight: 700,
                               opacity: isActing ? 0.7 : 1

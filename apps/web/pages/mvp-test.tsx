@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getCurrentUser } from '../lib/auth';
 
@@ -90,7 +90,7 @@ export default function MvpTestPage() {
     <>
       <PageHeader
         title="Private MVP Test"
-        description="Development-only checklist for validating Home & Everything with realistic homeowner data before adding more features."
+        description="Development-only checklist for validating Our Home Folder with realistic homeowner data before adding more features."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
@@ -100,17 +100,17 @@ export default function MvpTestPage() {
             <UtilityBadge label="Private testing only" />
             <UtilityBadge label="Manual seed only" />
           </div>
-          <p style={{ color: '#6b7280', marginTop: 0 }}>
+          <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
             This page does not create background jobs, send data externally, or enable paid services.
           </p>
-          <p style={{ color: '#6b7280', marginBottom: 0 }}>
+          <p style={{ color: 'var(--text-muted)', marginBottom: 0 }}>
             Use it as a guide while following the MVP test docs. Sample data must be entered manually and should avoid secrets or sensitive access instructions.
           </p>
         </Card>
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Manual seed walkthrough</h2>
-          <p style={{ color: '#6b7280' }}>
+          <p style={{ color: 'var(--text-muted)' }}>
             Build the Maple House sample by hand. Keep files small, use placeholders when possible, and do not upload anything that should not be used in testing.
           </p>
           <ol style={{ lineHeight: 1.7, paddingLeft: 22 }}>
@@ -136,7 +136,7 @@ export default function MvpTestPage() {
         <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
           <Card>
             <h2 style={{ marginTop: 0 }}>Pass signals</h2>
-            <ul style={{ color: '#4b5563', lineHeight: 1.7, paddingLeft: 20 }}>
+            <ul style={{ color: 'var(--text-muted)', lineHeight: 1.7, paddingLeft: 20 }}>
               <li>Tester can complete onboarding without coaching.</li>
               <li>Core records can be created, viewed, edited, and linked safely.</li>
               <li>Documents and receipts feel private and controlled.</li>
@@ -148,7 +148,7 @@ export default function MvpTestPage() {
 
           <Card>
             <h2 style={{ marginTop: 0 }}>Safety checks</h2>
-            <ul style={{ color: '#4b5563', lineHeight: 1.7, paddingLeft: 20 }}>
+            <ul style={{ color: 'var(--text-muted)', lineHeight: 1.7, paddingLeft: 20 }}>
               {safetyChecks.map((check) => (
                 <li key={check}>{check}</li>
               ))}
@@ -158,7 +158,7 @@ export default function MvpTestPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Bug report reminder</h2>
-          <p style={{ color: '#6b7280' }}>
+          <p style={{ color: 'var(--text-muted)' }}>
             Capture route, steps to reproduce, expected result, actual result, browser/device, signed-in versus demo mode, data involved, severity, and whether there is a security or cost concern.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

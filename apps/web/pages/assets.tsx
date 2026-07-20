@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ASSET_TYPES, formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, EmptyState, UtilityBadge } from '@home-bible/ui';
+import { ASSET_TYPES, formatEnumLabel } from '@home-folder/shared';
+import { PageHeader, Card, EmptyState, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   deleteAssetForContext,
@@ -70,7 +70,12 @@ export default function AssetsPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -79,6 +84,10 @@ export default function AssetsPage() {
 
   const handleDelete = async (id: string) => {
     if (!context) {
+      return;
+    }
+
+    if (!window.confirm('Delete this asset? You can recreate it later, but linked context may be harder to recover.')) {
       return;
     }
 
@@ -154,11 +163,17 @@ export default function AssetsPage() {
       <PageHeader
         title="Assets"
         description="The things the home owns, where they live, and what protects them."
-      />
+      >
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <ActionLink href="/tools" variant="secondary">The Tool Shed</ActionLink>
+          <ActionLink href="/inventory" variant="secondary">Home Inventory</ActionLink>
+          <ActionLink href="/warranties" variant="secondary">Warranties</ActionLink>
+        </div>
+      </PageHeader>
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
@@ -178,12 +193,12 @@ export default function AssetsPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Name, brand, model, retailer"
-                style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+                style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
               />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Category</span>
-              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <option value="">All categories</option>
                 {ASSET_TYPES.map((type) => (
                   <option key={type} value={type}>{formatEnumLabel(type)}</option>
@@ -192,7 +207,7 @@ export default function AssetsPage() {
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Room</span>
-              <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <select value={roomFilter} onChange={(event) => setRoomFilter(event.target.value)} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <option value="">All rooms</option>
                 {roomOptions.map((room) => (
                   <option key={room.id} value={room.id}>{room.name}</option>
@@ -201,7 +216,7 @@ export default function AssetsPage() {
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Sort</span>
-              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'name' | 'category' | 'purchase_date' | 'warranty')} style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}>
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value as 'name' | 'category' | 'purchase_date' | 'warranty')} style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                 <option value="name">Name</option>
                 <option value="category">Category</option>
                 <option value="purchase_date">Purchase date</option>
@@ -211,9 +226,9 @@ export default function AssetsPage() {
           </div>
 
           {loading ? (
-            <p style={{ color: '#6b7280', margin: 0 }}>Loading assets...</p>
+            <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading assets...</p>
           ) : error ? (
-            <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>{error}</p>
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }}>{error}</p>
           ) : dataMode === 'supabase' && context && !context.property ? (
             <div>
               <EmptyState
@@ -245,7 +260,7 @@ export default function AssetsPage() {
                     key={asset.id}
                     style={{
                       padding: 12,
-                      border: '1px solid #e5e7eb',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: 8,
                       display: 'grid',
                       gridTemplateColumns: '1fr auto',
@@ -261,7 +276,7 @@ export default function AssetsPage() {
                         {asset.brand && <UtilityBadge label={asset.brand} />}
                       </div>
 
-                      <div style={{ fontSize: '0.875rem', color: '#6b7280', lineHeight: 1.6 }}>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
                         {asset.model && (
                           <div>
                             <strong>Model:</strong> {asset.model}
@@ -308,9 +323,9 @@ export default function AssetsPage() {
                         style={{
                           padding: '8px 12px',
                           fontSize: '0.875rem',
-                          backgroundColor: '#fee2e2',
-                          color: '#dc2626',
-                          border: '1px solid #fecaca',
+                          backgroundColor: 'rgba(163,78,51,0.12)',
+                          color: 'var(--status-urgent)',
+                          border: '1px solid rgba(163,78,51,0.30)',
                           borderRadius: 6,
                           cursor: deletingId === asset.id ? 'not-allowed' : 'pointer',
                           fontWeight: 500,

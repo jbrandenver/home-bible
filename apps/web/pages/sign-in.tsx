@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
-import { Button, Card, PageHeader } from '@home-bible/ui';
+import { Button, Card, PageHeader } from '@home-folder/ui';
 import {
   formatAuthError,
   isSupabaseConfigured,
@@ -16,8 +16,10 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [oauthProvider, setOauthProvider] = useState<'google' | 'apple' | null>(null);
 
   const setupMissing = !isSupabaseConfigured();
+  const nextPath = typeof router.query.next === 'string' ? router.query.next : '/dashboard';
 
   const handleEmailSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -35,7 +37,20 @@ export default function SignInPage() {
       return;
     }
 
-    router.push('/dashboard');
+    router.push(nextPath);
+  };
+
+  const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
+    if (loading || oauthProvider) return;
+
+    setError('');
+    setOauthProvider(provider);
+
+    const result = provider === 'google' ? await signInWithGoogle() : await signInWithApple();
+    if (result.error) {
+      setError(formatAuthError(result.error));
+      setOauthProvider(null);
+    }
   };
 
   return (
@@ -47,7 +62,7 @@ export default function SignInPage() {
 
       <Card>
         {setupMissing && (
-          <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412' }}>
+          <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: 'rgba(227,194,136,0.14)', border: '1px solid var(--color-brass-pale)', color: 'var(--color-clay)' }}>
             Account sign-in is not available in this local build. You can still use demo mode in this browser.
           </div>
         )}
@@ -59,7 +74,7 @@ export default function SignInPage() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
               required
             />
           </label>
@@ -70,47 +85,35 @@ export default function SignInPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
               required
             />
           </label>
 
-          {error ? <p style={{ color: '#b91c1c', margin: 0 }}>{error}</p> : null}
+          {error ? <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{error}</p> : null}
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign in with email'}</Button>
             <button
               type="button"
-              disabled={loading}
-              onClick={async () => {
-                setError('');
-                const result = await signInWithGoogle();
-                if (result.error) {
-                  setError(formatAuthError(result.error));
-                }
-              }}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
+              disabled={loading || Boolean(oauthProvider)}
+              onClick={() => handleOAuthSignIn('google')}
+              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
             >
-              Continue with Google
+              {oauthProvider === 'google' ? 'Redirecting...' : 'Continue with Google'}
             </button>
             <button
               type="button"
-              disabled={loading}
-              onClick={async () => {
-                setError('');
-                const result = await signInWithApple();
-                if (result.error) {
-                  setError(formatAuthError(result.error));
-                }
-              }}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
+              disabled={loading || Boolean(oauthProvider)}
+              onClick={() => handleOAuthSignIn('apple')}
+              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
             >
-              Continue with Apple
+              {oauthProvider === 'apple' ? 'Redirecting...' : 'Continue with Apple'}
             </button>
           </div>
         </form>
 
-        <p style={{ marginTop: 16, color: '#6b7280' }}>
+        <p style={{ marginTop: 16, color: 'var(--text-muted)' }}>
           New here? <Link href="/sign-up">Create an account</Link>
         </p>
       </Card>

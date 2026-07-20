@@ -8,19 +8,16 @@ Phase 1 scope:
 - Property dashboard
 - Structured home map (floors, rooms, utilities)
 
-Exclude for phase 1: receipts, AI, billing, camera scan, partner integrations.
+Exclude for phase 1: AI, billing, camera scan, partner integrations, and native mobile parity.
 
 ## Current status
 
-- Phases 1-5 are functional in localStorage mode.
-- Phase 6A establishes Supabase backend foundation:
-	- schema + migration
-	- RLS policies
-	- auth-ready browser client helpers
-	- security/docs updates
-- Existing routes remain localStorage-based until Phase 6B.
+- The web MVP includes Supabase-backed property records, rooms, utilities, assets, warranties, reminders, repairs, issues, documents, and approved receipts.
+- Demo mode remains available when Supabase is not configured or the user is signed out, but demo data stays in localStorage.
+- Sharing is now invitation-backed for signed-in users, with database-enforced role and visibility rules.
+- Native mobile is intentionally out of the active workspace until it is scoped as a real product surface.
 
-## Next step (Phase 6B)
+## Next step
 
-- Incrementally migrate route persistence from localStorage to Supabase tables.
-- Keep UX stable while introducing authenticated data reads/writes.
+- Polish the signature workflows: handover PDF/print output, emergency overview, proactive reminder digest, and home-completeness score.
+- Keep security and RLS regression tests current as sharing roles evolve.

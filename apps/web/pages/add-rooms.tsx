@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { ROOM_TYPES } from '@home-bible/shared';
-import { PageHeader, Card, Input, Select, Button } from '@home-bible/ui';
+import { ROOM_TYPES } from '@home-folder/shared';
+import { PageHeader, Card, Input, Select, Button } from '@home-folder/ui';
 import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
 import { getPrimaryPropertyForUser } from '../lib/properties';
 import { createRoomsForProperty, getRoomsForProperty, updateRoomForProperty } from '../lib/rooms';
@@ -85,7 +85,11 @@ export default function AddRoomsPage() {
       setRooms(demoRooms);
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -247,17 +251,17 @@ export default function AddRoomsPage() {
 
         {userId ? (
           <Card>
-            <p style={{ margin: 0, color: '#065f46' }}>
+            <p style={{ margin: 0, color: 'var(--status-good)' }}>
               Saved to your account.
             </p>
           </Card>
         ) : (
           <Card>
-            <p style={{ margin: 0, color: '#6b7280' }}>
+            <p style={{ margin: 0, color: 'var(--text-muted)' }}>
               Demo data is stored only in this browser.
             </p>
             {!supabaseReady ? (
-              <p style={{ marginTop: 10, marginBottom: 0, color: '#9a3412' }}>
+              <p style={{ marginTop: 10, marginBottom: 0, color: 'var(--color-clay)' }}>
                 Account saving is not available in this local build. Demo data stays only in this browser.
               </p>
             ) : null}
@@ -309,7 +313,7 @@ export default function AddRoomsPage() {
               </div>
 
               {error ? (
-                <p style={{ color: '#b91c1c', fontWeight: 700, margin: 0 }}>
+                <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }}>
                   {error}
                 </p>
               ) : null}
@@ -325,14 +329,14 @@ export default function AddRoomsPage() {
             <h2 style={{ marginTop: 0 }}>Rooms & spaces added</h2>
 
             {rooms.length === 0 ? (
-              <p style={{ color: '#6b7280' }}>No rooms yet - let's map the house.</p>
+              <p style={{ color: 'var(--text-muted)' }}>No rooms yet - let's map the house.</p>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
                 {rooms.map((room) => (
                   <div
                     key={room.id}
                     style={{
-                      border: '1px solid #e5e7eb',
+                      border: '1px solid var(--border-subtle)',
                       borderRadius: 14,
                       padding: 16,
                       background: '#fff'
@@ -371,7 +375,7 @@ export default function AddRoomsPage() {
                             style={{
                               padding: 10,
                               borderRadius: 8,
-                              border: '1px solid #d1d5db',
+                              border: '1px solid var(--border-subtle)',
                               minHeight: 72,
                               fontFamily: 'inherit'
                             }}
@@ -379,7 +383,7 @@ export default function AddRoomsPage() {
                         </label>
                         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           <Button type="submit" disabled={isEditing}>{isEditing ? 'Saving...' : 'Save changes'}</Button>
-                          <Button type="button" disabled={isEditing} onClick={cancelEditingRoom} style={{ background: '#6b7280' }}>
+                          <Button type="button" disabled={isEditing} onClick={cancelEditingRoom} style={{ background: 'var(--text-muted)' }}>
                             Cancel
                           </Button>
                         </div>
@@ -388,10 +392,10 @@ export default function AddRoomsPage() {
                       <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'minmax(0, 1fr) auto', alignItems: 'start' }}>
                         <div>
                           <strong>{room.name}</strong>
-                          <div style={{ color: '#6b7280' }}>
+                          <div style={{ color: 'var(--text-muted)' }}>
                             {formatRoomTypeLabel(room.room_type)} • {formatRoomLocation(room)}
                           </div>
-                          {room.notes ? <div style={{ color: '#6b7280', marginTop: 4 }}>{room.notes}</div> : null}
+                          {room.notes ? <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>{room.notes}</div> : null}
                         </div>
                         <button
                           type="button"
@@ -399,7 +403,7 @@ export default function AddRoomsPage() {
                           style={{
                             padding: '8px 10px',
                             borderRadius: 6,
-                            border: '1px solid #d1d5db',
+                            border: '1px solid var(--border-subtle)',
                             background: '#fff',
                             cursor: 'pointer',
                             fontWeight: 700

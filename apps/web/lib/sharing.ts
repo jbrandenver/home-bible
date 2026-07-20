@@ -1,9 +1,12 @@
 import {
+  getHandoverContext,
   HANDOVER_SECTION_LABELS,
   loadHandoverReport,
   type HandoverReportData,
   type HandoverSection
 } from './handover';
+import { getSupabaseSetupMessage } from './auth';
+import { getSupabaseBrowserClient } from './supabase/client';
 
 export const SHARING_ROLES = [
   'owner',
@@ -37,6 +40,30 @@ export type SharingPreview = {
   warning: string | null;
   receiptAmountsVisible: boolean;
   data: HandoverReportData;
+};
+
+export type InvitationRole = Exclude<SharingRole, 'owner'>;
+
+export type PropertyInvitation = {
+  id: string;
+  property_id: string;
+  inviter_user_id: string;
+  invited_email: string | null;
+  role: InvitationRole;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type CreatedPropertyInvitation = {
+  invitation: PropertyInvitation | null;
+  inviteToken: string;
+  inviteUrl: string;
+  expiresAt: string;
 };
 
 type RoleProfile = {
@@ -540,4 +567,143 @@ export async function loadSharingPreview(role: SharingRole): Promise<SharingPrev
 
 export function sharingSectionLabel(section: HandoverSection) {
   return HANDOVER_SECTION_LABELS[section];
+}
+
+function normalizeInvitation(raw: Partial<PropertyInvitation>): PropertyInvitation {
+  const createdAt = raw.created_at || new Date().toISOString();
+
+  return {
+    id: raw.id || '',
+    property_id: raw.property_id || '',
+    inviter_user_id: raw.inviter_user_id || '',
+    invited_email: raw.invited_email || null,
+    role: (raw.role || 'viewer') as InvitationRole,
+    expires_at: raw.expires_at || createdAt,
+    accepted_at: raw.accepted_at || null,
+    accepted_by: raw.accepted_by || null,
+    revoked_at: raw.revoked_at || null,
+    created_at: createdAt,
+    updated_at: raw.updated_at || createdAt,
+    deleted_at: raw.deleted_at || null
+  };
+}
+
+function buildInviteUrl(inviteToken: string) {
+  const path = `/accept-invite?token=${encodeURIComponent(inviteToken)}`;
+  if (typeof window === 'undefined') {
+    return path;
+  }
+
+  return `${window.location.origin}${path}`;
+}
+
+export async function listPropertyInvitations() {
+  const context = await getHandoverContext();
+  if (context.mode === 'demo' || !context.property) {
+    return [] as PropertyInvitation[];
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('property_invitations')
+    .select('id, property_id, inviter_user_id, invited_email, role, expires_at, accepted_at, accepted_by, revoked_at, created_at, updated_at, deleted_at')
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to load invitations.');
+  }
+
+  return ((data ?? []) as Partial<PropertyInvitation>[]).map(normalizeInvitation);
+}
+
+export async function createPropertyInvitation(input: {
+  role: InvitationRole;
+  invitedEmail?: string | null;
+  expiresInSeconds?: number;
+}): Promise<CreatedPropertyInvitation> {
+  const context = await getHandoverContext();
+  if (context.mode === 'demo' || !context.property) {
+    throw new Error('Sign in and create a property before inviting someone.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase.rpc('create_property_invitation', {
+    target_property_id: context.property.id,
+    target_invited_email: input.invitedEmail || null,
+    target_role: input.role,
+    target_expires_in_seconds: input.expiresInSeconds ?? 604800
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to create invitation.');
+  }
+
+  const result = Array.isArray(data) ? data[0] : data;
+  const inviteToken = String(result?.invite_token || '');
+  if (!inviteToken) {
+    throw new Error('Invitation was created without a token.');
+  }
+
+  const invitations = await listPropertyInvitations();
+  const invitation =
+    invitations.find((item) => item.id === result?.invitation_id) || invitations[0] || null;
+
+  return {
+    invitation,
+    inviteToken,
+    inviteUrl: buildInviteUrl(inviteToken),
+    expiresAt: String(result?.expires_at || invitation?.expires_at || '')
+  };
+}
+
+export async function revokePropertyInvitation(invitationId: string) {
+  const context = await getHandoverContext();
+  if (context.mode === 'demo' || !context.property) {
+    throw new Error('Sign in and create a property before revoking invitations.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { error } = await supabase
+    .from('property_invitations')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('id', invitationId)
+    .eq('property_id', context.property.id)
+    .is('accepted_at', null)
+    .is('revoked_at', null)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(error.message || 'Failed to revoke invitation.');
+  }
+}
+
+export async function acceptPropertyInvitation(inviteToken: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase.rpc('accept_property_invitation', {
+    invite_token: inviteToken
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to accept invitation.');
+  }
+
+  return String(data);
 }

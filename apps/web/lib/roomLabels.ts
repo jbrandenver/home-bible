@@ -1,4 +1,4 @@
-import { formatEnumLabel } from '@home-bible/shared';
+import { formatEnumLabel } from '@home-folder/shared';
 
 export type RoomLocationLike = {
   name?: string | null;

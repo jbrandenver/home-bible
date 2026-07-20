@@ -1,3 +1,4 @@
+import { formatDataError } from './errors';
 import {
   DOCUMENT_SOURCES,
   DOCUMENT_TYPES,
@@ -7,15 +8,19 @@ import {
   type DocumentType,
   type DocumentVisibility,
   type VisibilityContext
-} from '@home-bible/shared';
+} from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { ensureProfileForUser, getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
+import { isCompressibleImage, prepareImageForUpload } from './images';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 import { normalizeVisibilityContexts, visibilityFromContexts } from './visibility';
 
 export const HOME_DOCUMENTS_BUCKET = 'home-documents';
 export const MAX_DOCUMENT_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+// Photos are compressed client-side before upload; anything still over 5 MB
+// after compression is rejected as a storage-cost guardrail.
+export const MAX_PHOTO_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 export const ALLOWED_DOCUMENT_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -54,6 +59,7 @@ export type DocumentLinkInput = {
   service_record_id?: string | null;
   issue_id?: string | null;
   trend_flag_id?: string | null;
+  automation_device_id?: string | null;
 };
 
 export type DocumentUploadInput = DocumentLinkInput & {
@@ -81,7 +87,8 @@ export type DocumentLinkField =
   | 'repair_id'
   | 'service_record_id'
   | 'issue_id'
-  | 'trend_flag_id';
+  | 'trend_flag_id'
+  | 'automation_device_id';
 
 export type DocumentLinkTarget = {
   field: DocumentLinkField;
@@ -89,7 +96,7 @@ export type DocumentLinkTarget = {
 };
 
 const DOCUMENT_SELECT =
-  'id, property_id, room_id, utility_id, asset_id, reminder_id, repair_id, service_record_id, issue_id, trend_flag_id, document_type, title, description, file_name, file_path, bucket_name, mime_type, file_size_bytes, visibility, visibility_contexts, source, created_by, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, utility_id, asset_id, reminder_id, repair_id, service_record_id, issue_id, trend_flag_id, automation_device_id, document_type, title, description, file_name, file_path, thumbnail_path, bucket_name, mime_type, file_size_bytes, visibility, visibility_contexts, source, created_by, created_at, updated_at, deleted_at';
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -116,11 +123,13 @@ function normalizeDocument(raw: Partial<DocumentRow>): DocumentRow {
     service_record_id: nullableString(raw.service_record_id),
     issue_id: nullableString(raw.issue_id),
     trend_flag_id: nullableString(raw.trend_flag_id),
+    automation_device_id: nullableString(raw.automation_device_id),
     document_type: enumValue(DOCUMENT_TYPES, raw.document_type, 'other'),
     title: raw.title?.trim() || raw.file_name?.trim() || 'Untitled document',
     description: nullableString(raw.description),
     file_name: raw.file_name?.trim() || 'document',
     file_path: raw.file_path?.trim() || '',
+    thumbnail_path: nullableString(raw.thumbnail_path),
     bucket_name: HOME_DOCUMENTS_BUCKET,
     mime_type: nullableString(raw.mime_type),
     file_size_bytes:
@@ -154,11 +163,11 @@ function formatDocumentError(action: string, message?: string) {
     lowerMessage.includes('policy') ||
     lowerMessage.includes('invalid input value');
 
-  if (!needsMigration) {
-    return detail;
-  }
-
-  return `Failed to ${action}. Apply ${PHASE_6I_MIGRATION} to your Supabase project, then try again. Original error: ${detail}`;
+  return formatDataError(
+    action,
+    detail,
+    needsMigration ? `Apply ${PHASE_6I_MIGRATION} to your Supabase project, then try again.` : undefined
+  );
 }
 
 function getExtension(fileName: string) {
@@ -193,6 +202,12 @@ function validateFile(file: File) {
     throw new Error('Only PDF, JPEG, PNG, WebP, and plain text files are allowed.');
   }
 
+  // Cost guardrail: photos are compressed client-side before this check, so a
+  // photo still over 5 MB is almost certainly a raw export that doesn't belong here.
+  if (isCompressibleImage(mimeType) && file.size > MAX_PHOTO_FILE_SIZE_BYTES) {
+    throw new Error('Photos must be 5 MB or smaller after compression.');
+  }
+
   return mimeType;
 }
 
@@ -213,6 +228,11 @@ function buildStoragePath(propertyId: string, fileName: string) {
   return `properties/${propertyId}/uploads/${timestamp}-${crypto.randomUUID()}-${sanitizeFileName(fileName)}`;
 }
 
+function buildThumbnailPath(propertyId: string, filePath: string) {
+  const fileName = filePath.split('/').pop() || 'photo.jpg';
+  return `properties/${propertyId}/thumbnails/${fileName.replace(/\.[^.]+$/, '')}-thumb.jpg`;
+}
+
 function cleanLinkInput(input: DocumentLinkInput) {
   return {
     room_id: nullableString(input.room_id),
@@ -222,7 +242,8 @@ function cleanLinkInput(input: DocumentLinkInput) {
     repair_id: nullableString(input.repair_id),
     service_record_id: nullableString(input.service_record_id),
     issue_id: nullableString(input.issue_id),
-    trend_flag_id: nullableString(input.trend_flag_id)
+    trend_flag_id: nullableString(input.trend_flag_id),
+    automation_device_id: nullableString(input.automation_device_id)
   };
 }
 
@@ -237,6 +258,7 @@ function cleanLinkUpdateInput(input: Partial<DocumentLinkInput>) {
   if (input.service_record_id !== undefined) payload.service_record_id = nullableString(input.service_record_id);
   if (input.issue_id !== undefined) payload.issue_id = nullableString(input.issue_id);
   if (input.trend_flag_id !== undefined) payload.trend_flag_id = nullableString(input.trend_flag_id);
+  if (input.automation_device_id !== undefined) payload.automation_device_id = nullableString(input.automation_device_id);
 
   return payload;
 }
@@ -371,13 +393,16 @@ export async function uploadDocumentForContext(context: DocumentDataContext, inp
     throw new Error('Document title is required.');
   }
 
-  const mimeType = validateFile(input.file);
-  const filePath = buildStoragePath(context.property.id, input.file.name);
+  // Near-zero-cost pipeline: photos are resized/re-encoded in the browser and a
+  // small thumbnail is generated so lists never fetch full-size images.
+  const prepared = await prepareImageForUpload(input.file);
+  const mimeType = validateFile(prepared.file);
+  const filePath = buildStoragePath(context.property.id, prepared.file.name);
   await ensureProfileForUser(context.user);
 
   const { error: uploadError } = await supabase.storage
     .from(HOME_DOCUMENTS_BUCKET)
-    .upload(filePath, input.file, {
+    .upload(filePath, prepared.file, {
       cacheControl: '3600',
       contentType: mimeType,
       upsert: false
@@ -385,6 +410,23 @@ export async function uploadDocumentForContext(context: DocumentDataContext, inp
 
   if (uploadError) {
     throw new Error(formatDocumentError('upload document file', uploadError.message));
+  }
+
+  // Thumbnail upload is best-effort — a missing thumbnail must never fail the upload.
+  let thumbnailPath: string | null = null;
+  if (prepared.thumbnail) {
+    const candidateThumbnailPath = buildThumbnailPath(context.property.id, filePath);
+    const { error: thumbnailError } = await supabase.storage
+      .from(HOME_DOCUMENTS_BUCKET)
+      .upload(candidateThumbnailPath, prepared.thumbnail, {
+        cacheControl: '31536000',
+        contentType: 'image/jpeg',
+        upsert: false
+      });
+
+    if (!thumbnailError) {
+      thumbnailPath = candidateThumbnailPath;
+    }
   }
 
   const { data, error: insertError } = await supabase
@@ -395,11 +437,12 @@ export async function uploadDocumentForContext(context: DocumentDataContext, inp
       document_type: input.document_type || 'other',
       title,
       description: nullableString(input.description),
-      file_name: input.file.name,
+      file_name: prepared.file.name,
       file_path: filePath,
+      thumbnail_path: thumbnailPath,
       bucket_name: HOME_DOCUMENTS_BUCKET,
       mime_type: mimeType,
-      file_size_bytes: input.file.size,
+      file_size_bytes: prepared.file.size,
       visibility: visibilityFromContexts(input.visibility_contexts, input.visibility || 'private'),
       visibility_contexts: normalizeVisibilityContexts(input.visibility_contexts, input.visibility || 'private'),
       source: 'manual_upload' satisfies DocumentSource,
@@ -484,6 +527,14 @@ export async function deleteDocumentForContext(context: DocumentDataContext, doc
     throw new Error(getSupabaseSetupMessage());
   }
 
+  // Look up storage paths first so the underlying files can be freed (cost hygiene).
+  const { data: existing } = await supabase
+    .from('documents')
+    .select('file_path, thumbnail_path')
+    .eq('id', documentId)
+    .eq('property_id', context.property.id)
+    .maybeSingle();
+
   const { error } = await supabase
     .from('documents')
     .update({ deleted_at: new Date().toISOString() })
@@ -492,6 +543,16 @@ export async function deleteDocumentForContext(context: DocumentDataContext, doc
 
   if (error) {
     throw new Error(formatDocumentError('delete document metadata', error.message));
+  }
+
+  // Best-effort file removal — the metadata delete above is the source of truth,
+  // so a storage hiccup here should not surface as a failed delete.
+  const pathsToRemove = [existing?.file_path, existing?.thumbnail_path].filter(
+    (path): path is string => typeof path === 'string' && path.length > 0
+  );
+
+  if (pathsToRemove.length > 0) {
+    await supabase.storage.from(HOME_DOCUMENTS_BUCKET).remove(pathsToRemove);
   }
 }
 
@@ -532,7 +593,9 @@ export async function createDocumentSignedUrlForContext(
   const normalized = normalizeDocument(document as Partial<DocumentRow>);
   const { data, error } = await supabase.storage
     .from(normalized.bucket_name)
-    .createSignedUrl(normalized.file_path, expiresInSeconds);
+    .createSignedUrl(normalized.file_path, expiresInSeconds, {
+      download: sanitizeFileName(normalized.file_name)
+    });
 
   if (error || !data?.signedUrl) {
     throw new Error(formatDocumentError('create signed document link', error?.message));
@@ -542,4 +605,53 @@ export async function createDocumentSignedUrlForContext(
     document: normalized,
     signedUrl: data.signedUrl
   };
+}
+
+/**
+ * Batch signed URLs for document thumbnails (one request for the whole list).
+ * Thumbnails are ~15 KB JPEGs, so lists stay fast and egress stays near zero.
+ * Documents without a thumbnail are simply absent from the returned map.
+ */
+export async function createDocumentThumbnailUrlsForContext(
+  context: DocumentDataContext,
+  documents: DocumentRow[],
+  expiresInSeconds = 3600
+): Promise<Map<string, string>> {
+  const urls = new Map<string, string>();
+
+  if (context.mode === 'demo' || !context.property) {
+    return urls;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return urls;
+  }
+
+  const withThumbnails = documents.filter(
+    (document) => document.thumbnail_path && !document.deleted_at
+  );
+
+  if (withThumbnails.length === 0) {
+    return urls;
+  }
+
+  const { data, error } = await supabase.storage
+    .from(HOME_DOCUMENTS_BUCKET)
+    .createSignedUrls(
+      withThumbnails.map((document) => document.thumbnail_path as string),
+      expiresInSeconds
+    );
+
+  if (error || !data) {
+    return urls;
+  }
+
+  data.forEach((entry, index) => {
+    if (entry.signedUrl && !entry.error) {
+      urls.set(withThumbnails[index].id, entry.signedUrl);
+    }
+  });
+
+  return urls;
 }

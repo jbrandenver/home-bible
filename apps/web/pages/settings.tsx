@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   getCurrentUser,
@@ -9,10 +9,13 @@ import {
   onAuthStateChange,
   signOut
 } from '../lib/auth';
+import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 export default function SettingsPage() {
   const [isReady, setIsReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [accountError, setAccountError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -46,18 +49,47 @@ export default function SettingsPage() {
     setUser(null);
   }
 
+  async function handleDeleteAccount() {
+    if (!window.confirm('Delete your account? This anonymizes your profile, removes memberships, and transfers or soft-deletes homes you own. This cannot be undone.')) {
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setAccountError('Supabase is not configured.');
+      return;
+    }
+
+    setDeletingAccount(true);
+    setAccountError('');
+
+    const { error } = await supabase.functions.invoke('delete-account', {
+      method: 'POST'
+    });
+
+    setDeletingAccount(false);
+
+    if (error) {
+      setAccountError(error.message || 'Failed to delete account.');
+      return;
+    }
+
+    await signOut();
+    setUser(null);
+  }
+
   const supabaseReady = isSupabaseConfigured();
 
   return (
     <>
       <PageHeader
         title="Settings"
-        description="Privacy, account, and safe testing controls for Home & Everything."
+        description="Privacy, account, and safe testing controls for Our Home Folder."
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
           <Card tone="dark">
-            <h2 style={{ marginTop: 0 }}>Home & Everything</h2>
+            <h2 style={{ marginTop: 0 }}>Our Home Folder</h2>
             <p style={{ color: 'rgba(255,248,234,0.78)', marginBottom: 0 }}>
               A home, documented. Keep the record calm, private, and complete enough to hand on.
             </p>
@@ -78,6 +110,23 @@ export default function SettingsPage() {
                   <Button type="button" onClick={handleSignOut} variant="secondary">
                     Sign out
                   </Button>
+                </div>
+                <div style={{ display: 'grid', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+                  <strong>Delete account</strong>
+                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                    Deletes the auth account, anonymizes the profile, removes memberships, and transfers or soft-deletes owned homes.
+                  </p>
+                  {accountError ? <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{accountError}</p> : null}
+                  <div>
+                    <Button
+                      type="button"
+                      disabled={deletingAccount}
+                      onClick={handleDeleteAccount}
+                      style={{ background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
+                    >
+                      {deletingAccount ? 'Deleting...' : 'Delete account'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -123,7 +172,6 @@ export default function SettingsPage() {
               <li>Sharing controls</li>
               <li>Privacy</li>
               <li>Data export</li>
-              <li>Delete account</li>
               <li>Support</li>
             </ul>
           </Card>

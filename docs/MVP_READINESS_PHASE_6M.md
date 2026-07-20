@@ -42,7 +42,7 @@ Date: 2026-06-27
 
 ## Verification
 
-- `corepack pnpm --filter @home-bible/web build` passed.
+- `corepack pnpm --filter @home-folder/web build` passed.
 - `corepack pnpm security:audit` completed with zero failures.
 - Local route smoke returned `200` for core routes and detail-route samples.
 

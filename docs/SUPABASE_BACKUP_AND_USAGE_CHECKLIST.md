@@ -6,7 +6,7 @@ Use this before a private MVP release candidate and before future migrations. Th
 
 In the Supabase dashboard:
 
-1. Open the intended Home Bible project.
+1. Open the intended Home Folder project.
 2. Review project usage and billing/usage indicators.
 3. Confirm usage looks expected for private MVP testing.
 4. Confirm there are no unexpected services enabled.

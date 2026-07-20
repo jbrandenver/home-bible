@@ -1,16 +1,17 @@
+import { formatDataError } from './errors';
 import {
   ISSUE_SEVERITIES,
   TREND_FLAG_DETECTED_FROM,
   TREND_FLAG_STATUSES,
   TREND_FLAG_TYPES
-} from '@home-bible/shared';
+} from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 
-const DEMO_TREND_FLAGS_KEY = 'homeBible.trendFlags';
+const DEMO_TREND_FLAGS_KEY = 'homeFolder.trendFlags';
 const PHASE_6G_MIGRATION = 'supabase/migrations/006_phase6g_issues_trend_flags.sql';
 
 export type TrendFlagType = (typeof TREND_FLAG_TYPES)[number];
@@ -130,11 +131,11 @@ function formatTrendFlagError(action: string, message?: string) {
     lowerMessage.includes('policy') ||
     lowerMessage.includes('invalid input value');
 
-  if (!needsMigration) {
-    return detail;
-  }
-
-  return `Failed to ${action}. Apply ${PHASE_6G_MIGRATION} to your Supabase project, then try again. Original error: ${detail}`;
+  return formatDataError(
+    action,
+    detail,
+    needsMigration ? `Apply ${PHASE_6G_MIGRATION} to your Supabase project, then try again.` : undefined
+  );
 }
 
 function buildTrendFlagPayload(input: TrendFlagInput, propertyId: string) {
@@ -384,6 +385,54 @@ export async function updateTrendFlagStatusForContext(
   const { data, error } = await supabase
     .from('trend_flags')
     .update(payload)
+    .eq('id', flagId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .select(TREND_FLAG_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw new Error(formatTrendFlagError('update trend flag', error?.message));
+  }
+
+  return normalizeTrendFlag(data as RawTrendFlag);
+}
+
+export async function updateTrendFlagForContext(
+  context: TrendFlagDataContext,
+  flagId: string,
+  input: TrendFlagInput
+) {
+  if (context.mode === 'demo') {
+    const demoProperty = getDemoActiveProperty();
+    const updated = getDemoTrendFlags().map((flag) =>
+      flag.id === flagId
+        ? normalizeTrendFlag({
+            ...flag,
+            ...buildTrendFlagPayload(input, demoProperty?.id || flag.property_id || ''),
+            id: flag.id,
+            property_id: flag.property_id,
+            updated_at: new Date().toISOString()
+          })
+        : flag
+    );
+
+    writeDemoTrendFlags(updated);
+    return updated.find((flag) => flag.id === flagId) || null;
+  }
+
+  if (!context.property) {
+    throw new Error('Create a property before editing trend flags.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('trend_flags')
+    .update(buildTrendFlagPayload(input, context.property.id))
     .eq('id', flagId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

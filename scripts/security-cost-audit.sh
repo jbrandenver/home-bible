@@ -171,10 +171,55 @@ print_matches WARNING "AI Or OCR References" 'openai|artificial intelligence|ai 
 print_matches WARNING "Storage Bucket References" 'storage\.buckets|bucket_name|bucket_id|home-documents|storage\.from|create bucket|bucket' "${SCAN_TARGETS[@]}"
 print_matches FAIL "Public Bucket Or Public File URL References" 'public[[:space:]]*=[[:space:]]*true|getPublicUrl|publicUrl|public_url|createPublicUrl' "${SCAN_TARGETS[@]}"
 print_matches WARNING "File Size Limit References" 'file_size_limit|MAX_.*FILE_SIZE|upload limit|[0-9]+[[:space:]]*(MB|MiB|KB|KiB)' "${SCAN_TARGETS[@]}"
-print_matches FAIL "Service Role References" 'service_role|SUPABASE_SERVICE_ROLE|sb_secret' "${SCAN_TARGETS[@]}"
+print_matches FAIL "Frontend Service Role References" 'service_role|SUPABASE_SERVICE_ROLE|sb_secret' apps packages package.json README.md
+print_matches WARNING "Server Or Docs Service Role References" 'service_role|SUPABASE_SERVICE_ROLE|sb_secret' supabase docs
 print_matches WARNING "Forbidden Sensitive Field Strings" 'access code|lock code|garage code|safe code|alarm code|wi-fi password|wifi password|hidden key|door code|keypad code|access_code|lock_code|garage_code|safe_code|alarm_code|wifi_password|hidden_key|door_code|keypad_code' "${SCAN_TARGETS[@]}"
 print_matches WARNING "Migrations Creating Buckets" 'insert into storage\.buckets|storage\.buckets|create bucket' supabase/migrations
 print_matches WARNING "Migrations Creating Cron, Jobs, Or Cost-Sensitive Extensions" 'pg_cron|cron|create extension[[:space:]]+.*cron|create extension[[:space:]]+.*pg_net|create extension[[:space:]]+.*vector|schedule\(|net\.http|job' supabase/migrations
+print_matches FAIL "Raw User-Supplied Asset Hrefs" 'href=\{asset\.(manual_url|support_url)\}' apps/web/pages apps/web/components
+
+section "Legacy 001 Policy Creation"
+if ! command -v rg >/dev/null 2>&1; then
+  status_line WARNING "ripgrep is not installed; skipped legacy policy creation check."
+else
+  legacy_policy_names=(
+    profiles_self_access
+    properties_select_owner_or_member
+    properties_insert_owner
+    properties_update_owner
+    properties_delete_owner
+    property_members_select_self
+    property_members_insert_self
+    floors_select_via_property
+    floors_insert_allowed
+    floors_update_allowed
+    floors_delete_allowed
+    rooms_select_via_property
+    rooms_insert_allowed
+    rooms_update_allowed
+    rooms_delete_allowed
+    utilities_select_via_property
+    utilities_insert_allowed
+    utilities_update_allowed
+    utilities_delete_allowed
+    audit_insert_authenticated
+  )
+  legacy_creates=""
+
+  for policy_name in "${legacy_policy_names[@]}"; do
+    matches="$(rg -n --no-heading -i "create policy[[:space:]]+\"?$policy_name\"?" supabase/migrations 2>/dev/null || true)"
+    if [ -n "$matches" ]; then
+      legacy_creates="${legacy_creates}${matches}"$'\n'
+    fi
+  done
+
+  if [ -n "$legacy_creates" ]; then
+    status_line FAIL "Legacy 001 policy creation was found in migrations."
+    printf '%s' "$legacy_creates" | print_line_refs
+  else
+    status_line PASS "No legacy 001 policy creation remains in migrations."
+  fi
+fi
 
 section "Migrations Creating Tables Without RLS"
 if ! command -v rg >/dev/null 2>&1; then

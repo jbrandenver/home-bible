@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
-import { Button, Card, PageHeader } from '@home-bible/ui';
+import { Button, Card, PageHeader } from '@home-folder/ui';
 import {
   formatAuthError,
   isSupabaseConfigured,
@@ -47,7 +47,7 @@ export default function SignUpPage() {
 
       <Card>
         {setupMissing && (
-          <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: '#fff7ed', border: '1px solid #fdba74', color: '#9a3412' }}>
+          <div style={{ marginBottom: 16, padding: 12, borderRadius: 8, background: 'rgba(227,194,136,0.14)', border: '1px solid var(--color-brass-pale)', color: 'var(--color-clay)' }}>
             Account creation is not available in this local build. You can still use demo mode in this browser.
           </div>
         )}
@@ -59,7 +59,7 @@ export default function SignUpPage() {
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
               required
             />
           </label>
@@ -70,13 +70,13 @@ export default function SignUpPage() {
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              style={{ padding: 10, borderRadius: 8, border: '1px solid #d1d5db' }}
+              style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
               required
               minLength={8}
             />
           </label>
 
-          {error ? <p style={{ color: '#b91c1c', margin: 0 }}>{error}</p> : null}
+          {error ? <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{error}</p> : null}
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button type="submit" disabled={loading}>{loading ? 'Creating account...' : 'Create account with email'}</Button>
@@ -90,7 +90,7 @@ export default function SignUpPage() {
                   setError(formatAuthError(result.error));
                 }
               }}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
+              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
             >
               Continue with Google
             </button>
@@ -104,14 +104,14 @@ export default function SignUpPage() {
                   setError(formatAuthError(result.error));
                 }
               }}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
+              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
             >
               Continue with Apple
             </button>
           </div>
         </form>
 
-        <p style={{ marginTop: 16, color: '#6b7280' }}>
+        <p style={{ marginTop: 16, color: 'var(--text-muted)' }}>
           Already have an account? <Link href="/sign-in">Sign in</Link>
         </p>
       </Card>

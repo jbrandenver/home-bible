@@ -1,4 +1,4 @@
-import { ROOM_TYPES } from '@home-bible/shared';
+import { ROOM_TYPES } from '@home-folder/shared';
 import { getSupabaseBrowserClient } from './supabase/client';
 
 export type RoomDraft = {
@@ -155,6 +155,17 @@ async function getOrCreateFloorForProperty(propertyId: string, floorName: string
     .single();
 
   if (error || !createdFloor) {
+    if (error && 'code' in error && error.code === '23505') {
+      const refreshedFloors = await getFloorsForProperty(propertyId);
+      const refreshedFloor = refreshedFloors.find(
+        (floor) => floor.name.trim().toLowerCase() === normalizedFloorName.toLowerCase()
+      );
+
+      if (refreshedFloor) {
+        return refreshedFloor;
+      }
+    }
+
     throw new Error(error?.message || 'Failed to create floor');
   }
 
@@ -205,6 +216,18 @@ export async function createRoomsForProperty(propertyId: string, drafts: RoomDra
       .single();
 
     if (error || !createdFloor) {
+      if (error && 'code' in error && error.code === '23505') {
+        const refreshedFloors = await getFloorsForProperty(propertyId);
+        const refreshedFloor = refreshedFloors.find(
+          (floor) => floor.name.trim().toLowerCase() === floorName.toLowerCase()
+        );
+
+        if (refreshedFloor) {
+          floorByLowerName.set(key, refreshedFloor);
+          continue;
+        }
+      }
+
       throw new Error(error?.message || 'Failed to create floor');
     }
 
@@ -246,9 +269,9 @@ export async function createRoomsForProperty(propertyId: string, drafts: RoomDra
     });
   }
 
-  if (pendingRows.length > 0) {
-    const { error } = await supabase.from('rooms').insert(pendingRows);
-    if (error) {
+  for (const row of pendingRows) {
+    const { error } = await supabase.from('rooms').insert(row);
+    if (error && (!('code' in error) || error.code !== '23505')) {
       throw new Error(error.message || 'Failed to create rooms');
     }
   }
@@ -283,6 +306,26 @@ export async function updateRoomForProperty(propertyId: string, roomId: string, 
 
   if (error) {
     throw new Error(error.message || 'Failed to update room or space.');
+  }
+
+  return getRoomsForProperty(propertyId);
+}
+
+export async function deleteRoomForProperty(propertyId: string, roomId: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const { error } = await supabase
+    .from('rooms')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', roomId)
+    .eq('property_id', propertyId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(error.message || 'Failed to delete room or space.');
   }
 
   return getRoomsForProperty(propertyId);

@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { ASSET_TYPES, formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-bible/ui';
+import { ASSET_TYPES, formatEnumLabel, safeHttpUrl, toLocalDateString } from '@home-folder/shared';
+import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
@@ -109,7 +109,7 @@ export default function AssetDetailPage() {
       return {
         status: 'expired',
         daysRemaining,
-        expirationDate: expirationDate.toISOString().slice(0, 10)
+        expirationDate: toLocalDateString(expirationDate)
       };
     }
 
@@ -117,14 +117,14 @@ export default function AssetDetailPage() {
       return {
         status: 'expiring_soon',
         daysRemaining,
-        expirationDate: expirationDate.toISOString().slice(0, 10)
+        expirationDate: toLocalDateString(expirationDate)
       };
     }
 
     return {
       status: 'active',
       daysRemaining,
-      expirationDate: expirationDate.toISOString().slice(0, 10)
+      expirationDate: toLocalDateString(expirationDate)
     };
   };
 
@@ -274,7 +274,12 @@ export default function AssetDetailPage() {
 
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -313,6 +318,10 @@ export default function AssetDetailPage() {
 
   const handleDelete = async () => {
     if (!asset || !context) return;
+
+    if (!window.confirm('Delete this asset?')) {
+      return;
+    }
 
     setDeleting(true);
     setError('');
@@ -371,7 +380,7 @@ export default function AssetDetailPage() {
       <>
         <PageHeader title="Asset" />
         <Card>
-          <p style={{ color: '#6b7280', margin: 0 }}>Loading asset...</p>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading asset...</p>
         </Card>
       </>
     );
@@ -382,7 +391,7 @@ export default function AssetDetailPage() {
       <>
         <PageHeader title="Asset error" />
         <Card>
-          <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p>
+          <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p>
           <ActionLink href="/assets" variant="secondary">Back to assets</ActionLink>
         </Card>
       </>
@@ -394,10 +403,10 @@ export default function AssetDetailPage() {
       <>
         <PageHeader title="Asset not found" />
         <Card>
-          <p style={{ color: '#6b7280' }}>
+          <p style={{ color: 'var(--text-muted)' }}>
             This asset may not exist yet, or your setup data was cleared.
           </p>
-          <p style={{ color: '#6b7280', marginTop: 8 }}>
+          <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>
             {dataMode === 'supabase'
               ? 'Saved to your account. If this asset was removed, it will no longer appear.'
               : 'Demo data is stored only in this browser. Add assets from the asset flow to continue.'}
@@ -419,48 +428,48 @@ export default function AssetDetailPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {reminderError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {reminderError}
             </p>
           ) : null}
           {repairError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {repairError}
             </p>
           ) : null}
           {serviceRecordError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {serviceRecordError}
             </p>
           ) : null}
           {documentError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {documentError}
             </p>
           ) : null}
           {receiptError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {receiptError}
             </p>
           ) : null}
           {issueError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {issueError}
             </p>
           ) : null}
           {trendFlagError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {trendFlagError}
             </p>
           ) : null}
           {formError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {formError}
             </p>
           ) : null}
@@ -470,7 +479,7 @@ export default function AssetDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Asset Information</h2>
 
-          <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: '#4b5563' }}>
+          <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
             <div>
               <strong>Type:</strong> {formatEnumLabel(asset.asset_type)}
             </div>
@@ -515,7 +524,7 @@ export default function AssetDetailPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Purchase Details</h2>
 
-            <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: '#4b5563' }}>
+            <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
               {asset.purchase_date && (
                 <div>
                   <strong>Purchased:</strong> {asset.purchase_date}
@@ -549,7 +558,7 @@ export default function AssetDetailPage() {
             <UtilityBadge label={`${warrantyDocuments.length} warranty doc${warrantyDocuments.length === 1 ? '' : 's'}`} />
           </div>
 
-          <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: '#4b5563' }}>
+          <div style={{ display: 'grid', gap: 12, fontSize: '0.875rem', color: 'var(--text-muted)' }}>
             {asset.warranty_length_months && (
               <div>
                 <strong>Coverage:</strong> {asset.warranty_length_months} months
@@ -563,7 +572,7 @@ export default function AssetDetailPage() {
             )}
 
             {!warrantyMeta.expirationDate && (
-              <div style={{ color: '#6b7280' }}>Add purchase date or warranty duration to calculate expiration.</div>
+              <div style={{ color: 'var(--text-muted)' }}>Add purchase date or warranty duration to calculate expiration.</div>
             )}
 
             <ActionLink href="/warranties" variant="secondary">Manage warranties</ActionLink>
@@ -586,31 +595,31 @@ export default function AssetDetailPage() {
         />
 
         {/* Documentation Card */}
-        {(asset.manual_url || asset.support_url) && (
+        {(safeHttpUrl(asset.manual_url) || safeHttpUrl(asset.support_url)) && (
           <Card>
             <h2 style={{ marginTop: 0 }}>Documentation</h2>
 
             <div style={{ display: 'grid', gap: 12 }}>
-              {asset.manual_url && (
+              {safeHttpUrl(asset.manual_url) && (
                 <div>
                   <a
-                    href={asset.manual_url}
+                    href={safeHttpUrl(asset.manual_url) || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: '#3b82f6', textDecoration: 'none' }}
+                    style={{ color: 'var(--accent-strong)', textDecoration: 'none' }}
                   >
                     📄 View Manual
                   </a>
                 </div>
               )}
 
-              {asset.support_url && (
+              {safeHttpUrl(asset.support_url) && (
                 <div>
                   <a
-                    href={asset.support_url}
+                    href={safeHttpUrl(asset.support_url) || undefined}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: '#3b82f6', textDecoration: 'none' }}
+                    style={{ color: 'var(--accent-strong)', textDecoration: 'none' }}
                   >
                     🔗 View Support
                   </a>
@@ -624,7 +633,7 @@ export default function AssetDetailPage() {
         {asset.notes && (
           <Card>
             <h2 style={{ marginTop: 0 }}>Notes</h2>
-            <p style={{ color: '#4b5563', whiteSpace: 'pre-wrap' }}>{asset.notes}</p>
+            <p style={{ color: 'var(--text-muted)', whiteSpace: 'pre-wrap' }}>{asset.notes}</p>
           </Card>
         )}
 
@@ -700,17 +709,17 @@ export default function AssetDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Trends</h2>
           {trendFlags.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No trends currently for this asset.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No trends currently for this asset.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {trendFlags.map((flag) => (
-                <div key={flag.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                <div key={flag.id} style={{ padding: 12, border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
                   <div style={{ fontWeight: 600 }}>{flag.title}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                     {formatEnumLabel(flag.flag_type)} • {formatEnumLabel(flag.status)} • {formatEnumLabel(flag.severity)}
                   </div>
                   {flag.description ? (
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: 4 }}>{flag.description}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 4 }}>{flag.description}</div>
                   ) : null}
                 </div>
               ))}
@@ -721,16 +730,16 @@ export default function AssetDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Repairs for this asset</h2>
           {linkedRepairs.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No repairs linked to this asset.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No repairs linked to this asset.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {linkedRepairs
                 .slice()
                 .sort((a, b) => new Date(b.reported_date || b.created_at).getTime() - new Date(a.reported_date || a.created_at).getTime())
                 .map((repair) => (
-                  <div key={repair.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                  <div key={repair.id} style={{ padding: 12, border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
                     <div style={{ fontWeight: 600 }}>{repair.title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {repair.reported_date || 'No reported date'} • {formatEnumLabel(repair.repair_type)} • {formatEnumLabel(repair.status)}
                     </div>
                     <div style={{ marginTop: 8 }}>
@@ -748,20 +757,20 @@ export default function AssetDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Service History for this asset</h2>
           {linkedServiceRecords.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No service history linked to this asset.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No service history linked to this asset.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {linkedServiceRecords
                 .slice()
                 .sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
                 .map((record) => (
-                  <div key={record.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                  <div key={record.id} style={{ padding: 12, border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
                     <div style={{ fontWeight: 600 }}>{record.service_title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {record.service_date} • {formatEnumLabel(record.service_type)}
                     </div>
                     {record.next_service_date && (
-                      <div style={{ color: '#92400e', fontSize: '0.875rem' }}>
+                      <div style={{ color: 'var(--color-brass-deep)', fontSize: '0.875rem' }}>
                         Next service: {record.next_service_date}
                       </div>
                     )}
@@ -777,16 +786,16 @@ export default function AssetDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Issues for this asset</h2>
           {linkedIssues.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No issues linked to this asset.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No issues linked to this asset.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {linkedIssues
                 .slice()
                 .sort((a, b) => new Date(b.first_seen_date || b.created_at).getTime() - new Date(a.first_seen_date || a.created_at).getTime())
                 .map((issue) => (
-                  <div key={issue.id} style={{ padding: 12, border: '1px solid #e5e7eb', borderRadius: 8 }}>
+                  <div key={issue.id} style={{ padding: 12, border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
                     <div style={{ fontWeight: 600 }}>{issue.title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {issue.first_seen_date || 'Not set'} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
                     </div>
                     <div style={{ marginTop: 8 }}>
@@ -804,7 +813,7 @@ export default function AssetDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Reminders for this asset</h2>
           {linkedReminders.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No reminders linked to this asset.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No reminders linked to this asset.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {linkedReminders.map((reminder) => (
@@ -812,12 +821,12 @@ export default function AssetDetailPage() {
                   key={reminder.id}
                   style={{
                     padding: 12,
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: 8
                   }}
                 >
                   <div style={{ fontWeight: 600 }}>{reminder.title}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                     {reminder.due_date || 'No due date'} • {formatEnumLabel(reminder.status)} •{' '}
                     {formatEnumLabel(reminder.reminder_type)}
                   </div>
@@ -839,9 +848,9 @@ export default function AssetDetailPage() {
             disabled={deleting}
             style={{
               padding: '10px 16px',
-              backgroundColor: '#fee2e2',
-              color: '#dc2626',
-              border: '1px solid #fecaca',
+              backgroundColor: 'rgba(163,78,51,0.12)',
+              color: 'var(--status-urgent)',
+              border: '1px solid rgba(163,78,51,0.30)',
               borderRadius: 6,
               cursor: deleting ? 'not-allowed' : 'pointer',
               fontWeight: 500,

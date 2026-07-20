@@ -3,7 +3,7 @@ import {
   type DocumentVisibility,
   type VisibilityContext,
   type VisibilityOption
-} from '@home-bible/shared';
+} from '@home-folder/shared';
 
 export const DEFAULT_VISIBILITY_CONTEXTS: VisibilityContext[] = ['personal_archive'];
 

@@ -1,24 +1,30 @@
 {
-  "name": "@home-bible/web",
+  "name": "@home-folder/web",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "next lint",
+    "test": "vitest run",
     "start": "next start"
   },
   "dependencies": {
-    "@home-bible/shared": "workspace:*",
-    "@home-bible/ui": "workspace:*",
+    "@home-folder/shared": "workspace:*",
+    "@home-folder/ui": "workspace:*",
     "@hookform/resolvers": "^5.4.0",
     "@supabase/supabase-js": "^2.27.0",
     "next": "^14.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
     "react-hook-form": "^7.80.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@types/react": "19.2.17"
+    "@types/node": "^20.19.25",
+    "@types/react": "^18.3.27",
+    "@types/react-dom": "^18.3.7",
+    "vitest": "^3.2.4"
   }
 }

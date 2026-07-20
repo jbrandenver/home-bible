@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel } from '@home-bible/shared';
-import { PageHeader, Card, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel } from '@home-folder/shared';
+import { PageHeader, Card, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
@@ -57,6 +57,7 @@ export default function RoomDetailPage() {
   const [receiptError, setReceiptError] = useState('');
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
+  const [roomError, setRoomError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -180,7 +181,16 @@ export default function RoomDetailPage() {
       }
 
       if (utilityContext.mode === 'supabase') {
-        const remoteRoom = await getRoomById(roomId);
+        let remoteRoom = null;
+
+        try {
+          remoteRoom = await getRoomById(roomId);
+        } catch (loadError) {
+          if (!isMounted) {
+            return;
+          }
+          setRoomError(loadError instanceof Error ? loadError.message : 'Failed to load this room.');
+        }
 
         if (!isMounted) {
           return;
@@ -221,7 +231,11 @@ export default function RoomDetailPage() {
       setTrendFlags(nextTrendFlags);
     }
 
-    load();
+    load().catch((loadError) => {
+      if (isMounted) {
+        setRoomError(loadError instanceof Error ? loadError.message : 'Failed to load this room.');
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -290,12 +304,17 @@ export default function RoomDetailPage() {
   if (!room) {
     return (
       <>
-        <PageHeader title="Room not found" />
+        <PageHeader title={roomError ? 'Could not load this room' : 'Room not found'} />
         <Card>
-          <p style={{ color: '#6b7280' }}>
-            This room may not exist yet, or setup data was cleared.
+          {roomError ? (
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{roomError}</p>
+          ) : null}
+          <p style={{ color: 'var(--text-muted)' }}>
+            {roomError
+              ? 'Something went wrong while loading this room. Check your connection and try again.'
+              : 'This room may not exist yet, or setup data was cleared.'}
           </p>
-          <p style={{ color: '#6b7280', marginTop: 8 }}>
+          <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>
             {dataMode === 'supabase'
               ? 'Saved to your account. If this room was removed, it will no longer appear.'
               : 'Demo data is stored only in this browser. Add rooms from the onboarding flow to continue.'}
@@ -329,53 +348,53 @@ export default function RoomDetailPage() {
             <UtilityBadge label={`${roomIssues.length} issue${roomIssues.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${roomTrendFlags.length} trend${roomTrendFlags.length === 1 ? '' : 's'}`} />
           </div>
-          <p style={{ marginTop: 12, marginBottom: 0, color: '#6b7280' }}>
+          <p style={{ marginTop: 12, marginBottom: 0, color: 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
           {utilityError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {utilityError}
             </p>
           ) : null}
           {assetError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {assetError}
             </p>
           ) : null}
           {reminderError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {reminderError}
             </p>
           ) : null}
           {repairError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {repairError}
             </p>
           ) : null}
           {serviceRecordError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {serviceRecordError}
             </p>
           ) : null}
           {documentError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {documentError}
             </p>
           ) : null}
           {receiptError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {receiptError}
             </p>
           ) : null}
           {issueError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {issueError}
             </p>
           ) : null}
           {trendFlagError ? (
-            <p style={{ marginTop: 8, marginBottom: 0, color: '#b91c1c', fontWeight: 700 }}>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {trendFlagError}
             </p>
           ) : null}
@@ -398,17 +417,17 @@ export default function RoomDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Trends</h2>
           {roomTrendFlags.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No room-level trends currently.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No room-level trends currently.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {roomTrendFlags.map((flag) => (
-                <div key={flag.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                <div key={flag.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                   <div style={{ fontWeight: 600 }}>{flag.title}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                     {formatEnumLabel(flag.flag_type)} • {formatEnumLabel(flag.status)} • {formatEnumLabel(flag.severity)}
                   </div>
                   {flag.description ? (
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: 4 }}>{flag.description}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: 4 }}>{flag.description}</div>
                   ) : null}
                 </div>
               ))}
@@ -425,12 +444,12 @@ export default function RoomDetailPage() {
                   key={utility.id}
                   style={{
                     padding: 12,
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: 8
                   }}
                 >
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{utility.name}</div>
-                  <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: 4 }}>
+                  <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 4 }}>
                     <UtilityBadge label={formatEnumLabel(utility.utility_type)} />
                   </div>
                   {utility.location_notes && (
@@ -439,7 +458,7 @@ export default function RoomDetailPage() {
                     </div>
                   )}
                   {utility.emergency_notes && (
-                    <div style={{ fontSize: '0.875rem', color: '#dc2626' }}>
+                    <div style={{ fontSize: '0.875rem', color: 'var(--status-urgent)' }}>
                       <strong>Emergency:</strong> {utility.emergency_notes}
                     </div>
                   )}
@@ -461,14 +480,14 @@ export default function RoomDetailPage() {
                   key={asset.id}
                   style={{
                     padding: 12,
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: 8
                   }}
                 >
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'start' }}>
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{asset.name}</div>
-                      <div style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: 4 }}>
+                      <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 4 }}>
                         <UtilityBadge label={formatEnumLabel(asset.asset_type)} />
                       </div>
                       {asset.brand && (
@@ -482,7 +501,7 @@ export default function RoomDetailPage() {
                         </div>
                       )}
                       {asset.warranty_expires_at && (
-                        <div style={{ fontSize: '0.875rem', color: '#d97706', marginBottom: 4 }}>
+                        <div style={{ fontSize: '0.875rem', color: 'var(--color-brass-deep)', marginBottom: 4 }}>
                           <strong>Warranty expires:</strong> {asset.warranty_expires_at}
                         </div>
                       )}
@@ -498,16 +517,16 @@ export default function RoomDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Repairs for this room</h2>
           {roomRepairs.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No repairs linked to this room.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No repairs linked to this room.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {roomRepairs
                 .slice()
                 .sort((a, b) => new Date(b.reported_date || b.created_at).getTime() - new Date(a.reported_date || a.created_at).getTime())
                 .map((repair) => (
-                  <div key={repair.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div key={repair.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                     <div style={{ fontWeight: 600 }}>{repair.title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {repair.reported_date || 'No reported date'} • {formatEnumLabel(repair.repair_type)} • {formatEnumLabel(repair.status)}
                     </div>
                     <div style={{ marginTop: 8 }}>
@@ -525,20 +544,20 @@ export default function RoomDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Service History for this room</h2>
           {roomServiceRecords.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No service history linked to this room.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No service history linked to this room.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {roomServiceRecords
                 .slice()
                 .sort((a, b) => new Date(b.service_date).getTime() - new Date(a.service_date).getTime())
                 .map((record) => (
-                  <div key={record.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div key={record.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                     <div style={{ fontWeight: 600 }}>{record.service_title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {record.service_date} • {formatEnumLabel(record.service_type)}
                     </div>
                     {record.next_service_date && (
-                      <div style={{ color: '#92400e', fontSize: '0.875rem' }}>
+                      <div style={{ color: 'var(--color-brass-deep)', fontSize: '0.875rem' }}>
                         Next service: {record.next_service_date}
                       </div>
                     )}
@@ -554,16 +573,16 @@ export default function RoomDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Issues for this room</h2>
           {roomIssues.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No issues linked to this room.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No issues linked to this room.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {roomIssues
                 .slice()
                 .sort((a, b) => new Date(b.first_seen_date || b.created_at).getTime() - new Date(a.first_seen_date || a.created_at).getTime())
                 .map((issue) => (
-                  <div key={issue.id} style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+                  <div key={issue.id} style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
                     <div style={{ fontWeight: 600 }}>{issue.title}</div>
-                    <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                       {issue.first_seen_date || 'Not set'} • {formatEnumLabel(issue.issue_type)} • {formatEnumLabel(issue.status)}
                     </div>
                     <div style={{ marginTop: 8 }}>
@@ -581,7 +600,7 @@ export default function RoomDetailPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>Reminders for this room</h2>
           {roomReminders.length === 0 ? (
-            <p style={{ color: '#6b7280' }}>No reminders linked to this room yet.</p>
+            <p style={{ color: 'var(--text-muted)' }}>No reminders linked to this room yet.</p>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {roomReminders.map((reminder) => (
@@ -589,12 +608,12 @@ export default function RoomDetailPage() {
                   key={reminder.id}
                   style={{
                     padding: 12,
-                    border: '1px solid #e5e7eb',
+                    border: '1px solid var(--border-subtle)',
                     borderRadius: 8
                   }}
                 >
                   <div style={{ fontWeight: 600 }}>{reminder.title}</div>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
                     {reminder.due_date || 'No due date'} • {formatEnumLabel(reminder.status)} •{' '}
                     {formatEnumLabel(reminder.reminder_type)}
                   </div>
@@ -609,7 +628,7 @@ export default function RoomDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>What will live here</h2>
-          <p style={{ color: '#4b5563' }}>
+          <p style={{ color: 'var(--text-muted)' }}>
             This room will store utilities, appliances, accessories, smart devices, tools, receipts, warranties, repairs, photos, and notes.
           </p>
         </Card>

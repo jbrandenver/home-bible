@@ -55,7 +55,7 @@ git revert <commit-sha>
 Then run:
 
 ```bash
-corepack pnpm --filter @home-bible/web build
+corepack pnpm --filter @home-folder/web build
 corepack pnpm security:audit
 ```
 

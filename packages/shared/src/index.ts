@@ -311,7 +311,9 @@ export const MEMBER_ROLES = [
   'co_owner',
   'editor',
   'viewer',
-  'maintenance_guest'
+  'maintenance_guest',
+  'buyer_preview',
+  'insurance_view'
 ] as const;
 
 export const PLAN_NAMES = [
@@ -319,6 +321,132 @@ export const PLAN_NAMES = [
   'paid',
   'extra_property'
 ] as const;
+
+export function safeHttpUrl(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+const optionalHttpUrlSchema = z
+  .union([z.string(), z.null(), z.undefined()])
+  .transform((value, context) => {
+    if (value === null || value === undefined || value.trim() === '') {
+      return null;
+    }
+
+    const safeUrl = safeHttpUrl(value);
+    if (!safeUrl) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Use a valid http:// or https:// URL.'
+      });
+      return z.NEVER;
+    }
+
+    return safeUrl;
+  });
+
+export function toLocalDateString(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export type WarrantyLike = {
+  warranty_expires_at?: string | null;
+  purchase_date?: string | null;
+  warranty_length_months?: number | null;
+};
+
+export function getWarrantyMeta(asset: WarrantyLike): {
+  status: WarrantyStatus;
+  daysRemaining: number | null;
+  expirationDate: string | null;
+} {
+  let expirationDate = asset.warranty_expires_at || null;
+
+  if (!expirationDate && asset.purchase_date && asset.warranty_length_months) {
+    const purchaseDate = new Date(`${asset.purchase_date}T00:00:00`);
+    if (!Number.isNaN(purchaseDate.getTime())) {
+      purchaseDate.setMonth(purchaseDate.getMonth() + asset.warranty_length_months);
+      expirationDate = toLocalDateString(purchaseDate);
+    }
+  }
+
+  if (!expirationDate) {
+    return { status: 'unknown', daysRemaining: null, expirationDate: null };
+  }
+
+  const expiration = new Date(`${expirationDate}T00:00:00`);
+  if (Number.isNaN(expiration.getTime())) {
+    return { status: 'unknown', daysRemaining: null, expirationDate };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const daysRemaining = Math.ceil((expiration.getTime() - today.getTime()) / 86_400_000);
+
+  if (daysRemaining < 0) {
+    return { status: 'expired', daysRemaining, expirationDate };
+  }
+
+  if (daysRemaining <= 30) {
+    return { status: 'expiring_soon', daysRemaining, expirationDate };
+  }
+
+  return { status: 'active', daysRemaining, expirationDate };
+}
+
+export const forbiddenSensitivePatterns = [
+  /access\s*codes?/i,
+  /lock\s*codes?/i,
+  /garage\s*codes?/i,
+  /safe\s*codes?/i,
+  /alarm\s*codes?/i,
+  /wi[-\s]?fi\s*passwords?/i,
+  /wifi\s*passwords?/i,
+  /hidden\s*keys?/i,
+  /door\s*codes?/i,
+  /keypad\s*codes?/i,
+  // broadened: common secret phrasings and "code/pin: 1234" style entries
+  /pass\s*codes?/i,
+  /pass\s*words?/i,
+  /\bpins?\b/i,
+  /combination/i,
+  /\bcodes?\b\s*[:#=-]/i,
+  /\b(code|pin|combo|combination)\b[^.\n]{0,12}\d{3,}/i
+] as const;
+
+export function safeText(value: string | null | undefined, fallback = 'Hidden by privacy rule') {
+  if (!value || !value.trim()) {
+    return null;
+  }
+
+  return forbiddenSensitivePatterns.some((pattern) => pattern.test(value)) ? fallback : value.trim();
+}
+
+export function safeFileName(value: string | null | undefined) {
+  const fileName = safeText(value);
+  if (!fileName || /^https?:\/\//i.test(fileName) || /^www\./i.test(fileName)) {
+    return null;
+  }
+
+  return fileName;
+}
 
 export const createPropertySchema = z.object({
   nickname: z.string().min(1, 'Property nickname is required'),
@@ -385,8 +513,8 @@ export const createAssetSchema = z.object({
   retailer: z.string().optional().nullable(),
   warranty_length_months: z.coerce.number().optional().nullable(),
   warranty_expires_at: z.string().optional().nullable(),
-  manual_url: z.string().url().optional().nullable(),
-  support_url: z.string().url().optional().nullable(),
+  manual_url: optionalHttpUrlSchema,
+  support_url: optionalHttpUrlSchema,
   notes: z.string().optional().nullable(),
   visibility: z.enum(VISIBILITY_OPTIONS).default('private'),
   visibility_contexts: z.array(z.enum(VISIBILITY_CONTEXTS)).default(['personal_archive'])
@@ -764,11 +892,13 @@ export interface DocumentRow {
   service_record_id: string | null;
   issue_id: string | null;
   trend_flag_id: string | null;
+  automation_device_id: string | null;
   document_type: DocumentType;
   title: string;
   description: string | null;
   file_name: string;
   file_path: string;
+  thumbnail_path: string | null;
   bucket_name: 'home-documents';
   mime_type: string | null;
   file_size_bytes: number | null;
@@ -815,3 +945,5 @@ export function formatEnumLabel(value: string) {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
+
+export * from './automation';

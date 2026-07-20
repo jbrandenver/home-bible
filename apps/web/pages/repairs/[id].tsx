@@ -1,8 +1,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { formatEnumLabel, REPAIR_STATUSES } from '@home-bible/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-bible/ui';
+import { formatEnumLabel, REPAIR_STATUSES } from '@home-folder/shared';
+import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
@@ -168,7 +168,12 @@ export default function RepairDetailPage() {
       }
     }
 
-    load();
+    load().catch((err) => {
+      if (isMounted) {
+        setError(err instanceof Error ? err.message : 'Failed to load data.');
+        setLoading(false);
+      }
+    });
 
     return () => {
       isMounted = false;
@@ -196,6 +201,10 @@ export default function RepairDetailPage() {
   const deleteRepair = async () => {
     if (!context || !repair) return;
 
+    if (!window.confirm('Delete this repair?')) {
+      return;
+    }
+
     setActing(true);
     setError('');
 
@@ -213,7 +222,7 @@ export default function RepairDetailPage() {
       <>
         <PageHeader title="Repair" />
         <Card>
-          <p style={{ color: '#6b7280', margin: 0 }}>Loading repair...</p>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading repair...</p>
         </Card>
       </>
     );
@@ -224,7 +233,7 @@ export default function RepairDetailPage() {
       <>
         <PageHeader title={error ? 'Repair error' : 'Repair not found'} />
         <Card>
-          <p style={{ color: error ? '#b91c1c' : '#6b7280', fontWeight: error ? 700 : 400 }}>
+          <p style={{ color: error ? 'var(--status-urgent)' : 'var(--text-muted)', fontWeight: error ? 700 : 400 }}>
             {error || 'This repair may have been removed, or it may not belong to the current property.'}
           </p>
           <ActionLink href="/repairs" variant="secondary">Back to repairs</ActionLink>
@@ -239,12 +248,12 @@ export default function RepairDetailPage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
-          <p style={{ margin: 0, color: dataMode === 'supabase' ? '#065f46' : '#6b7280' }}>
+          <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
-          {error ? <p style={{ color: '#b91c1c', fontWeight: 700 }}>{error}</p> : null}
+          {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p> : null}
         </Card>
 
         <Card>
@@ -258,7 +267,7 @@ export default function RepairDetailPage() {
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
             <UtilityBadge label={`${receipts.length} receipt${receipts.length === 1 ? '' : 's'}`} />
           </div>
-          <div style={{ color: '#4b5563', display: 'grid', gap: 6 }}>
+          <div style={{ color: 'var(--text-muted)', display: 'grid', gap: 6 }}>
             <div><strong>Reported:</strong> {repair.reported_date || 'Not set'}</div>
             {repair.completed_date && <div><strong>Completed:</strong> {repair.completed_date}</div>}
             {repair.contractor_name && <div><strong>Contractor:</strong> {repair.contractor_name}</div>}
@@ -267,6 +276,15 @@ export default function RepairDetailPage() {
             {repair.description && <div><strong>Description:</strong> {repair.description}</div>}
             {repair.notes && <div><strong>Notes:</strong> {repair.notes}</div>}
           </div>
+        </Card>
+
+        <Card tone="dark">
+          <h2 style={{ marginTop: 0 }}>Share with a repair pro</h2>
+          <p style={{ color: 'rgba(255,248,234,0.78)' }}>
+            Build a clear, printable sheet anyone at home can hand or text to a technician — with the
+            issue, the relevant shut-offs, and service history. Sensitive codes are left out automatically.
+          </p>
+          <ActionLink href={`/repairs/${repair.id}/service-call`}>Create service call sheet</ActionLink>
         </Card>
 
         <Card>
@@ -284,9 +302,9 @@ export default function RepairDetailPage() {
               style={{
                 padding: '10px 14px',
                 borderRadius: 6,
-                border: '1px solid #fecaca',
-                background: '#fef2f2',
-                color: '#b91c1c',
+                border: '1px solid rgba(163,78,51,0.30)',
+                background: 'rgba(163,78,51,0.08)',
+                color: 'var(--status-urgent)',
                 cursor: acting ? 'not-allowed' : 'pointer',
                 fontWeight: 700,
                 opacity: acting ? 0.7 : 1
@@ -350,16 +368,16 @@ function RelatedList({ title, empty, children }: { title: string; empty: string;
   return (
     <Card>
       <h2 style={{ marginTop: 0 }}>{title}</h2>
-      {hasItems ? <div style={{ display: 'grid', gap: 10 }}>{children}</div> : <p style={{ color: '#6b7280', margin: 0 }}>{empty}</p>}
+      {hasItems ? <div style={{ display: 'grid', gap: 10 }}>{children}</div> : <p style={{ color: 'var(--text-muted)', margin: 0 }}>{empty}</p>}
     </Card>
   );
 }
 
 function RelatedItem({ title, detail, href }: { title: string; detail: string; href?: string }) {
   const content = (
-    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12 }}>
+    <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 12 }}>
       <div style={{ fontWeight: 700 }}>{title}</div>
-      <div style={{ color: '#6b7280', fontSize: '0.875rem' }}>{detail}</div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{detail}</div>
     </div>
   );
 

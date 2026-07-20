@@ -1,11 +1,11 @@
-import { UTILITY_TYPES } from '@home-bible/shared';
+import { UTILITY_TYPES } from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 
-const DEMO_UTILITIES_KEY = 'homeBible.utilities';
+const DEMO_UTILITIES_KEY = 'homeFolder.utilities';
 
 export type UtilityType = (typeof UTILITY_TYPES)[number];
 export type UtilityDataMode = 'demo' | 'supabase';
