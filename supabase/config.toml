@@ -378,6 +378,14 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# The delete-account function re-verifies identity in-handler
+# (userClient.auth.getUser) and scopes every write to that user, but we also
+# require the gateway to reject unauthenticated calls. Declared explicitly so
+# the security posture is intentional and review-visible rather than relying on
+# the platform default.
+[functions.delete-account]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

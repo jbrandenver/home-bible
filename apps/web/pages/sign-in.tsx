@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
 import { Button, Card, PageHeader } from '@home-folder/ui';
+import { Seo } from '../components/Seo';
 import {
   formatAuthError,
   isSupabaseConfigured,
@@ -55,6 +56,7 @@ export default function SignInPage() {
 
   return (
     <>
+      <Seo title="Sign in — Our Home Folder" path="/sign-in" />
       <PageHeader
         title="Sign in"
         description="Sign in to keep your home record saved to your account."
@@ -72,6 +74,7 @@ export default function SignInPage() {
             <span style={{ fontWeight: 600 }}>Email</span>
             <input
               type="email"
+              autoComplete="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
@@ -83,6 +86,7 @@ export default function SignInPage() {
             <span style={{ fontWeight: 600 }}>Password</span>
             <input
               type="password"
+              autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
@@ -90,7 +94,7 @@ export default function SignInPage() {
             />
           </label>
 
-          {error ? <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{error}</p> : null}
+          {error ? <p role="alert" style={{ color: 'var(--status-urgent)', margin: 0 }}>{error}</p> : null}
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign in with email'}</Button>

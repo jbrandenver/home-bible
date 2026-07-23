@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400;1,9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+/* Fonts are self-hosted via next/font (lib/fonts.ts), which exposes them as the
+   --font-fraunces/--font-newsreader/--font-plex-mono CSS variables referenced
+   below. No render-blocking Google Fonts request. See docs/BROWSER_AWARE_DESIGN.md §5. */
 
 /* ============================================================
    OUR HOME FOLDER — the heirloom house ledger
@@ -8,10 +10,10 @@
    ============================================================ */
 
 :root{
-  --font-display:"Fraunces",Georgia,"Times New Roman",serif;
-  --font-body:"Newsreader",Georgia,serif;
-  --font-ui:"Newsreader",Georgia,serif;
-  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --font-display:var(--font-fraunces),Georgia,"Times New Roman",serif;
+  --font-body:var(--font-newsreader),Georgia,serif;
+  --font-ui:var(--font-newsreader),Georgia,serif;
+  --font-mono:var(--font-plex-mono),ui-monospace,SFMono-Regular,Menlo,monospace;
 
   --color-espresso:#2C1F18;
   --color-ink:#221610;
@@ -19,7 +21,7 @@
   --color-sand:#DDCCB0;
   --color-paper:#F5EEDD;
   --color-ivory:#ECE2CF;
-  --color-brass-deep:#9C6D26;
+  --color-brass-deep:#855A18; /* darkened for >=4.5:1 as text/links/badges (was #9C6D26 ~4.18:1). Brand-accent shift — tool-verify; revert to #9C6D26 if undesired. */
   --color-brass:#C8923F;
   --color-brass-pale:#E3C288;
   --color-taupe:#8C7D68;
@@ -107,12 +109,27 @@ input,select,textarea{
 }
 input:hover,select:hover,textarea:hover{border-color:var(--border-strong)}
 input:focus,select:focus,textarea:focus{
-  outline:none;
-  border-color:var(--color-brass);
-  box-shadow:0 0 0 3px rgba(200,146,63,0.22);
+  /* Visible focus indicator meeting WCAG 2.2 1.4.11/2.4.13 (>=3:1). brass-deep
+     (~4.18:1) replaces brass (~2.38:1) and the faint 22% ring. */
+  outline:2px solid var(--color-brass-deep);
+  outline-offset:1px;
+  border-color:var(--color-brass-deep);
+  box-shadow:0 0 0 3px rgba(156,109,38,0.35);
   background:#FFFDF6;
 }
-button:focus-visible,a:focus-visible{outline:2px solid var(--color-brass);outline-offset:2px}
+button:focus-visible,a:focus-visible{outline:2px solid var(--color-brass-deep);outline-offset:2px}
+
+/* Body-text links are distinguishable by more than color (WCAG 1.4.1) — inline
+   links inside paragraphs are underlined; nav/brand/button links are exempt. */
+p a{text-decoration:underline}
+
+/* Skip link — hidden until focused, then visible top-left (WCAG 2.4.1). */
+.skip-link{
+  position:absolute;left:-9999px;top:0;z-index:3000;
+  background:#1a1a1a;color:#fff;padding:0.5rem 1rem;
+  border-radius:var(--radius-control);font-weight:600;text-decoration:none;
+}
+.skip-link:focus{left:1rem;top:1rem;outline:2px solid #fff;outline-offset:2px}
 
 /* ---------- motion ---------- */
 @keyframes hb-rise{
@@ -130,7 +147,11 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--color-brass);outlin
 
 /* one orchestrated reveal per page — content rises like turned pages */
 .app-main > div > *{animation:hb-rise 0.55s cubic-bezier(0.22,0.9,0.3,1) both}
-.app-main > div > *:nth-child(1){animation-delay:0.04s}
+/* First block is usually the LCP element (hero/page header): slide only, never
+   fade from opacity:0, so it's "contentful" at first paint and doesn't push LCP
+   back. See docs/BROWSER_AWARE_DESIGN.md §2. */
+@keyframes hb-rise-slide{from{transform:translateY(14px)}to{transform:translateY(0)}}
+.app-main > div > *:nth-child(1){animation-name:hb-rise-slide;animation-delay:0.04s}
 .app-main > div > *:nth-child(2){animation-delay:0.11s}
 .app-main > div > *:nth-child(3){animation-delay:0.18s}
 .app-main > div > *:nth-child(4){animation-delay:0.25s}
@@ -140,7 +161,13 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--color-brass);outlin
 
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:0.001s !important;transition-duration:0.001s !important}
+  html{scroll-behavior:auto}
 }
+
+/* Skip layout/paint for below-the-fold sections until near the viewport;
+   contain-intrinsic-size reserves height so nothing shifts (no CLS). Apply to
+   long-list/table pages and below-fold page sections. See docs/BROWSER_AWARE_DESIGN.md §11. */
+.cv-section{content-visibility:auto;contain-intrinsic-size:auto 500px}
 
 /* ---------- legacy utility classes (kept for existing pages) ---------- */
 .bg-gray-50{background-color:var(--surface-page)}
@@ -360,7 +387,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--color-brass);outlin
   padding:0.7rem 0.15rem;
   text-decoration:none;
   color:var(--text-primary);
-  transition:background-color 160ms ease, padding-left 200ms cubic-bezier(0.22,0.9,0.3,1);
+  transition:background-color 160ms ease, transform 200ms cubic-bezier(0.22,0.9,0.3,1);
   border-radius:var(--radius-control);
 }
 .hb-toc-row .hb-toc-num{
@@ -374,7 +401,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--color-brass);outlin
   font-family:var(--font-mono);font-size:0.7rem;font-weight:500;
   letter-spacing:0.08em;text-transform:uppercase;color:var(--text-muted);
 }
-.hb-toc-row:hover{background:rgba(227,194,136,0.16);padding-left:0.6rem}
+.hb-toc-row:hover{background:rgba(227,194,136,0.16);transform:translateX(0.6rem)}
 .hb-toc-row:hover .hb-toc-detail{color:var(--color-brass-deep)}
 
 /* controls */

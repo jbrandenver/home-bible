@@ -451,12 +451,12 @@ export function safeFileName(value: string | null | undefined) {
 export const createPropertySchema = z.object({
   nickname: z.string().min(1, 'Property nickname is required'),
   property_type: z.enum(PROPERTY_TYPES),
-  address_line_1: z.string().optional().nullable(),
-  address_line_2: z.string().optional().nullable(),
-  city: z.string().optional().nullable(),
-  state: z.string().optional().nullable(),
-  postal_code: z.string().optional().nullable(),
-  country: z.string().optional().nullable(),
+  address_line_1: z.string().max(10000).optional().nullable(),
+  address_line_2: z.string().max(10000).optional().nullable(),
+  city: z.string().max(10000).optional().nullable(),
+  state: z.string().max(10000).optional().nullable(),
+  postal_code: z.string().max(10000).optional().nullable(),
+  country: z.string().max(10000).optional().nullable(),
   address_is_enabled: z.boolean().default(false),
   square_feet: z.coerce.number().optional().nullable(),
   year_built: z.coerce.number().optional().nullable(),
@@ -482,12 +482,12 @@ export const createRoomSchema = z.object({
   name: z.string().min(1, 'Room name is required'),
   room_type: z.enum(ROOM_TYPES),
   sort_order: z.coerce.number().default(0),
-  notes: z.string().optional().nullable(),
+  notes: z.string().max(10000).optional().nullable(),
   outlet_count: z.coerce.number().optional().nullable(),
   switch_count: z.coerce.number().optional().nullable(),
   vent_count: z.coerce.number().optional().nullable(),
-  vent_type: z.string().optional().nullable(),
-  breaker_label: z.string().optional().nullable(),
+  vent_type: z.string().max(10000).optional().nullable(),
+  breaker_label: z.string().max(10000).optional().nullable(),
   has_plumbing: z.boolean().default(false)
 });
 
@@ -496,8 +496,8 @@ export const createUtilitySchema = z.object({
   room_id: z.string().uuid().optional().nullable(),
   utility_type: z.enum(UTILITY_TYPES),
   name: z.string().min(1, 'Utility name is required'),
-  location_notes: z.string().optional().nullable(),
-  emergency_notes: z.string().optional().nullable()
+  location_notes: z.string().max(10000).optional().nullable(),
+  emergency_notes: z.string().max(10000).optional().nullable()
 });
 
 export const createAssetSchema = z.object({
@@ -505,33 +505,33 @@ export const createAssetSchema = z.object({
   room_id: z.string().uuid().optional().nullable(),
   asset_type: z.enum(ASSET_TYPES),
   name: z.string().min(1, 'Asset name is required'),
-  brand: z.string().optional().nullable(),
-  model: z.string().optional().nullable(),
-  serial_number: z.string().optional().nullable(),
-  purchase_date: z.string().optional().nullable(),
+  brand: z.string().max(10000).optional().nullable(),
+  model: z.string().max(10000).optional().nullable(),
+  serial_number: z.string().max(10000).optional().nullable(),
+  purchase_date: z.string().max(10000).optional().nullable(),
   purchase_price: z.coerce.number().optional().nullable(),
-  retailer: z.string().optional().nullable(),
+  retailer: z.string().max(10000).optional().nullable(),
   warranty_length_months: z.coerce.number().optional().nullable(),
-  warranty_expires_at: z.string().optional().nullable(),
+  warranty_expires_at: z.string().max(10000).optional().nullable(),
   manual_url: optionalHttpUrlSchema,
   support_url: optionalHttpUrlSchema,
-  notes: z.string().optional().nullable(),
+  notes: z.string().max(10000).optional().nullable(),
   visibility: z.enum(VISIBILITY_OPTIONS).default('private'),
   visibility_contexts: z.array(z.enum(VISIBILITY_CONTEXTS)).default(['personal_archive'])
 });
 
 export const createReminderSchema = z.object({
   title: z.string().min(1, 'Reminder title is required'),
-  description: z.string().optional().nullable(),
+  description: z.string().max(10000).optional().nullable(),
   reminder_type: z.enum(REMINDER_TYPES),
-  due_date: z.string().optional().nullable(),
+  due_date: z.string().max(10000).optional().nullable(),
   linked_type: z.enum(REMINDER_LINKED_TYPES).optional().nullable(),
   linked_id: z.string().uuid().optional().nullable(),
   room_id: z.string().uuid().optional().nullable(),
   asset_id: z.string().uuid().optional().nullable(),
   utility_id: z.string().uuid().optional().nullable(),
   frequency: z.enum(REMINDER_FREQUENCIES).default('none'),
-  repeat_rule: z.string().optional().nullable(),
+  repeat_rule: z.string().max(10000).optional().nullable(),
   status: z.enum(REMINDER_STATUSES).default('open'),
   priority: z.enum(REMINDER_PRIORITIES).default('normal'),
   source: z.enum(REMINDER_SOURCES).default('manual')
@@ -543,18 +543,18 @@ export const createRepairSchema = z.object({
   asset_id: z.string().uuid().optional().nullable(),
   utility_id: z.string().uuid().optional().nullable(),
   title: z.string().min(1, 'Repair title is required'),
-  description: z.string().optional().nullable(),
+  description: z.string().max(10000).optional().nullable(),
   repair_type: z.enum(REPAIR_TYPES).default('general'),
   status: z.enum(REPAIR_STATUSES).default('open'),
   priority: z.enum(REPAIR_PRIORITIES).default('normal'),
-  reported_date: z.string().optional().nullable(),
-  completed_date: z.string().optional().nullable(),
-  contractor_name: z.string().optional().nullable(),
-  contractor_phone: z.string().optional().nullable(),
+  reported_date: z.string().max(10000).optional().nullable(),
+  completed_date: z.string().max(10000).optional().nullable(),
+  contractor_name: z.string().max(10000).optional().nullable(),
+  contractor_phone: z.string().max(10000).optional().nullable(),
   contractor_email: z.string().email().optional().nullable(),
   estimated_cost: z.coerce.number().optional().nullable(),
   actual_cost: z.coerce.number().optional().nullable(),
-  notes: z.string().optional().nullable()
+  notes: z.string().max(10000).optional().nullable()
 });
 
 export const createServiceRecordSchema = z.object({
@@ -564,14 +564,14 @@ export const createServiceRecordSchema = z.object({
   utility_id: z.string().uuid().optional().nullable(),
   service_type: z.enum(SERVICE_TYPES),
   service_title: z.string().min(1, 'Service title is required'),
-  service_date: z.string().optional().nullable(),
-  provider_name: z.string().optional().nullable(),
-  provider_phone: z.string().optional().nullable(),
+  service_date: z.string().max(10000).optional().nullable(),
+  provider_name: z.string().max(10000).optional().nullable(),
+  provider_phone: z.string().max(10000).optional().nullable(),
   provider_email: z.string().email().optional().nullable(),
   cost: z.coerce.number().optional().nullable(),
-  summary: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
-  next_service_date: z.string().optional().nullable()
+  summary: z.string().max(10000).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable(),
+  next_service_date: z.string().max(10000).optional().nullable()
 });
 
 export const createIssueSchema = z.object({
@@ -582,13 +582,13 @@ export const createIssueSchema = z.object({
   repair_id: z.string().uuid().optional().nullable(),
   issue_type: z.enum(ISSUE_TYPES).default('general'),
   title: z.string().min(1, 'Issue title is required'),
-  description: z.string().optional().nullable(),
+  description: z.string().max(10000).optional().nullable(),
   status: z.enum(ISSUE_STATUSES).default('open'),
   severity: z.enum(ISSUE_SEVERITIES).default('medium'),
-  first_seen_date: z.string().optional().nullable(),
-  last_seen_date: z.string().optional().nullable(),
-  resolved_date: z.string().optional().nullable(),
-  notes: z.string().optional().nullable()
+  first_seen_date: z.string().max(10000).optional().nullable(),
+  last_seen_date: z.string().max(10000).optional().nullable(),
+  resolved_date: z.string().max(10000).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable()
 });
 
 export const createTrendFlagSchema = z.object({
@@ -599,13 +599,13 @@ export const createTrendFlagSchema = z.object({
   issue_id: z.string().uuid().optional().nullable(),
   flag_type: z.enum(TREND_FLAG_TYPES),
   title: z.string().min(1, 'Trend flag title is required'),
-  description: z.string().optional().nullable(),
+  description: z.string().max(10000).optional().nullable(),
   severity: z.enum(ISSUE_SEVERITIES).default('medium'),
   status: z.enum(TREND_FLAG_STATUSES).default('active'),
   detected_from: z.enum(TREND_FLAG_DETECTED_FROM).default('manual'),
-  first_detected_at: z.string().optional().nullable(),
-  last_detected_at: z.string().optional().nullable(),
-  resolved_at: z.string().optional().nullable()
+  first_detected_at: z.string().max(10000).optional().nullable(),
+  last_detected_at: z.string().max(10000).optional().nullable(),
+  resolved_at: z.string().max(10000).optional().nullable()
 });
 
 export const createDocumentSchema = z.object({
@@ -620,11 +620,11 @@ export const createDocumentSchema = z.object({
   trend_flag_id: z.string().uuid().optional().nullable(),
   document_type: z.enum(DOCUMENT_TYPES).default('other'),
   title: z.string().min(1, 'Document title is required'),
-  description: z.string().optional().nullable(),
+  description: z.string().max(10000).optional().nullable(),
   file_name: z.string().min(1),
   file_path: z.string().min(1),
   bucket_name: z.literal('home-documents').default('home-documents'),
-  mime_type: z.string().optional().nullable(),
+  mime_type: z.string().max(10000).optional().nullable(),
   file_size_bytes: z.coerce.number().nonnegative().optional().nullable(),
   visibility: z.enum(DOCUMENT_VISIBILITIES).default('private'),
   visibility_contexts: z.array(z.enum(VISIBILITY_CONTEXTS)).default(['personal_archive']),
@@ -639,15 +639,15 @@ export const createReceiptSchema = z.object({
   asset_id: z.string().uuid().optional().nullable(),
   repair_id: z.string().uuid().optional().nullable(),
   service_record_id: z.string().uuid().optional().nullable(),
-  vendor_name: z.string().optional().nullable(),
-  purchase_date: z.string().optional().nullable(),
+  vendor_name: z.string().max(10000).optional().nullable(),
+  purchase_date: z.string().max(10000).optional().nullable(),
   total_amount: z.coerce.number().optional().nullable(),
   tax_amount: z.coerce.number().optional().nullable(),
   currency: z.string().length(3).default('USD'),
-  payment_method: z.string().optional().nullable(),
+  payment_method: z.string().max(10000).optional().nullable(),
   category: z.enum(RECEIPT_CATEGORIES).default('other'),
-  description: z.string().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  description: z.string().max(10000).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable(),
   approval_status: z.enum(RECEIPT_APPROVAL_STATUSES).default('approved'),
   source: z.enum(RECEIPT_SOURCES).default('manual_review')
 });
