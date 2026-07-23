@@ -40,7 +40,8 @@ Deno.serve(async (request) => {
     .is('deleted_at', null);
 
   if (ownedError) {
-    return json({ error: ownedError.message }, 500);
+    console.error('delete-account: failed to load owned properties', ownedError);
+    return json({ error: 'Could not delete your account. Please try again.' }, 500);
   }
 
   for (const property of (ownedProperties ?? []) as PropertyRow[]) {
@@ -92,7 +93,8 @@ Deno.serve(async (request) => {
 
   const { error: deleteError } = await serviceClient.auth.admin.deleteUser(userId);
   if (deleteError) {
-    return json({ error: deleteError.message }, 500);
+    console.error('delete-account: auth deleteUser failed', deleteError);
+    return json({ error: 'Could not delete your account. Please try again.' }, 500);
   }
 
   return json({ ok: true });
