@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Card, PageHeader } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { Seo } from '../components/Seo';
 
 const EFFECTIVE_DATE = 'July 16, 2026';
 
@@ -16,6 +17,7 @@ function Section({ heading, children }: { heading: string; children: React.React
 export default function PrivacyPolicyPage() {
   return (
     <>
+      <Seo title="Privacy & Data Policy — Our Home Folder" path="/privacy" />
       <PageHeader
         eyebrow={`Effective ${EFFECTIVE_DATE}`}
         title="Privacy Policy"

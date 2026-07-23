@@ -1,5 +1,7 @@
 import { Card, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { Seo } from '../components/Seo';
+import { organizationSchema, websiteSchema, softwareApplicationSchema } from '../lib/seo';
 
 const contents: { num: string; title: string; detail: string; href: string }[] = [
   { num: 'I', title: 'The Home', detail: 'Rooms · Floors · Map', href: '/home' },
@@ -13,6 +15,11 @@ const contents: { num: string; title: string; detail: string; href: string }[] =
 export default function Home() {
   return (
     <div style={{ display: 'grid', gap: 28 }}>
+      <Seo
+        title="Our Home Folder — a home, documented"
+        path="/"
+        structuredData={[organizationSchema, websiteSchema, softwareApplicationSchema]}
+      />
       <Card tone="dark" className="hb-cover">
         <div className="hb-cover-inner">
           <div style={{ maxWidth: 780 }}>
@@ -87,7 +94,7 @@ export default function Home() {
         </div>
       </Card>
 
-      <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+      <div className="cv-section" style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
         <Card interactive>
           <h3 style={{ marginTop: 0 }}>Find the important things</h3>
           <p style={{ color: 'var(--text-muted)' }}>
