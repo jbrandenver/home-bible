@@ -284,7 +284,7 @@ export default function AutomationDetailPage() {
                   {roleLinks.map((link) => (
                     <span key={`${link.device_id}-${link.role}`} style={{ display: 'inline-flex', gap: 8, alignItems: 'center', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '4px 10px' }}>
                       <Link href={`/automation/devices/${link.device_id}`} style={{ textDecoration: 'none' }}>{deviceName(link.device_id)}</Link>
-                      <button type="button" onClick={() => removeDevice(link)} disabled={acting} aria-label="Remove" style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--status-urgent)' }}>×</button>
+                      <button type="button" onClick={() => removeDevice(link)} disabled={acting} aria-label="Remove" style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--status-urgent)', minWidth: 24, minHeight: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, lineHeight: 1 }}>×</button>
                     </span>
                   ))}
                 </div>

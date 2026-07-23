@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type {
   ButtonHTMLAttributes,
   CSSProperties,
@@ -326,6 +327,40 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Focus management (WCAG 2.1.2 / 2.4.3): move focus into the dialog on open,
+  // trap Tab inside, close on Esc, and restore focus to the opener on close.
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement as HTMLElement | null;
+    const selector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    dialogRef.current?.querySelector<HTMLElement>(selector)?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        onCancel();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const f = dialogRef.current?.querySelectorAll<HTMLElement>(selector);
+      if (!f || f.length === 0) return;
+      const first = f[0];
+      const last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      opener?.focus?.();
+    };
+  }, [open, onCancel]);
+
   if (!open) {
     return null;
   }
@@ -345,6 +380,7 @@ export function ConfirmDialog({
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"

@@ -1,5 +1,6 @@
 import React from 'react';
 import Link from 'next/link';
+import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
@@ -7,6 +8,14 @@ import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
 interface LayoutProps {
   children: React.ReactNode;
   title?: string;
+}
+
+/** Fallback page title from the route (WCAG 2.4.2) — public pages override it
+ *  with their own <Seo> title, which renders after this and wins. */
+function deriveTitle(pathname: string): string {
+  const seg = pathname.split('/').filter(Boolean)[0];
+  if (!seg) return 'Home';
+  return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
@@ -50,6 +59,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
 
   return (
     <div className="app-shell">
+      <Head>
+        <title>{`${title ?? deriveTitle(router.pathname)} · Our Home Folder`}</title>
+      </Head>
+      {/* Skip link — first focusable element (WCAG 2.4.1). */}
+      <a href="#main-content" className="skip-link">Skip to main content</a>
       {/* gilt page edge */}
       <div className="app-gilt" aria-hidden="true" />
       {/* Navigation header */}
@@ -101,7 +115,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
       </nav>
 
       {/* Main content */}
-      <main className="p-6 app-main">
+      <main id="main-content" className="p-6 app-main">
         <div className="max-w-6xl mx-auto">{children}</div>
       </main>
 

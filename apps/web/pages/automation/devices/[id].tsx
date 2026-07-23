@@ -442,7 +442,7 @@ export default function AutomationDeviceDetailPage() {
                   {dependencies.map((d) => (
                     <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 4 }}>
                       <span>{d.label}</span>
-                      <button type="button" onClick={() => removeDep(d.id)} disabled={acting} aria-label="Remove dependency" style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--status-urgent)' }}>×</button>
+                      <button type="button" onClick={() => removeDep(d.id)} disabled={acting} aria-label="Remove dependency" style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--status-urgent)', minWidth: 24, minHeight: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, lineHeight: 1 }}>×</button>
                     </div>
                   ))}
                 </div>
