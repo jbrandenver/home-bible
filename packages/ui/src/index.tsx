@@ -29,10 +29,14 @@ export function getControlStyle({
     color: 'var(--color-ink)',
     border: '1px solid var(--color-brass)'
   };
+  // Secondary reads as a COLORED (gilt-tinted) button on the light document
+  // ground — not a transparent "white" outline — while staying subordinate to
+  // the solid-gilt primary. On dark surfaces (.brand-hero) the --btn-secondary-*
+  // vars flip it back to a ghost button so a light fill never lands on green.
   const secondaryStyle: CSSProperties = {
-    background: 'transparent',
-    color: 'var(--color-espresso)',
-    border: '1px solid var(--border-subtle)'
+    background: 'var(--btn-secondary-bg, var(--color-brass))',
+    color: 'var(--btn-secondary-color, var(--color-ink))',
+    border: '1px solid var(--btn-secondary-border, var(--color-brass))'
   };
 
   return {
@@ -45,7 +49,11 @@ export function getControlStyle({
     minHeight: 44,
     textDecoration: 'none',
     ...(variant === 'secondary' ? secondaryStyle : primaryStyle),
-    color: hasCustomBackground ? 'var(--text-inverse)' : variant === 'secondary' ? 'var(--color-espresso)' : 'var(--color-ink)',
+    color: hasCustomBackground
+      ? 'var(--text-inverse)'
+      : variant === 'secondary'
+        ? 'var(--btn-secondary-color, var(--color-ink))'
+        : 'var(--color-ink)',
     fontWeight: 700,
     fontSize: 14,
     lineHeight: 1.2,
@@ -125,29 +133,25 @@ export function PageHeader({
   return (
     <header style={{ marginBottom: 28 }}>
       <div
+        className="hb-registry"
         style={{
-          display: 'flex',
+          display: 'inline-flex',
           alignItems: 'center',
-          gap: 10,
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
-          fontWeight: 600,
-          letterSpacing: '0.18em',
-          textTransform: 'uppercase',
-          color: 'var(--color-brass-deep)',
-          marginBottom: 10
+          gap: 8,
+          marginBottom: 12
         }}
       >
-        <span aria-hidden="true" style={{ width: 26, height: 1, background: 'var(--color-brass)' }} />
         {eyebrow}
       </div>
       <h1
         style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: 'clamp(2.1rem, 4.5vw, 3.2rem)',
+          fontFamily: 'var(--font-title)',
+          fontSize: 'clamp(1.9rem, 4vw, 2.9rem)',
           fontWeight: 600,
-          lineHeight: 1.03,
-          letterSpacing: '-0.02em',
+          lineHeight: 1.08,
+          letterSpacing: '0.02em',
+          textTransform: 'uppercase',
+          textWrap: 'balance',
           margin: 0,
           color: 'var(--color-ink)'
         }}
@@ -263,28 +267,30 @@ export function UtilityBadge({
         ? 'var(--status-urgent)'
         : 'var(--color-ink)';
 
+  // A struck status SEAL, not a pill: a ruled stamp with an inset highlight so
+  // it reads as pressed into the page. The brassPale variant is a solid gilt
+  // seal for the dark (green) hero ground. See globals.css .hb-seal.
+  const sealInk = isBrassPale ? 'var(--shortcut-tag-color, #16302A)' : `var(--utility-badge-color, ${toneColor})`;
+
   return (
     <span
-      className={`utility-badge ${isBrassPale ? 'shortcut-tag-on-dark' : ''}`.trim()}
+      className={`utility-badge hb-seal ${isBrassPale ? 'shortcut-tag-on-dark' : ''}`.trim()}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
         gap: 6,
         borderRadius: 'var(--radius-control)',
-        padding: '6px 10px',
-        background: isBrassPale
-          ? 'var(--shortcut-tag-bg, #E3C288)'
-          : 'var(--utility-badge-bg, rgba(227,194,136,0.22))',
-        color: isBrassPale
-          ? 'var(--shortcut-tag-color, #2C1F18)'
-          : `var(--utility-badge-color, ${toneColor})`,
+        padding: '5px 10px',
+        background: isBrassPale ? 'var(--shortcut-tag-bg, #E3C288)' : 'transparent',
+        color: sealInk,
         border: isBrassPale
           ? '1px solid var(--shortcut-tag-border, #C8923F)'
-          : '1px solid var(--utility-badge-border, rgba(156,109,38,0.22))',
+          : `1px solid ${toneColor === 'var(--color-ink)' ? 'var(--border-strong)' : 'currentColor'}`,
+        boxShadow: isBrassPale ? 'none' : 'inset 0 0 0 1px rgba(255,253,246,0.4)',
         fontFamily: 'var(--font-mono)',
         fontSize: 11,
-        fontWeight: 600,
-        letterSpacing: '0.06em',
+        fontWeight: 700,
+        letterSpacing: '0.12em',
         textTransform: 'uppercase',
         transition: 'background-color 160ms ease, color 160ms ease, border-color 160ms ease'
       }}
@@ -293,8 +299,8 @@ export function UtilityBadge({
         <span
           aria-hidden="true"
           style={{
-            width: 6,
-            height: 6,
+            width: 5,
+            height: 5,
             borderRadius: 99,
             background: toneColor,
             flexShrink: 0
