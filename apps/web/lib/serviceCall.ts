@@ -30,6 +30,12 @@ export type ServiceCallContact = {
   phone: string;
 };
 
+export type ScheduledVisit = {
+  date: string | null;
+  dateLabel: string | null;
+  window: string | null;
+};
+
 export type ServiceCallSheet = {
   propertyName: string;
   propertyAddress: string | null;
@@ -41,6 +47,7 @@ export type ServiceCallSheet = {
   statusLabel: string;
   reportedDate: string | null;
   locationLabel: string | null;
+  scheduledVisit: ScheduledVisit | null;
   onSiteContact: ServiceCallContact | null;
   contractor: { name: string | null; phone: string | null; email: string | null } | null;
   safety: SafetyItem[];
@@ -98,6 +105,31 @@ export function relevantUtilityTypesForRepair(repairType: RepairType): UtilityTy
     }
   }
   return ordered;
+}
+
+// "2026-07-30" -> "Wed, Jul 30, 2026". Parsed by parts so a date-only string
+// isn't shifted a day by the UTC interpretation of new Date('YYYY-MM-DD').
+export function formatFriendlyDate(dateString: string | null | undefined): string | null {
+  if (!dateString) {
+    return null;
+  }
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString.trim());
+  if (!match) {
+    return dateString;
+  }
+
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  if (Number.isNaN(date.getTime())) {
+    return dateString;
+  }
+
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
 }
 
 function serviceRecordSharesRepairScope(record: ServiceRecordRow, repair: RepairRow): boolean {
@@ -200,6 +232,15 @@ export function buildServiceCallSheet(params: {
         }
       : null;
 
+  const scheduledVisit: ScheduledVisit | null =
+    repair.scheduled_date || repair.scheduled_window
+      ? {
+          date: repair.scheduled_date,
+          dateLabel: formatFriendlyDate(repair.scheduled_date),
+          window: safeText(repair.scheduled_window)
+        }
+      : null;
+
   return {
     propertyName: propertyName || 'Home',
     propertyAddress: safeText(propertyAddress),
@@ -211,6 +252,7 @@ export function buildServiceCallSheet(params: {
     statusLabel: typeLabelFor(repair.status),
     reportedDate: repair.reported_date,
     locationLabel: locationLabel || null,
+    scheduledVisit,
     onSiteContact:
       onSiteContact && (onSiteContact.name.trim() || onSiteContact.phone.trim())
         ? { name: onSiteContact.name.trim(), phone: onSiteContact.phone.trim() }
@@ -234,6 +276,10 @@ export function serviceCallToPlainText(sheet: ServiceCallSheet): string {
   lines.push(`ISSUE: ${sheet.issueTitle}`);
   lines.push(`Type: ${sheet.issueTypeLabel} · Priority: ${sheet.priorityLabel}`);
   if (sheet.locationLabel) lines.push(`Location: ${sheet.locationLabel}`);
+  if (sheet.scheduledVisit) {
+    const when = [sheet.scheduledVisit.dateLabel, sheet.scheduledVisit.window].filter(Boolean).join(' · ');
+    if (when) lines.push(`Scheduled visit: ${when}`);
+  }
   if (sheet.description) {
     lines.push('');
     lines.push('What we are seeing:');
@@ -291,4 +337,62 @@ export function serviceCallToPlainText(sheet: ServiceCallSheet): string {
   lines.push('Shared from Our Home Folder');
 
   return lines.join('\n');
+}
+
+// Compact version for SMS links. Prefilled sms: bodies get truncated (or
+// silently dropped) by some phones past roughly 1–2k characters, so this keeps
+// only what a technician needs at the door: where, what, when, and the
+// shut-offs that are actually on file.
+export function serviceCallToCompactText(sheet: ServiceCallSheet): string {
+  const lines: string[] = [];
+
+  lines.push(`SERVICE CALL — ${sheet.issueTitle}`);
+
+  const where = [sheet.propertyName, sheet.propertyAddress].filter(Boolean).join(' · ');
+  if (where) lines.push(where);
+  if (sheet.locationLabel) lines.push(`Location: ${sheet.locationLabel}`);
+
+  if (sheet.scheduledVisit) {
+    const when = [sheet.scheduledVisit.dateLabel, sheet.scheduledVisit.window].filter(Boolean).join(' · ');
+    if (when) lines.push(`Visit: ${when}`);
+  }
+
+  if (sheet.description) {
+    const problem = sheet.description.replace(/\s+/g, ' ').trim();
+    lines.push(`Problem: ${problem.length > 320 ? `${problem.slice(0, 317)}...` : problem}`);
+  }
+
+  if (sheet.onSiteContact) {
+    lines.push(
+      `On site: ${sheet.onSiteContact.name}${sheet.onSiteContact.phone ? ` ${sheet.onSiteContact.phone}` : ''}`
+    );
+  }
+
+  const recordedSafety = sheet.safety.filter((item) => item.recorded && item.location).slice(0, 4);
+  if (recordedSafety.length > 0) {
+    lines.push('Shut-offs:');
+    for (const item of recordedSafety) {
+      lines.push(`• ${item.typeLabel}: ${item.location}`);
+    }
+  }
+
+  lines.push('— Shared from Our Home Folder');
+
+  return lines.join('\n');
+}
+
+// Subject + body for a pre-addressed mailto: link.
+export function buildServiceCallEmail(sheet: ServiceCallSheet): { subject: string; body: string } {
+  const where = sheet.propertyAddress || sheet.propertyName;
+  return {
+    subject: `Service call — ${sheet.issueTitle}${where ? ` at ${where}` : ''}`,
+    body: serviceCallToPlainText(sheet)
+  };
+}
+
+// Keep only characters that dialers/SMS apps accept in an href target.
+export function sanitizePhoneForHref(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const cleaned = phone.replace(/[^\d+]/g, '');
+  return cleaned.length >= 7 ? cleaned : null;
 }

@@ -310,6 +310,27 @@ export default function UtilityDetailPage() {
           {utility.emergency_notes ? <p style={{ color: 'var(--status-urgent)' }}><strong>Emergency:</strong> {utility.emergency_notes}</p> : null}
         </Card>
 
+        <Card tone="dark">
+          <h2 style={{ marginTop: 0 }}>Something wrong with this utility?</h2>
+          <p style={{ color: 'rgba(255,248,234,0.78)' }}>
+            Start a repair record for it — describe the problem, note when the technician is
+            coming, then build a service call sheet you can text or email to them with the
+            location, shut-offs, and address.
+          </p>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <ActionLink
+              href={`/repairs?utilityId=${encodeURIComponent(utility.id)}${utility.room_id ? `&roomId=${encodeURIComponent(utility.room_id)}` : ''}&title=${encodeURIComponent(`${utility.name} — `)}`}
+            >
+              Report a problem
+            </ActionLink>
+            {repairs.length > 0 ? (
+              <ActionLink href={`/repairs/${repairs[0].id}/service-call`} variant="secondary">
+                Service call sheet for latest repair
+              </ActionLink>
+            ) : null}
+          </div>
+        </Card>
+
         <Card>
           <h2 style={{ marginTop: 0 }}>Edit utility</h2>
           <form onSubmit={saveUtility} style={{ display: 'grid', gap: 12 }}>

@@ -1,3 +1,4 @@
+import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   formatEnumLabel,
@@ -101,6 +102,8 @@ export default function RepairsPage() {
   const [repairPriority, setRepairPriority] = useState<(typeof REPAIR_PRIORITIES)[number]>('normal');
   const [reportedDate, setReportedDate] = useState(toLocalDateString());
   const [completedDate, setCompletedDate] = useState('');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledWindow, setScheduledWindow] = useState('');
   const [contractorName, setContractorName] = useState('');
   const [contractorPhone, setContractorPhone] = useState('');
   const [contractorEmail, setContractorEmail] = useState('');
@@ -124,6 +127,27 @@ export default function RepairsPage() {
   const [serviceRoomId, setServiceRoomId] = useState('');
   const [serviceAssetId, setServiceAssetId] = useState('');
   const [serviceUtilityId, setServiceUtilityId] = useState('');
+
+  const router = useRouter();
+
+  // "Report a problem" links (e.g. from a utility page) prefill the new-repair
+  // form with the thing being reported.
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const queryValue = (value: string | string[] | undefined) =>
+      Array.isArray(value) ? value[0] : value;
+
+    const prefillUtilityId = queryValue(router.query.utilityId);
+    const prefillRoomId = queryValue(router.query.roomId);
+    const prefillTitle = queryValue(router.query.title);
+
+    if (prefillUtilityId) setRepairUtilityId(prefillUtilityId);
+    if (prefillRoomId) setRepairRoomId(prefillRoomId);
+    if (prefillTitle) setRepairTitle(prefillTitle);
+  }, [router.isReady, router.query.utilityId, router.query.roomId, router.query.title]);
 
   useEffect(() => {
     let isMounted = true;
@@ -339,6 +363,8 @@ export default function RepairsPage() {
     setRepairPriority('normal');
     setReportedDate(toLocalDateString());
     setCompletedDate('');
+    setScheduledDate('');
+    setScheduledWindow('');
     setContractorName('');
     setContractorPhone('');
     setContractorEmail('');
@@ -399,6 +425,8 @@ export default function RepairsPage() {
         priority: repairPriority,
         reported_date: reportedDate || null,
         completed_date: completedDate || null,
+        scheduled_date: scheduledDate || null,
+        scheduled_window: scheduledWindow,
         contractor_name: contractorName,
         contractor_phone: contractorPhone,
         contractor_email: contractorEmail,
@@ -684,6 +712,22 @@ export default function RepairsPage() {
               <label style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontWeight: 600 }}>Actual cost</span>
                 <input type="number" step="0.01" value={actualCost} onChange={(event) => setActualCost(event.target.value)} style={fieldStyle} />
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Visit scheduled for</span>
+                <input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} style={fieldStyle} />
+              </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Arrival window</span>
+                <input
+                  value={scheduledWindow}
+                  onChange={(event) => setScheduledWindow(event.target.value)}
+                  placeholder="8am – 12pm"
+                  style={fieldStyle}
+                />
               </label>
             </div>
 

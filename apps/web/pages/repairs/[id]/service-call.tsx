@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-folder/shared';
@@ -12,6 +13,7 @@ import {
   type RepairDataContext,
   type RepairRow
 } from '../../../lib/repairs';
+import { formatRoomLocation, formatRoomTypeLabel } from '../../../lib/roomLabels';
 import { getRoomsForProperty } from '../../../lib/rooms';
 import {
   getServiceRecordDataContext,
@@ -19,13 +21,17 @@ import {
   type ServiceRecordRow
 } from '../../../lib/serviceRecords';
 import {
+  buildServiceCallEmail,
   buildServiceCallSheet,
+  sanitizePhoneForHref,
+  serviceCallToCompactText,
   serviceCallToPlainText,
   type ServiceCallSheet
 } from '../../../lib/serviceCall';
 import { getDemoUtilities, getUtilitiesForProperty, type UtilityRow } from '../../../lib/utilities';
 
 type NamedRow = { id: string; name: string };
+type RoomRowLite = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
 export default function ServiceCallSheetPage() {
   const router = useRouter();
@@ -36,7 +42,7 @@ export default function ServiceCallSheetPage() {
   const [repair, setRepair] = useState<RepairRow | null>(null);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
-  const [rooms, setRooms] = useState<NamedRow[]>([]);
+  const [rooms, setRooms] = useState<RoomRowLite[]>([]);
   const [assets, setAssets] = useState<NamedRow[]>([]);
   const [propertyAddress, setPropertyAddress] = useState<string | null>(null);
   const [propertyName, setPropertyName] = useState('Home');
@@ -65,7 +71,7 @@ export default function ServiceCallSheetPage() {
         const nextRepair = await getRepairByIdForContext(repairContext, repairId);
 
         let nextUtilities: UtilityRow[] = [];
-        let nextRooms: NamedRow[] = [];
+        let nextRooms: RoomRowLite[] = [];
         let nextAssets: NamedRow[] = [];
         let nextAddress: string | null = null;
 
@@ -78,12 +84,22 @@ export default function ServiceCallSheetPage() {
             getPropertyAddressLine(propertyId)
           ]);
           nextUtilities = util;
-          nextRooms = roomList.map((room) => ({ id: room.id, name: room.name }));
+          nextRooms = roomList.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }));
           nextAssets = assetList.map((asset) => ({ id: asset.id, name: asset.name }));
           nextAddress = address;
         } else {
           nextUtilities = getDemoUtilities();
-          nextRooms = getDemoRooms().map((room) => ({ id: room.id, name: room.name }));
+          nextRooms = getDemoRooms().map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }));
           nextAssets = getDemoAssets().map((asset: AssetRow) => ({ id: asset.id, name: asset.name }));
         }
 
@@ -122,7 +138,15 @@ export default function ServiceCallSheetPage() {
 
   const locationLabel = useMemo(() => {
     if (!repair) return null;
-    if (repair.room_id) return rooms.find((room) => room.id === repair.room_id)?.name || null;
+    if (repair.room_id) {
+      const room = rooms.find((candidate) => candidate.id === repair.room_id);
+      if (!room) return null;
+      const typeLabel = room.room_type ? formatRoomTypeLabel(room.room_type) : null;
+      const base = formatRoomLocation(room);
+      return typeLabel && typeLabel.toLowerCase() !== room.name.trim().toLowerCase()
+        ? `${base} (${typeLabel})`
+        : base;
+    }
     if (repair.asset_id) return assets.find((asset) => asset.id === repair.asset_id)?.name || null;
     if (repair.utility_id) return utilities.find((utility) => utility.id === repair.utility_id)?.name || null;
     return null;
@@ -171,7 +195,17 @@ export default function ServiceCallSheetPage() {
     }
   };
 
-  const smsHref = `sms:?&body=${encodeURIComponent(plainText)}`;
+  const compactText = useMemo(() => (sheet ? serviceCallToCompactText(sheet) : ''), [sheet]);
+
+  // Pre-address the text and email to the technician when their contact info
+  // is on the repair; otherwise the links open with just the body filled in.
+  const contractorPhone = sanitizePhoneForHref(repair?.contractor_phone);
+  const contractorEmail = repair?.contractor_email?.trim() || '';
+  const smsHref = `sms:${contractorPhone || ''}?&body=${encodeURIComponent(compactText)}`;
+  const email = sheet ? buildServiceCallEmail(sheet) : null;
+  const mailtoHref = email
+    ? `mailto:${encodeURIComponent(contractorEmail)}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`
+    : '#';
 
   if (loading) {
     return (
@@ -211,7 +245,10 @@ export default function ServiceCallSheetPage() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button onClick={() => window.print()}>Print</Button>
             <a href={smsHref} className="action-link hb-control" style={getControlStyle({ variant: 'secondary' })}>
-              Text this
+              {contractorPhone ? 'Text the technician' : 'Text this'}
+            </a>
+            <a href={mailtoHref} className="action-link hb-control" style={getControlStyle({ variant: 'secondary' })}>
+              {contractorEmail ? 'Email the technician' : 'Email this'}
             </a>
             <Button variant="secondary" onClick={handleShare}>Share…</Button>
             <Button variant="secondary" onClick={handleCopy}>{copied ? 'Copied ✓' : 'Copy text'}</Button>
@@ -237,6 +274,15 @@ export default function ServiceCallSheetPage() {
           </div>
           {shareNote ? (
             <p style={{ color: 'var(--status-attention)', marginBottom: 0, fontWeight: 600 }}>{shareNote}</p>
+          ) : null}
+          {context?.mode === 'supabase' && !sheet.propertyAddress ? (
+            <p style={{ color: 'var(--text-muted)', marginBottom: 0 }}>
+              No address is on this sheet.{' '}
+              <Link href="/settings" style={{ textDecoration: 'underline', fontWeight: 600 }}>
+                Add your property address in Settings
+              </Link>{' '}
+              so the technician knows where to go.
+            </p>
           ) : null}
         </Card>
       </div>
@@ -274,6 +320,18 @@ export default function ServiceCallSheetPage() {
             {sheet.reportedDate ? <UtilityBadge label={`Reported ${sheet.reportedDate}`} /> : null}
           </div>
         </header>
+
+        {sheet.scheduledVisit ? (
+          <section style={{ marginBottom: 20 }}>
+            <h2 style={{ marginTop: 0 }}>Scheduled visit</h2>
+            <p style={{ marginBottom: 0 }}>
+              <strong>
+                {[sheet.scheduledVisit.dateLabel, sheet.scheduledVisit.window].filter(Boolean).join(' · ')}
+              </strong>
+              {sheet.contractor?.name ? ` — ${sheet.contractor.name}` : ''}
+            </p>
+          </section>
+        ) : null}
 
         <section style={{ marginBottom: 20 }}>
           <h2 style={{ marginTop: 0 }}>What we are seeing</h2>

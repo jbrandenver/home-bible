@@ -32,6 +32,8 @@ export type RepairRow = {
   priority: RepairPriority;
   reported_date: string | null;
   completed_date: string | null;
+  scheduled_date: string | null;
+  scheduled_window: string | null;
   contractor_name: string | null;
   contractor_phone: string | null;
   contractor_email: string | null;
@@ -51,6 +53,8 @@ export type RepairInput = {
   priority?: RepairPriority;
   reported_date?: string | null;
   completed_date?: string | null;
+  scheduled_date?: string | null;
+  scheduled_window?: string | null;
   contractor_name?: string | null;
   contractor_phone?: string | null;
   contractor_email?: string | null;
@@ -70,7 +74,7 @@ export type RepairDataContext = {
 };
 
 const REPAIR_SELECT =
-  'id, property_id, room_id, asset_id, utility_id, title, description, repair_type, status, priority, reported_date, completed_date, contractor_name, contractor_phone, contractor_email, estimated_cost, actual_cost, notes, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, asset_id, utility_id, title, description, repair_type, status, priority, reported_date, completed_date, scheduled_date, scheduled_window, contractor_name, contractor_phone, contractor_email, estimated_cost, actual_cost, notes, created_at, updated_at, deleted_at';
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -107,6 +111,8 @@ function normalizeRepair(raw: Partial<RepairRow>): RepairRow {
     priority: enumValue(REPAIR_PRIORITIES, raw.priority, 'normal'),
     reported_date: nullableString(raw.reported_date),
     completed_date: nullableString(raw.completed_date),
+    scheduled_date: nullableString(raw.scheduled_date),
+    scheduled_window: nullableString(raw.scheduled_window),
     contractor_name: nullableString(raw.contractor_name),
     contractor_phone: nullableString(raw.contractor_phone),
     contractor_email: nullableString(raw.contractor_email),
@@ -171,6 +177,8 @@ function buildRepairPayload(input: RepairInput, propertyId: string) {
     priority: input.priority || 'normal',
     reported_date: input.reported_date || null,
     completed_date: input.completed_date || null,
+    scheduled_date: input.scheduled_date || null,
+    scheduled_window: nullableString(input.scheduled_window),
     contractor_name: nullableString(input.contractor_name),
     contractor_phone: nullableString(input.contractor_phone),
     contractor_email: nullableString(input.contractor_email),
