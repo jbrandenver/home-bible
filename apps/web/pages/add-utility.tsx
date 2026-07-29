@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { UTILITY_TYPES, formatEnumLabel } from '@home-folder/shared';
 import { PageHeader, Card, Input, Select, Button } from '@home-folder/ui';
 import { getDemoRooms } from '../lib/demoStorage';
+import {
+  getAvailableLocationPresets,
+  isLocationPresetValue,
+  resolveLocationRoomId
+} from '../lib/locationPresets';
 import { getRoomsForProperty } from '../lib/rooms';
 import {
   createUtilityForContext,
@@ -36,6 +41,8 @@ export default function AddUtilityPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const locationPresets = useMemo(() => getAvailableLocationPresets(rooms), [rooms]);
 
   useEffect(() => {
     let isMounted = true;
@@ -121,14 +128,26 @@ export default function AddUtilityPage() {
       return;
     }
 
+    if (isLocationPresetValue(roomId) && context.mode === 'supabase' && !context.property) {
+      setError('Create a property before adding utilities.');
+      return;
+    }
+
     setSaving(true);
     setError('');
 
     try {
+      const resolvedRoomId = await resolveLocationRoomId(
+        roomId,
+        context.mode === 'supabase' && context.property
+          ? { mode: 'supabase', propertyId: context.property.id }
+          : { mode: 'demo' }
+      );
+
       const createdUtility = await createUtilityForContext(context, {
         utility_type: utilityType,
         name: name.trim(),
-        room_id: roomId || null,
+        room_id: resolvedRoomId,
         location_notes: locationNotes.trim() || null,
         emergency_notes: emergencyNotes.trim() || null
       });
@@ -220,7 +239,7 @@ export default function AddUtilityPage() {
                 marginBottom: 8
               }}
             >
-              Room (optional)
+              Location (optional)
             </label>
             <Select
               id="roomId"
@@ -228,13 +247,29 @@ export default function AddUtilityPage() {
               onChange={(event) => setRoomId(event.target.value)}
               disabled={loading}
             >
-              <option value="">{loading ? 'Loading rooms...' : 'Not assigned'}</option>
-              {rooms.map((room) => (
-                <option key={room.id} value={room.id}>
-                  {formatRoomLocation(room)}
-                </option>
-              ))}
+              <option value="">{loading ? 'Loading locations...' : 'Not assigned'}</option>
+              {rooms.length > 0 ? (
+                <optgroup label="Rooms & spaces">
+                  {rooms.map((room) => (
+                    <option key={room.id} value={room.id}>
+                      {formatRoomLocation(room)}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {locationPresets.length > 0 ? (
+                <optgroup label="Outdoor & exterior">
+                  {locationPresets.map((preset) => (
+                    <option key={preset.value} value={preset.value}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
             </Select>
+            <p style={{ marginTop: 6, marginBottom: 0, color: 'var(--text-muted)', fontSize: 14 }}>
+              Pick a room, or an outdoor spot like the back yard or a side of the house.
+            </p>
           </div>
 
           <div>

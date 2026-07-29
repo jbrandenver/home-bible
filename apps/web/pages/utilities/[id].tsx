@@ -1,12 +1,17 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel, UTILITY_TYPES } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getDemoRooms } from '../../lib/demoStorage';
+import {
+  getAvailableLocationPresets,
+  isLocationPresetValue,
+  resolveLocationRoomId
+} from '../../lib/locationPresets';
 import {
   getDocumentDataContext,
   getDocumentsForLink,
@@ -166,6 +171,8 @@ export default function UtilityDetailPage() {
     ? formatRoomLocation(rooms.find((room) => room.id === utility.room_id) || { name: 'Unknown room' })
     : 'Not assigned';
 
+  const locationPresets = useMemo(() => getAvailableLocationPresets(rooms), [rooms]);
+
   const saveUtility = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!context || !utility) return;
@@ -179,16 +186,33 @@ export default function UtilityDetailPage() {
     setFormError('');
 
     try {
+      const wasPreset = isLocationPresetValue(roomId);
+      const resolvedRoomId = await resolveLocationRoomId(
+        roomId,
+        context.mode === 'supabase' && context.property
+          ? { mode: 'supabase', propertyId: context.property.id }
+          : { mode: 'demo' }
+      );
+
       const updatedUtility = await updateUtilityForContext(context, utility.id, {
         name,
         utility_type: utilityType,
-        room_id: roomId || null,
+        room_id: resolvedRoomId,
         location_notes: locationNotes,
         emergency_notes: emergencyNotes
       });
 
       if (updatedUtility) {
         setUtility(updatedUtility);
+        setRoomId(updatedUtility.room_id || '');
+      }
+
+      if (wasPreset) {
+        const refreshedRooms =
+          context.mode === 'supabase' && context.property
+            ? await getRoomsForProperty(context.property.id)
+            : getDemoRooms();
+        setRooms(refreshedRooms);
       }
     } catch (saveError) {
       setFormError(saveError instanceof Error ? saveError.message : 'Failed to update utility.');
@@ -303,12 +327,23 @@ export default function UtilityDetailPage() {
                 </select>
               </label>
               <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Room</span>
+                <span style={{ fontWeight: 600 }}>Location</span>
                 <select value={roomId} onChange={(event) => setRoomId(event.target.value)} style={fieldStyle}>
                   <option value="">Not assigned</option>
-                  {rooms.map((room) => (
-                    <option key={room.id} value={room.id}>{formatRoomLocation(room)}</option>
-                  ))}
+                  {rooms.length > 0 ? (
+                    <optgroup label="Rooms & spaces">
+                      {rooms.map((room) => (
+                        <option key={room.id} value={room.id}>{formatRoomLocation(room)}</option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  {locationPresets.length > 0 ? (
+                    <optgroup label="Outdoor & exterior">
+                      {locationPresets.map((preset) => (
+                        <option key={preset.value} value={preset.value}>{preset.label}</option>
+                      ))}
+                    </optgroup>
+                  ) : null}
                 </select>
               </label>
             </div>

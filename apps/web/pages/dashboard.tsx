@@ -528,7 +528,7 @@ export default function DashboardPage() {
                 gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
               }}
             >
-              <Card>
+              <Card id="home-record">
                 <div className="hb-leader" style={{ marginBottom: 12 }}>
                   <h2 style={{ margin: 0 }}>Home record</h2>
                   <span
@@ -595,7 +595,7 @@ export default function DashboardPage() {
                 )}
               </Card>
 
-              <Card>
+              <Card id="this-week">
                 <h2 style={{ marginTop: 0 }}>This week at home</h2>
                 {digest.length === 0 ? (
                   <p style={{ color: 'var(--text-muted)', margin: 0 }}>
@@ -643,7 +643,7 @@ export default function DashboardPage() {
           ) : null}
 
           {automationSummary && (automationSummary.totalDevices > 0 || automationSummary.hubs > 0 || automationSummary.networks > 0 || automationSummary.routines > 0) ? (
-            <Card>
+            <Card id="smart-home">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
                 <h2 style={{ margin: 0 }}>Smart home</h2>
                 <ActionLink href="/automation" variant="secondary">Open</ActionLink>
@@ -660,7 +660,7 @@ export default function DashboardPage() {
             </Card>
           ) : null}
 
-          <Card>
+          <Card id="rooms-spaces">
             <h2 style={{ marginTop: 0 }}>Rooms & spaces</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <UtilityBadge label={`${floors} floor${floors === 1 ? '' : 's'}`} />
@@ -755,7 +755,7 @@ export default function DashboardPage() {
             </div>
           </Card>
 
-          <Card tone="dark">
+          <Card tone="dark" id="critical-utilities">
             <h2 style={{ marginTop: 0 }}>Critical Utilities</h2>
             <p style={{ color: 'rgba(255,248,234,0.78)' }}>
               Where the most important systems live: shutoffs, panels, HVAC, water heater, router, and other home systems.
@@ -790,7 +790,7 @@ export default function DashboardPage() {
             </div>
           </Card>
 
-          <Card tone="dark">
+          <Card tone="dark" id="handover">
             <h2 style={{ marginTop: 0 }}>Home Handover</h2>
             <p style={{ color: 'rgba(255,248,234,0.78)' }}>
               Hand the whole home over in one document for family, buyer, maintenance, insurance, or personal archive use.
@@ -801,7 +801,7 @@ export default function DashboardPage() {
             <ActionLink href="/handover" variant="secondary">Build handover</ActionLink>
           </Card>
 
-          <Card>
+          <Card id="sharing">
             <h2 style={{ marginTop: 0 }}>Sharing Review</h2>
             <p style={{ color: 'var(--text-muted)' }}>
               Preview role-based access before future invitations, guests, or share links are enabled.
@@ -812,7 +812,7 @@ export default function DashboardPage() {
             <ActionLink href="/sharing" variant="secondary">Open sharing review</ActionLink>
           </Card>
 
-          <Card>
+          <Card id="service-history">
             <h2 style={{ marginTop: 0 }}>Service History</h2>
             {recentServiceRecords.length === 0 ? (
               <p style={{ color: 'var(--text-muted)' }}>No service history yet.</p>
@@ -838,7 +838,7 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <Card>
+          <Card id="recent-documents">
             <h2 style={{ marginTop: 0 }}>Recent documents</h2>
             {recentDocuments.length === 0 ? (
               <p style={{ color: 'var(--text-muted)' }}>No documents uploaded yet.</p>
@@ -867,7 +867,7 @@ export default function DashboardPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card id="recent-receipts">
             <h2 style={{ marginTop: 0 }}>Recent receipts</h2>
             {recentReceipts.length === 0 ? (
               <p style={{ color: 'var(--text-muted)' }}>No approved receipts yet.</p>
@@ -896,7 +896,7 @@ export default function DashboardPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card id="trends">
             <h2 style={{ marginTop: 0 }}>Trends</h2>
             {trendFlags.length === 0 ? (
               <p style={{ color: 'var(--text-muted)' }}>No trends currently.</p>
@@ -914,7 +914,7 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <Card>
+          <Card id="warranties">
             <h2 style={{ marginTop: 0 }}>Warranty summary</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <UtilityBadge label={`${warrantySummary.active} active`} />
@@ -924,7 +924,7 @@ export default function DashboardPage() {
             </div>
           </Card>
 
-          <Card>
+          <Card id="reminders">
             <h2 style={{ marginTop: 0 }}>Reminder summary</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
               <UtilityBadge label={`${reminderSummary.open} open`} />
@@ -956,7 +956,7 @@ export default function DashboardPage() {
             )}
           </Card>
 
-          <Card>
+          <Card id="room-list">
             <h2 style={{ marginTop: 0 }}>Rooms & spaces</h2>
             {!hasProperty ? (
               <div>
