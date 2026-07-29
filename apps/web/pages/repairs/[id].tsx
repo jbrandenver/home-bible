@@ -269,6 +269,12 @@ export default function RepairDetailPage() {
           </div>
           <div style={{ color: 'var(--text-muted)', display: 'grid', gap: 6 }}>
             <div><strong>Reported:</strong> {repair.reported_date || 'Not set'}</div>
+            {(repair.scheduled_date || repair.scheduled_window) && (
+              <div>
+                <strong>Scheduled visit:</strong>{' '}
+                {[repair.scheduled_date, repair.scheduled_window].filter(Boolean).join(' · ')}
+              </div>
+            )}
             {repair.completed_date && <div><strong>Completed:</strong> {repair.completed_date}</div>}
             {repair.contractor_name && <div><strong>Contractor:</strong> {repair.contractor_name}</div>}
             {repair.estimated_cost !== null && <div><strong>Estimated:</strong> ${repair.estimated_cost}</div>}

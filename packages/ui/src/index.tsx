@@ -91,18 +91,21 @@ export function Card({
   className,
   style,
   tone = 'default',
-  interactive = false
+  interactive = false,
+  id
 }: {
   children: ReactNode;
   className?: string;
   style?: CSSProperties;
   tone?: 'default' | 'dark';
   interactive?: boolean;
+  id?: string;
 }) {
   const isDark = tone === 'dark';
 
   return (
     <section
+      id={id}
       className={`hb-card ${interactive ? 'hb-card-hover' : ''} ${isDark ? 'brand-hero' : ''} ${className || ''}`.trim()}
       style={{
         border: '1px solid var(--border-subtle)',

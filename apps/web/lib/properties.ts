@@ -48,9 +48,40 @@ function formatPropertySetupError(step: string, message?: string) {
   );
 }
 
+export type PropertyAddressDetails = {
+  address_line_1: string | null;
+  address_line_2: string | null;
+  city: string | null;
+  state: string | null;
+  postal_code: string | null;
+  address_is_enabled: boolean;
+};
+
+// Pure single-line formatter so the sheet, settings preview, and tests all
+// agree on what the shared address looks like.
+export function formatAddressLine(details: Omit<PropertyAddressDetails, 'address_is_enabled'>): string | null {
+  const cityState = [details.city, details.state]
+    .filter((part) => typeof part === 'string' && part.trim().length > 0)
+    .join(', ');
+  const parts = [details.address_line_1, details.address_line_2, cityState, details.postal_code].filter(
+    (part) => typeof part === 'string' && part.trim().length > 0
+  );
+
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
 // Formatted single-line address for a property, respecting the owner's
 // address_is_enabled flag. Returns null if disabled, unset, or unreadable.
 export async function getPropertyAddressLine(propertyId: string): Promise<string | null> {
+  const details = await getPropertyAddressDetails(propertyId);
+  if (!details || !details.address_is_enabled) {
+    return null;
+  }
+
+  return formatAddressLine(details);
+}
+
+export async function getPropertyAddressDetails(propertyId: string): Promise<PropertyAddressDetails | null> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return null;
@@ -63,16 +94,47 @@ export async function getPropertyAddressLine(propertyId: string): Promise<string
     .is('deleted_at', null)
     .maybeSingle();
 
-  if (error || !data || !data.address_is_enabled) {
+  if (error || !data) {
     return null;
   }
 
-  const cityState = [data.city, data.state].filter(Boolean).join(', ');
-  const parts = [data.address_line_1, data.address_line_2, cityState, data.postal_code].filter(
-    (part) => typeof part === 'string' && part.trim().length > 0
-  );
+  return {
+    address_line_1: data.address_line_1 ?? null,
+    address_line_2: data.address_line_2 ?? null,
+    city: data.city ?? null,
+    state: data.state ?? null,
+    postal_code: data.postal_code ?? null,
+    address_is_enabled: Boolean(data.address_is_enabled)
+  };
+}
 
-  return parts.length > 0 ? parts.join(', ') : null;
+export async function updatePropertyAddress(propertyId: string, input: PropertyAddressDetails): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const clean = (value: string | null) => {
+    const trimmed = typeof value === 'string' ? value.trim() : '';
+    return trimmed.length > 0 ? trimmed : null;
+  };
+
+  const { error } = await supabase
+    .from('properties')
+    .update({
+      address_line_1: clean(input.address_line_1),
+      address_line_2: clean(input.address_line_2),
+      city: clean(input.city),
+      state: clean(input.state),
+      postal_code: clean(input.postal_code),
+      address_is_enabled: input.address_is_enabled
+    })
+    .eq('id', propertyId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(formatPropertySetupError('save property address', error.message));
+  }
 }
 
 export async function getPrimaryPropertyForUser(userId: string): Promise<PropertySummary | null> {

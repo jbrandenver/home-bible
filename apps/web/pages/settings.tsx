@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, Input, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   getCurrentUser,
@@ -9,6 +9,13 @@ import {
   onAuthStateChange,
   signOut
 } from '../lib/auth';
+import {
+  formatAddressLine,
+  getPrimaryPropertyForUser,
+  getPropertyAddressDetails,
+  updatePropertyAddress,
+  type PropertySummary
+} from '../lib/properties';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 
 export default function SettingsPage() {
@@ -16,6 +23,18 @@ export default function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [accountError, setAccountError] = useState('');
+
+  const [property, setProperty] = useState<PropertySummary | null>(null);
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [addressCity, setAddressCity] = useState('');
+  const [addressState, setAddressState] = useState('');
+  const [addressPostal, setAddressPostal] = useState('');
+  const [addressEnabled, setAddressEnabled] = useState(false);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [addressSaving, setAddressSaving] = useState(false);
+  const [addressError, setAddressError] = useState('');
+  const [addressSaved, setAddressSaved] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -43,6 +62,78 @@ export default function SettingsPage() {
       unsubscribe();
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadAddress() {
+      if (!user) {
+        setProperty(null);
+        return;
+      }
+
+      setAddressLoading(true);
+      setAddressError('');
+
+      try {
+        const nextProperty = await getPrimaryPropertyForUser(user.id);
+        const details = nextProperty ? await getPropertyAddressDetails(nextProperty.id) : null;
+
+        if (!isMounted) {
+          return;
+        }
+
+        setProperty(nextProperty);
+        setAddressLine1(details?.address_line_1 || '');
+        setAddressLine2(details?.address_line_2 || '');
+        setAddressCity(details?.city || '');
+        setAddressState(details?.state || '');
+        setAddressPostal(details?.postal_code || '');
+        setAddressEnabled(details?.address_is_enabled || false);
+      } catch (loadError) {
+        if (isMounted) {
+          setAddressError(loadError instanceof Error ? loadError.message : 'Failed to load the property address.');
+        }
+      } finally {
+        if (isMounted) {
+          setAddressLoading(false);
+        }
+      }
+    }
+
+    loadAddress();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  async function handleSaveAddress(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!property) {
+      return;
+    }
+
+    setAddressSaving(true);
+    setAddressError('');
+    setAddressSaved(false);
+
+    try {
+      await updatePropertyAddress(property.id, {
+        address_line_1: addressLine1,
+        address_line_2: addressLine2,
+        city: addressCity,
+        state: addressState,
+        postal_code: addressPostal,
+        address_is_enabled: addressEnabled
+      });
+      setAddressSaved(true);
+    } catch (saveError) {
+      setAddressError(saveError instanceof Error ? saveError.message : 'Failed to save the property address.');
+    } finally {
+      setAddressSaving(false);
+    }
+  }
 
   async function handleSignOut() {
     await signOut();
@@ -137,6 +228,128 @@ export default function SettingsPage() {
                   <ActionLink href="/sign-up" variant="secondary">Create account</ActionLink>
                 </div>
               </div>
+            )}
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Property address</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              Optional. When enabled, the address appears on service call sheets and handover
+              reports so a technician knows where to go — it is never shown anywhere else.
+            </p>
+            {!supabaseReady || !user ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Sign in to save your property address.
+              </p>
+            ) : !property && !addressLoading ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <p style={{ color: 'var(--text-muted)', margin: 0 }}>Create a property first — the address belongs to it.</p>
+                <div>
+                  <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveAddress} style={{ display: 'grid', gap: 14 }}>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                  <label>
+                    <span>Street address</span>
+                    <Input
+                      value={addressLine1}
+                      onChange={(event) => setAddressLine1(event.target.value)}
+                      placeholder="123 Main St"
+                      autoComplete="address-line1"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>Apt, unit, etc. (optional)</span>
+                    <Input
+                      value={addressLine2}
+                      onChange={(event) => setAddressLine2(event.target.value)}
+                      placeholder="Unit B"
+                      autoComplete="address-line2"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                </div>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                  <label>
+                    <span>City</span>
+                    <Input
+                      value={addressCity}
+                      onChange={(event) => setAddressCity(event.target.value)}
+                      autoComplete="address-level2"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>State</span>
+                    <Input
+                      value={addressState}
+                      onChange={(event) => setAddressState(event.target.value)}
+                      autoComplete="address-level1"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>ZIP</span>
+                    <Input
+                      value={addressPostal}
+                      onChange={(event) => setAddressPostal(event.target.value)}
+                      autoComplete="postal-code"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={addressEnabled}
+                    onChange={(event) => setAddressEnabled(event.target.checked)}
+                    disabled={addressLoading}
+                    style={{ marginTop: 4 }}
+                  />
+                  <span style={{ textTransform: 'none', letterSpacing: 'normal', fontFamily: 'var(--font-body)', fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Include this address on service call sheets and handover reports.
+                  </span>
+                </label>
+                {formatAddressLine({
+                  address_line_1: addressLine1,
+                  address_line_2: addressLine2,
+                  city: addressCity,
+                  state: addressState,
+                  postal_code: addressPostal
+                }) ? (
+                  <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14 }}>
+                    Will appear as:{' '}
+                    <strong style={{ color: 'var(--text-primary)' }}>
+                      {formatAddressLine({
+                        address_line_1: addressLine1,
+                        address_line_2: addressLine2,
+                        city: addressCity,
+                        state: addressState,
+                        postal_code: addressPostal
+                      })}
+                    </strong>
+                  </p>
+                ) : null}
+                {addressError ? (
+                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{addressError}</p>
+                ) : null}
+                {addressSaved ? (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Address saved.</p>
+                ) : null}
+                <div>
+                  <Button type="submit" disabled={addressLoading || addressSaving}>
+                    {addressSaving ? 'Saving...' : 'Save address'}
+                  </Button>
+                </div>
+              </form>
             )}
           </Card>
 

@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
 
 interface LayoutProps {
@@ -18,9 +18,15 @@ function deriveTitle(pathname: string): string {
   return seg.charAt(0).toUpperCase() + seg.slice(1).replace(/-/g, ' ');
 }
 
+function sectionHref(section: NavSection, item: NavSectionLink) {
+  return item.hash ? `${section.href}#${item.hash}` : section.href;
+}
+
 export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const menuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const isActiveRoute = (path: string) => {
     if (path === '/') return router.pathname === '/';
@@ -56,6 +62,53 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
       unsubscribe();
     };
   }, []);
+
+  // Any navigation (including hash jumps) closes an open section menu.
+  useEffect(() => {
+    setOpenMenu(null);
+  }, [router.asPath]);
+
+  // Click/tap outside closes the open section menu.
+  useEffect(() => {
+    if (!openMenu) {
+      return;
+    }
+
+    function onPointerDown(event: MouseEvent | TouchEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-nav-menu]')) {
+        return;
+      }
+      setOpenMenu(null);
+    }
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('touchstart', onPointerDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('touchstart', onPointerDown);
+    };
+  }, [openMenu]);
+
+  const handleMenuKeyDown = (menuKey: string) => (event: React.KeyboardEvent) => {
+    if (event.key === 'Escape' && openMenu === menuKey) {
+      event.stopPropagation();
+      setOpenMenu(null);
+      menuTriggerRefs.current[menuKey]?.focus();
+    }
+  };
+
+  const renderMenuItems = (section: NavSection) =>
+    (section.sections ?? []).map((item) => (
+      <Link
+        key={item.label}
+        href={sectionHref(section, item)}
+        className="nav-dropdown-item"
+        onClick={() => setOpenMenu(null)}
+      >
+        {item.label}
+      </Link>
+    ));
 
   return (
     <div className="app-shell">
@@ -105,11 +158,50 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             </div>
           </div>
           <div className="desktop-primary-nav flex gap-2 text-sm flex-wrap">
-            {desktopSections.map((section) => (
-              <Link key={section.href} href={section.href} className={navLinkClass(section)}>
-                {section.label}
-              </Link>
-            ))}
+            {desktopSections.map((section) => {
+              if (!section.sections) {
+                return (
+                  <Link key={section.href} href={section.href} className={navLinkClass(section)}>
+                    {section.label}
+                  </Link>
+                );
+              }
+
+              const menuKey = `desktop:${section.href}`;
+              const menuId = `desktop-menu${section.href.replace(/\//g, '-')}`;
+              const isOpen = openMenu === menuKey;
+
+              return (
+                <div
+                  key={section.href}
+                  className="nav-menu-wrap"
+                  data-nav-menu
+                  onKeyDown={handleMenuKeyDown(menuKey)}
+                >
+                  <Link href={section.href} className={navLinkClass(section)}>
+                    {section.label}
+                  </Link>
+                  <button
+                    type="button"
+                    className="desktop-nav-link nav-menu-trigger"
+                    aria-expanded={isOpen}
+                    aria-controls={menuId}
+                    aria-label={`${section.label} sections`}
+                    ref={(element) => {
+                      menuTriggerRefs.current[menuKey] = element;
+                    }}
+                    onClick={() => setOpenMenu(isOpen ? null : menuKey)}
+                  >
+                    <span aria-hidden="true">▾</span>
+                  </button>
+                  {isOpen ? (
+                    <div id={menuId} className="nav-dropdown nav-dropdown-desktop">
+                      {renderMenuItems(section)}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
         </div>
       </nav>
@@ -135,19 +227,63 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
       </footer>
 
       <nav className="mobile-bottom-nav bg-white shadow-sm border-t border-gray-200">
-        {mobileSections.map((section) => (
-          <Link
-            key={section.href}
-            href={section.href}
-            className={`mobile-bottom-link ${sectionMatches(section) ? 'mobile-bottom-link-active' : ''}`}
-          >
-            <span aria-hidden="true">{section.icon}</span>
-            <span>{section.mobileLabel || section.label}</span>
-          </Link>
-        ))}
+        {mobileSections.map((section) => {
+          const activeClass = sectionMatches(section) ? 'mobile-bottom-link-active' : '';
+
+          if (!section.sections) {
+            return (
+              <Link
+                key={section.href}
+                href={section.href}
+                className={`mobile-bottom-link ${activeClass}`}
+              >
+                <span aria-hidden="true">{section.icon}</span>
+                <span>{section.mobileLabel || section.label}</span>
+              </Link>
+            );
+          }
+
+          const menuKey = `mobile:${section.href}`;
+          const menuId = `mobile-menu${section.href.replace(/\//g, '-')}`;
+          const isOpen = openMenu === menuKey;
+
+          return (
+            <div
+              key={section.href}
+              className="mobile-menu-wrap"
+              data-nav-menu
+              onKeyDown={handleMenuKeyDown(menuKey)}
+            >
+              <button
+                type="button"
+                className={`mobile-bottom-link mobile-menu-trigger ${activeClass}`}
+                aria-expanded={isOpen}
+                aria-controls={menuId}
+                ref={(element) => {
+                  menuTriggerRefs.current[menuKey] = element;
+                }}
+                onClick={() => setOpenMenu(isOpen ? null : menuKey)}
+              >
+                <span aria-hidden="true">{section.icon}</span>
+                <span>{section.mobileLabel || section.label}</span>
+              </button>
+              {isOpen ? (
+                <div id={menuId} className="nav-dropdown mobile-nav-sheet">
+                  {renderMenuItems(section)}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
       </nav>
     </div>
   );
+};
+
+type NavSectionLink = {
+  label: string;
+  /** Anchor id on the section's page; omitted = top of the page. */
+  hash?: string;
 };
 
 type NavSection = {
@@ -156,6 +292,8 @@ type NavSection = {
   mobileLabel?: string;
   icon: string;
   activeRoutes: string[];
+  /** When present, the tab gets a jump menu listing the page's sections. */
+  sections?: NavSectionLink[];
 };
 
 const desktopSections: NavSection[] = [
@@ -163,7 +301,23 @@ const desktopSections: NavSection[] = [
     href: '/dashboard',
     label: 'Dashboard',
     icon: 'D',
-    activeRoutes: ['/dashboard']
+    activeRoutes: ['/dashboard'],
+    sections: [
+      { label: 'Overview' },
+      { label: 'Home record', hash: 'home-record' },
+      { label: 'This week at home', hash: 'this-week' },
+      { label: 'Rooms & spaces', hash: 'rooms-spaces' },
+      { label: 'Critical utilities', hash: 'critical-utilities' },
+      { label: 'Home handover', hash: 'handover' },
+      { label: 'Sharing review', hash: 'sharing' },
+      { label: 'Service history', hash: 'service-history' },
+      { label: 'Recent documents', hash: 'recent-documents' },
+      { label: 'Recent receipts', hash: 'recent-receipts' },
+      { label: 'Trends', hash: 'trends' },
+      { label: 'Warranty summary', hash: 'warranties' },
+      { label: 'Reminder summary', hash: 'reminders' },
+      { label: 'All rooms & spaces', hash: 'room-list' }
+    ]
   },
   {
     href: '/home',
@@ -193,7 +347,15 @@ const desktopSections: NavSection[] = [
     href: '/more',
     label: 'More',
     icon: '...',
-    activeRoutes: ['/more', '/handover', '/sharing', '/settings', '/mvp-test', '/sign-in', '/sign-up']
+    activeRoutes: ['/more', '/handover', '/sharing', '/settings', '/mvp-test', '/sign-in', '/sign-up'],
+    sections: [
+      { label: 'Overview' },
+      { label: 'Files', hash: 'files' },
+      { label: 'Records', hash: 'records' },
+      { label: 'Review tools', hash: 'review-tools' },
+      { label: 'Account', hash: 'account' },
+      { label: 'Legal', hash: 'legal' }
+    ]
   }
 ];
 

@@ -67,6 +67,10 @@ const moreLinks = [
   }
 ];
 
+function groupAnchorId(group: string) {
+  return group.toLowerCase().replace(/\s+/g, '-');
+}
+
 export default function MorePage() {
   const groups = Array.from(new Set(moreLinks.map((link) => link.group)));
 
@@ -91,7 +95,7 @@ export default function MorePage() {
         </Card>
 
         {groups.map((group) => (
-          <Card key={group}>
+          <Card key={group} id={groupAnchorId(group)}>
             <h2 style={{ marginTop: 0 }}>{group}</h2>
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
               {moreLinks
