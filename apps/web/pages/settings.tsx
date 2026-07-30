@@ -36,6 +36,7 @@ export default function SettingsPage() {
   const [addressError, setAddressError] = useState('');
   const [addressSaved, setAddressSaved] = useState(false);
   const [addressLoadFailed, setAddressLoadFailed] = useState(false);
+  const [addressDirty, setAddressDirty] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -92,6 +93,7 @@ export default function SettingsPage() {
         setAddressState(details?.state || '');
         setAddressPostal(details?.postal_code || '');
         setAddressEnabled(details?.address_is_enabled || false);
+        setAddressDirty(false);
       } catch (loadError) {
         if (isMounted) {
           setAddressLoadFailed(true);
@@ -115,6 +117,7 @@ export default function SettingsPage() {
   // "Address saved." while looking at unsaved changes.
   function noteAddressEdited() {
     setAddressSaved(false);
+    setAddressDirty(true);
   }
 
   async function handleSaveAddress(event: React.FormEvent<HTMLFormElement>) {
@@ -137,12 +140,28 @@ export default function SettingsPage() {
         address_is_enabled: addressEnabled
       });
       setAddressSaved(true);
+      setAddressDirty(false);
     } catch (saveError) {
       setAddressError(saveError instanceof Error ? saveError.message : 'Failed to save the property address.');
     } finally {
       setAddressSaving(false);
     }
   }
+
+  // Typing a correction and navigating away used to lose it silently.
+  useEffect(() => {
+    if (!addressDirty) {
+      return;
+    }
+
+    const warnOnUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', warnOnUnload);
+    return () => window.removeEventListener('beforeunload', warnOnUnload);
+  }, [addressDirty]);
 
   async function handleSignOut() {
     await signOut();
@@ -397,10 +416,15 @@ export default function SettingsPage() {
                 {addressSaved ? (
                   <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Address saved.</p>
                 ) : null}
-                <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <Button type="submit" disabled={addressLoading || addressSaving}>
                     {addressSaving ? 'Saving...' : 'Save address'}
                   </Button>
+                  {addressDirty ? (
+                    <span style={{ color: 'var(--status-attention)', fontWeight: 600, fontSize: 14 }}>
+                      Unsaved changes
+                    </span>
+                  ) : null}
                 </div>
               </form>
             )}

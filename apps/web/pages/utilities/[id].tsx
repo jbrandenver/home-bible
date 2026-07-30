@@ -169,7 +169,7 @@ export default function UtilityDetailPage() {
   }, [utilityId]);
 
   const roomName = utility?.room_id
-    ? formatRoomLocation(rooms.find((room) => room.id === utility.room_id) || { name: 'Unknown room' })
+    ? formatRoomLocation(rooms.find((room) => room.id === utility.room_id) || { name: 'Room was deleted' })
     : 'Not assigned';
 
   const locationPresets = useMemo(() => getAvailableLocationPresets(rooms), [rooms]);
@@ -325,7 +325,7 @@ export default function UtilityDetailPage() {
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <ActionLink
-              href={`/repairs?utilityId=${encodeURIComponent(utility.id)}${utility.room_id ? `&roomId=${encodeURIComponent(utility.room_id)}` : ''}&title=${encodeURIComponent(`${utility.name} — `)}`}
+              href={`/repairs?utilityId=${encodeURIComponent(utility.id)}${utility.room_id ? `&roomId=${encodeURIComponent(utility.room_id)}` : ''}&title=${encodeURIComponent(utility.name)}`}
             >
               Report a problem
             </ActionLink>

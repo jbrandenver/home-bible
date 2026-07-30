@@ -328,5 +328,39 @@ export async function deleteRoomForProperty(propertyId: string, roomId: string) 
     throw new Error(error.message || 'Failed to delete room or space.');
   }
 
+  // Release anything still pointing at the room. The foreign keys are
+  // `on delete set null`, which never fires for a soft delete, so without this
+  // a deleted room leaves utilities, repairs and assets showing "Unknown room"
+  // — and the service call sheet silently resolves their location to nothing.
+  await releaseRoomReferences(propertyId, roomId);
+
   return getRoomsForProperty(propertyId);
+}
+
+/** Null out room_id on every record that referenced a removed room. */
+async function releaseRoomReferences(propertyId: string, roomId: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return;
+  }
+
+  const dependents = ['utilities', 'assets', 'repairs', 'reminders', 'service_records', 'issues'];
+
+  await Promise.all(
+    dependents.map(async (table) => {
+      const { error } = await supabase
+        .from(table)
+        .update({ room_id: null })
+        .eq('property_id', propertyId)
+        .eq('room_id', roomId)
+        .is('deleted_at', null);
+
+      if (error) {
+        // The room itself is already gone; a failure here leaves a stale
+        // reference rather than corrupting anything, and the UI degrades to
+        // "Room was deleted" rather than a hard error.
+        console.warn(`Could not release ${table}.room_id for a deleted room:`, error.message);
+      }
+    })
+  );
 }

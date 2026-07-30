@@ -430,6 +430,7 @@ export async function updateReceiptForContext(
     .update(payload)
     .eq('id', receiptId)
     .eq('property_id', context.property.id)
+    .is('deleted_at', null)
     .select(RECEIPT_SELECT)
     .maybeSingle();
 

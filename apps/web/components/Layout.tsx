@@ -68,6 +68,35 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
     setOpenMenu(null);
   }, [router.asPath]);
 
+  // Section anchors live inside cards that only render after their page's data
+  // has loaded, so arriving from another page with a #hash scrolled to nothing.
+  // Retry briefly until the target exists.
+  useEffect(() => {
+    const hash = router.asPath.split('#')[1];
+    if (!hash) {
+      return;
+    }
+
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      const target = document.getElementById(hash);
+      attempts += 1;
+
+      if (target) {
+        target.scrollIntoView();
+        window.clearInterval(timer);
+        return;
+      }
+
+      // ~3s of retries, then give up rather than spin forever.
+      if (attempts > 30) {
+        window.clearInterval(timer);
+      }
+    }, 100);
+
+    return () => window.clearInterval(timer);
+  }, [router.asPath]);
+
   // Click/tap outside closes the open section menu.
   useEffect(() => {
     if (!openMenu) {
@@ -91,11 +120,51 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   }, [openMenu]);
 
   const handleMenuKeyDown = (menuKey: string) => (event: React.KeyboardEvent) => {
-    if (event.key === 'Escape' && openMenu === menuKey) {
+    if (openMenu !== menuKey) {
+      return;
+    }
+
+    if (event.key === 'Escape') {
       event.stopPropagation();
       setOpenMenu(null);
       menuTriggerRefs.current[menuKey]?.focus();
+      return;
     }
+
+    // Arrow keys move within the menu, per the WAI-ARIA menu button pattern.
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') {
+      return;
+    }
+
+    const container = (event.currentTarget as HTMLElement).querySelector('[data-nav-dropdown]');
+    const items = container ? Array.from(container.querySelectorAll<HTMLAnchorElement>('a')) : [];
+    if (items.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    const current = items.findIndex((item) => item === document.activeElement);
+
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : event.key === 'ArrowDown'
+            ? (current + 1 + items.length) % items.length
+            : (current - 1 + items.length) % items.length;
+
+    items[nextIndex]?.focus();
+  };
+
+  // Opening with the keyboard should land focus on the first item; opening with
+  // a pointer should not steal it.
+  const openMenuWithKeyboard = (menuKey: string) => {
+    setOpenMenu(menuKey);
+    window.requestAnimationFrame(() => {
+      const container = document.querySelector(`[data-menu-key="${menuKey}"] [data-nav-dropdown]`);
+      container?.querySelector<HTMLAnchorElement>('a')?.focus();
+    });
   };
 
   const renderMenuItems = (section: NavSection) =>
@@ -104,6 +173,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
         key={item.label}
         href={sectionHref(section, item)}
         className="nav-dropdown-item"
+        role="menuitem"
         onClick={() => setOpenMenu(null)}
       >
         {item.label}
@@ -176,6 +246,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                   key={section.href}
                   className="nav-menu-wrap"
                   data-nav-menu
+                  data-menu-key={menuKey}
                   onKeyDown={handleMenuKeyDown(menuKey)}
                 >
                   <Link href={section.href} className={navLinkClass(section)}>
@@ -186,16 +257,29 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                     className="desktop-nav-link nav-menu-trigger"
                     aria-expanded={isOpen}
                     aria-controls={menuId}
+                    aria-haspopup="menu"
                     aria-label={`${section.label} sections`}
                     ref={(element) => {
                       menuTriggerRefs.current[menuKey] = element;
                     }}
                     onClick={() => setOpenMenu(isOpen ? null : menuKey)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowDown' && !isOpen) {
+                        event.preventDefault();
+                        openMenuWithKeyboard(menuKey);
+                      }
+                    }}
                   >
                     <span aria-hidden="true">▾</span>
                   </button>
                   {isOpen ? (
-                    <div id={menuId} className="nav-dropdown nav-dropdown-desktop">
+                    <div
+                      id={menuId}
+                      data-nav-dropdown
+                      role="menu"
+                      aria-label={`${section.label} sections`}
+                      className="nav-dropdown nav-dropdown-desktop"
+                    >
                       {renderMenuItems(section)}
                     </div>
                   ) : null}
@@ -252,6 +336,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               key={section.href}
               className="mobile-menu-wrap"
               data-nav-menu
+              data-menu-key={menuKey}
               onKeyDown={handleMenuKeyDown(menuKey)}
             >
               <button
@@ -259,6 +344,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 className={`mobile-bottom-link mobile-menu-trigger ${activeClass}`}
                 aria-expanded={isOpen}
                 aria-controls={menuId}
+                aria-haspopup="menu"
+                aria-label={`${section.mobileLabel || section.label} sections`}
                 ref={(element) => {
                   menuTriggerRefs.current[menuKey] = element;
                 }}
@@ -268,7 +355,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 <span>{section.mobileLabel || section.label}</span>
               </button>
               {isOpen ? (
-                <div id={menuId} className="nav-dropdown mobile-nav-sheet">
+                <div
+                  id={menuId}
+                  data-nav-dropdown
+                  role="menu"
+                  aria-label={`${section.mobileLabel || section.label} sections`}
+                  className="nav-dropdown mobile-nav-sheet"
+                >
                   {renderMenuItems(section)}
                 </div>
               ) : null}

@@ -57,17 +57,66 @@ function withAuthTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
   ]);
 }
 
+// A detail page resolves up to eight independent data contexts in parallel,
+// and each one used to call getUser() separately — eight network round-trips
+// for one answer that cannot change mid-render. Concurrent callers now share a
+// single in-flight request, and the answer is reused briefly afterwards.
+// Cleared immediately on any auth state change, so signing out is never stale.
+const USER_CACHE_MS = 5_000;
+
+let cachedUser: { user: User | null; at: number } | null = null;
+let inFlightUser: Promise<User | null> | null = null;
+
+export function clearCachedUser() {
+  cachedUser = null;
+  inFlightUser = null;
+}
+
+// Other modules cache things keyed to the signed-in user. They register here
+// rather than auth importing them, which would make auth <-> properties a
+// circular import that only works by accident of hoisting.
+const cacheInvalidators = new Set<() => void>();
+
+export function registerCacheInvalidator(invalidate: () => void) {
+  cacheInvalidators.add(invalidate);
+  return () => cacheInvalidators.delete(invalidate);
+}
+
+function invalidateUserScopedCaches() {
+  clearCachedUser();
+  for (const invalidate of cacheInvalidators) {
+    invalidate();
+  }
+}
+
 export async function getCurrentUser() {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return null;
   }
 
+  if (cachedUser && Date.now() - cachedUser.at < USER_CACHE_MS) {
+    return cachedUser.user;
+  }
+
+  if (inFlightUser) {
+    return inFlightUser;
+  }
+
   // Deliberately throws rather than returning null on timeout: null means
   // "signed out" to every caller, and quietly downgrading a signed-in user to
   // demo data is precisely the failure this is meant to prevent.
-  const { data } = await withAuthTimeout(supabase.auth.getUser(), 'checking your sign-in');
-  return data.user ?? null;
+  inFlightUser = withAuthTimeout(supabase.auth.getUser(), 'checking your sign-in')
+    .then(({ data }) => {
+      const user = data.user ?? null;
+      cachedUser = { user, at: Date.now() };
+      return user;
+    })
+    .finally(() => {
+      inFlightUser = null;
+    });
+
+  return inFlightUser;
 }
 
 export async function ensureProfileForUser(user: User | null) {
@@ -178,6 +227,8 @@ export function onAuthStateChange(callback: (user: User | null) => void) {
   }
 
   const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Any change invalidates the shared cache before listeners react to it.
+    invalidateUserScopedCaches();
     callback(session?.user ?? null);
   });
 

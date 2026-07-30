@@ -50,6 +50,12 @@ export default function ServiceCallSheetPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Kept per repair in this browser: the sheet is typically filled in, printed,
+  // then reopened later to text it, and losing the on-site contact in between
+  // meant retyping it every time. It is a local convenience only — never sent
+  // anywhere and never written to the account.
+  const contactStorageKey = repairId ? `homeFolder.serviceCallContact.${repairId}` : null;
+
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [copied, setCopied] = useState(false);
@@ -59,7 +65,13 @@ export default function ServiceCallSheetPage() {
     let isMounted = true;
 
     async function load() {
-      if (!repairId) return;
+      // Router params are not ready on the first render. Bail before touching
+      // any state, so `loading` cannot be stranded true by an early return
+      // that skips the try/finally below.
+      if (!repairId) {
+        return;
+      }
+
       setLoading(true);
       setError('');
 
@@ -137,6 +149,39 @@ export default function ServiceCallSheetPage() {
     };
   }, [repairId]);
 
+  useEffect(() => {
+    if (!contactStorageKey || typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const saved = window.localStorage.getItem(contactStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as { name?: string; phone?: string };
+        setContactName(parsed.name || '');
+        setContactPhone(parsed.phone || '');
+      }
+    } catch {
+      /* unreadable or corrupt — just start blank */
+    }
+  }, [contactStorageKey]);
+
+  useEffect(() => {
+    if (!contactStorageKey || typeof window === 'undefined') {
+      return;
+    }
+
+    if (!contactName && !contactPhone) {
+      window.localStorage.removeItem(contactStorageKey);
+      return;
+    }
+
+    window.localStorage.setItem(
+      contactStorageKey,
+      JSON.stringify({ name: contactName, phone: contactPhone })
+    );
+  }, [contactStorageKey, contactName, contactPhone]);
+
   const locationLabel = useMemo(() => {
     if (!repair) return null;
     if (repair.room_id) {
@@ -210,9 +255,14 @@ export default function ServiceCallSheetPage() {
 
   // Pre-address the text and email to the technician when their contact info
   // is on the repair; otherwise the links open with just the body filled in.
-  const contractorPhone = sanitizePhoneForHref(repair?.contractor_phone);
-  const contractorEmail = repair?.contractor_email?.trim() || '';
+  // Take the phone from the sheet, not the raw row: the sheet's copy has been
+  // through safeText, so the link can never carry a value the page redacted.
+  const contractorPhone = sanitizePhoneForHref(sheet?.contractor?.phone);
+  const contractorEmail = sheet?.contractor?.email?.trim() || '';
   const smsHref = `sms:${contractorPhone || ''}?&body=${encodeURIComponent(compactText)}`;
+  // On a desktop browser with no number to address, `sms:` does nothing at all.
+  // Offer the share sheet or Copy instead of a link that silently fails.
+  const canText = Boolean(contractorPhone) || (typeof navigator !== 'undefined' && 'share' in navigator);
   const email = sheet ? buildServiceCallEmail(sheet) : null;
   const mailtoHref = email
     ? `mailto:${encodeURIComponent(contractorEmail)}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`
@@ -255,9 +305,11 @@ export default function ServiceCallSheetPage() {
         >
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button onClick={() => window.print()}>Print</Button>
-            <a href={smsHref} className="action-link hb-control" style={getControlStyle({ variant: 'secondary' })}>
-              {contractorPhone ? 'Text the technician' : 'Text this'}
-            </a>
+            {canText ? (
+              <a href={smsHref} className="action-link hb-control" style={getControlStyle({ variant: 'secondary' })}>
+                {contractorPhone ? 'Text the technician' : 'Text this'}
+              </a>
+            ) : null}
             <a href={mailtoHref} className="action-link hb-control" style={getControlStyle({ variant: 'secondary' })}>
               {contractorEmail ? 'Email the technician' : 'Email this'}
             </a>

@@ -2,7 +2,7 @@ import { formatDataError } from './errors';
 import { PROPERTY_TYPES } from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
 import { getSupabaseBrowserClient } from './supabase/client';
-import { ensureProfileForUser } from './auth';
+import { ensureProfileForUser, registerCacheInvalidator } from './auth';
 
 export type PropertyInput = {
   nickname: string;
@@ -137,7 +137,47 @@ export async function updatePropertyAddress(propertyId: string, input: PropertyA
   }
 }
 
+// Same problem as the auth user: every data context resolves the primary
+// property independently, so one page load ran this 1-3 query lookup up to
+// eight times. Concurrent callers share one in-flight lookup, and the result is
+// reused briefly. Keyed by user id so switching accounts cannot read a stale
+// property, and cleared outright whenever a property is created.
+const PROPERTY_CACHE_MS = 5_000;
+
+let cachedProperty: { userId: string; property: PropertySummary | null; at: number } | null = null;
+let inFlightProperty: { userId: string; promise: Promise<PropertySummary | null> } | null = null;
+
+export function clearCachedProperty() {
+  cachedProperty = null;
+  inFlightProperty = null;
+}
+
+// Drop the cached property whenever the signed-in user changes.
+registerCacheInvalidator(clearCachedProperty);
+
 export async function getPrimaryPropertyForUser(userId: string): Promise<PropertySummary | null> {
+  if (cachedProperty && cachedProperty.userId === userId && Date.now() - cachedProperty.at < PROPERTY_CACHE_MS) {
+    return cachedProperty.property;
+  }
+
+  if (inFlightProperty && inFlightProperty.userId === userId) {
+    return inFlightProperty.promise;
+  }
+
+  const promise = loadPrimaryPropertyForUser(userId)
+    .then((property) => {
+      cachedProperty = { userId, property, at: Date.now() };
+      return property;
+    })
+    .finally(() => {
+      inFlightProperty = null;
+    });
+
+  inFlightProperty = { userId, promise };
+  return promise;
+}
+
+async function loadPrimaryPropertyForUser(userId: string): Promise<PropertySummary | null> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return null;
@@ -322,6 +362,9 @@ export async function createPropertyForUser(user: User, input: PropertyInput) {
   if (propertyMemberError) {
     throw new Error(formatPropertySetupError('create property membership', propertyMemberError.message));
   }
+
+  // The caller navigates straight to a page that looks the property up again.
+  clearCachedProperty();
 
   return {
     id: propertyId,
