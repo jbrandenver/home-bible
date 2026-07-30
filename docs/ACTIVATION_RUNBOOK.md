@@ -1,0 +1,235 @@
+# Switching on reminders and payments
+
+Everything for both is already built, deployed-ready and tested. Neither is
+switched on, because each needs an account only you can open. This is the exact
+sequence for when you are ready — nothing here requires code changes.
+
+Both are designed to be **inert rather than broken** while unconfigured:
+`send-digest` runs the whole pipeline and reports what it *would* have sent;
+`stripe-webhook` refuses every request with a 503. So you can deploy them today
+and switch them on whenever.
+
+---
+
+## A. Reminder emails
+
+### What actually gets sent
+
+Titles, dates and counts. Nothing else. The payload builder
+(`public.build_user_digest`) deliberately excludes the address, appliance
+brands/models/serials, contractor names and numbers, costs, and any note you
+typed. Verified against real data: a test repair carrying a contractor name,
+phone, a $450 cost and the text "gate code is 4417" produced a digest
+containing none of them.
+
+That is not fussiness. Email is unencrypted in transit, syncs to every device
+the recipient owns, is indexed by their provider, and previews on a lock
+screen. A list of someone's home maintenance is a burglary reconnaissance
+document. If the email is forwarded or the inbox is breached, the blast radius
+must be "this person has a home and owns a furnace".
+
+### Why monthly is the default
+
+The app's own dashboard digest already looks 14 days ahead for reminders, 30
+for the next service date, and 60 for warranty expiry. That is a monthly
+horizon. Home maintenance runs on a seasonal cadence — filters quarterly,
+gutters twice a year, HVAC annually — so a weekly email about a gutter clean due
+in six weeks is noise, and noise gets unsubscribed.
+
+Monthly has one gap: something created on the 5th and due on the 10th would
+never be emailed, because the next send is the 1st. Two things close it:
+
+1. The monthly digest looks **35 days** ahead, not 30, so consecutive sends
+   overlap rather than leaving a hole.
+2. A **scheduled technician visit** is the one genuinely short-fuse item, so it
+   gets its own next-day nudge regardless of digest frequency.
+
+Users can choose weekly in Settings. Monthly is also far kinder on the free
+tier: 100 users monthly is 100 emails/month against a 3,000/month allowance,
+versus 400 weekly and a 100/day cap you would hit at exactly 100 users.
+
+### Steps
+
+**1. Resend account and domain** — free, no card.
+
+- Sign up at resend.com, add the domain **`send.ourhomefolder.com`**.
+  Use the subdomain, not the apex: it isolates sending reputation, so a future
+  deliverability problem cannot damage the domain you use for real
+  correspondence.
+- Add the SPF, DKIM and MX records Resend shows you, on that subdomain.
+- Add DMARC on the apex, starting permissive:
+  `_dmarc.ourhomefolder.com  TXT  "v=DMARC1; p=none; rua=mailto:dmarc@ourhomefolder.com;"`
+  Read the reports for a month, then tighten to `p=quarantine`.
+- Create an API key.
+
+**2. A postal address for the footer.** CAN-SPAM requires one. **Do not use your
+home address** — it goes to every recipient. A PO box or virtual mailbox is
+~$10–20/month and is the only genuinely unavoidable cost in any of this.
+
+**3. Secrets.**
+
+```bash
+supabase secrets set \
+  RESEND_API_KEY=re_xxxxxxxx \
+  UNSUBSCRIBE_SECRET="$(openssl rand -hex 32)" \
+  DIGEST_CRON_SECRET="$(openssl rand -hex 32)" \
+  SITE_URL=https://ourhomefolder.com \
+  DIGEST_FROM='Our Home Folder <reminders@send.ourhomefolder.com>' \
+  POSTAL_ADDRESS='JBran LLC, PO Box 000, Your City, ST 00000'
+```
+
+**4. Deploy.**
+
+```bash
+supabase functions deploy send-digest
+supabase functions deploy unsubscribe
+```
+
+**5. Dry run before scheduling anything.** With the key set this sends for real,
+so test on your own account first — set your own frequency to monthly, make sure
+you have something due, and invoke it manually.
+
+**6. Schedule it.** Runs daily; the function decides who is actually due, so
+frequency stays a per-user preference.
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select vault.create_secret('<DIGEST_CRON_SECRET>', 'digest_cron_secret');
+
+select cron.schedule('home-folder-digest', '0 * * * *', $$
+  select net.http_post(
+    url := 'https://gdntnlhnjyyzxcjuypuy.supabase.co/functions/v1/send-digest',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'digest_cron_secret')
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 20000
+  );
+$$);
+```
+
+Hourly, not daily, because `users_due_for_digest` matches on the user's **local**
+8am — an hourly tick is what lets one schedule serve every timezone.
+
+**7. Housekeeping.** `cron.job_run_details` is not auto-cleaned and will slowly
+eat a 500 MB database. Add a monthly purge:
+
+```sql
+select cron.schedule('purge-cron-history', '0 3 1 * *', $$
+  delete from cron.job_run_details where end_time < now() - interval '30 days';
+$$);
+```
+
+### Watch out for
+
+- **Free Supabase projects pause after ~7 days of inactivity**, and a paused
+  project means the digest silently stops. Whether cron activity alone prevents
+  pausing is not documented. This is another reason to be on Pro before you rely
+  on it.
+- **Never send an empty digest.** The function already skips anyone with nothing
+  due, and logs it as `skipped`. Do not "fix" that.
+- Check `digest_log` after the first few runs: `status` of `failed` with a
+  message is how a delivery problem surfaces.
+
+---
+
+## B. Payments
+
+### The honest constraint, first
+
+The Handover Pack is generated **in the browser** from data the user already
+owns and can legitimately read. So the paywall is a client-side check backed by
+an entitlements table — **not an enforced boundary**. A technical user could
+read their own rows and render their own PDF.
+
+That is a normal way to sell formatting and convenience, and the realistic
+bypass rate for a homeowner at a closing is nil. But know it now rather than
+discover it. If it ever matters, move generation into an Edge Function that
+checks the entitlement with the service role and returns a signed URL — roughly
+two days, and a clean upgrade you can make *after* someone has actually paid.
+
+What *is* enforced: **nobody can grant themselves an entitlement.**
+`public.entitlements` has a SELECT policy and no INSERT, UPDATE or DELETE policy
+at all, and insert/update/delete are revoked from `anon` and `authenticated`.
+Verified: a signed-in user attempting to insert one produced zero rows.
+
+### Steps
+
+**1. Stripe account**, test mode to begin with.
+
+**2. Two Products with one-time Prices**, then a **Payment Link** for each. In
+each link's settings, set metadata `product_key` to `handover_pack` or
+`insurance_evidence_pack` — the webhook keys off that. Enable email collection
+on the link; it is the fallback when the buyer id is missing.
+
+**3. Secrets and deploy.**
+
+```bash
+supabase secrets set STRIPE_SECRET_KEY=sk_test_xxx STRIPE_WEBHOOK_SIGNING_SECRET=whsec_xxx
+supabase functions deploy stripe-webhook
+```
+
+**4. Register the endpoint** in Stripe → Developers → Webhooks:
+`https://gdntnlhnjyyzxcjuypuy.supabase.co/functions/v1/stripe-webhook`,
+subscribed to `checkout.session.completed`, `charge.refunded`,
+`charge.dispute.created`. Paste its signing secret into the secret above — note
+this is **different** from the one `stripe listen` prints locally.
+
+**5. Link buyers to their purchase.** Append the signed-in user's id:
+
+```
+https://buy.stripe.com/xxxx?client_reference_id=<user.id>&prefilled_email=<email>
+```
+
+It is a URL parameter, so it is buyer-controlled and Stripe silently drops
+malformed values. The webhook therefore treats it as a hint, not authorisation:
+it verifies the id resolves to a real profile, falls back to matching the email
+Stripe collected, and if neither resolves writes to `unmatched_purchases` rather
+than losing the sale. Check that table occasionally.
+
+**6. Test before going live.**
+
+```bash
+supabase functions serve stripe-webhook --no-verify-jwt
+stripe listen --forward-to http://localhost:54321/functions/v1/stripe-webhook
+stripe trigger checkout.session.completed
+```
+
+Card `4242 4242 4242 4242` succeeds; **`4000 0000 0000 0259`** succeeds then
+raises a dispute — use it, and confirm the handler does not fall over.
+
+The tests worth actually running:
+- Replay the same event twice → exactly one entitlement row.
+- Strip `client_reference_id` → money taken, row in `unmatched_purchases`, no crash.
+- Bogus `Stripe-Signature` → 400, and **zero** database writes.
+- From the browser with a real session, try to insert into `entitlements` → fails.
+
+**7. Move to Supabase Pro ($25/month) the day you go live.** Free projects pause
+when idle, and a paused project means someone pays and gets nothing. Stripe
+retries for three days, which saves you only if you notice. Against $29–79
+products that is one extra sale a month.
+
+### Tax
+
+Sell **US-only at first** and set a country restriction on the checkout. The EU
+and UK have no de-minimis threshold for digital goods sold to consumers — the
+VAT obligation attaches from the first sale. Staying domestic avoids the whole
+surface.
+
+The day you want international buyers, switch to a merchant-of-record (Paddle,
+or Lemon Squeezy) which becomes the legal seller and handles it. That is a
+checkout swap: the entitlements table and webhook shape stay identical.
+
+**Get a CPA's view on whether your state taxes digital products before taking
+the first dollar.** I deliberately did not research state tax rules — they vary,
+change annually, and are exactly where a wrong answer costs real money.
+
+### Refunds
+
+Refund on request, immediately, and never fight a dispute on principle. Stripe
+keeps the original processing fee on a refund, and a dispute costs $15 to
+receive plus $15 to contest — so a disputed $29 sale is a net loss of around $44
+**even when you win**. The economics are not close.

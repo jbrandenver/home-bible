@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { PageHeader, Card, Button, Input, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   getCurrentUser,
@@ -17,6 +17,13 @@ import {
   type PropertySummary
 } from '../lib/properties';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
+import {
+  DIGEST_FREQUENCIES,
+  DIGEST_FREQUENCY_LABELS,
+  getDigestPreferences,
+  saveDigestPreferences,
+  type DigestFrequency
+} from '../lib/digestPreferences';
 import {
   buildAccountExport,
   buildCsvSheets,
@@ -57,6 +64,12 @@ export default function SettingsPage() {
   const [exporting, setExporting] = useState<'json' | 'csv' | null>(null);
   const [exportError, setExportError] = useState('');
   const [exportNote, setExportNote] = useState('');
+
+  const [digestFrequency, setDigestFrequency] = useState<DigestFrequency>('monthly');
+  const [visitReminders, setVisitReminders] = useState(true);
+  const [digestSaving, setDigestSaving] = useState(false);
+  const [digestSaved, setDigestSaved] = useState(false);
+  const [digestError, setDigestError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -182,6 +195,41 @@ export default function SettingsPage() {
     window.addEventListener('beforeunload', warnOnUnload);
     return () => window.removeEventListener('beforeunload', warnOnUnload);
   }, [addressDirty]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!user) return;
+
+    getDigestPreferences()
+      .then((prefs) => {
+        if (!isMounted) return;
+        setDigestFrequency(prefs.frequency);
+        setVisitReminders(prefs.visit_reminders);
+      })
+      .catch(() => {
+        /* falls back to the defaults already in state */
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  async function handleSaveDigest(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDigestSaving(true);
+    setDigestError('');
+    setDigestSaved(false);
+
+    try {
+      await saveDigestPreferences({ frequency: digestFrequency, visit_reminders: visitReminders });
+      setDigestSaved(true);
+    } catch (saveError) {
+      setDigestError(saveError instanceof Error ? saveError.message : 'Could not save.');
+    } finally {
+      setDigestSaving(false);
+    }
+  }
 
   async function handleExport(format: 'json' | 'csv') {
     setExporting(format);
@@ -545,6 +593,73 @@ export default function SettingsPage() {
               <ActionLink href="/handover" variant="secondary">Open handover builder</ActionLink>
               <ActionLink href="/sharing" variant="secondary">Open sharing review</ActionLink>
             </div>
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Reminder emails</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              A short note about what is coming up, so nothing quietly becomes
+              urgent. It lists titles and dates only — never your address, what
+              you own, or anything you wrote down.
+            </p>
+            {!supabaseReady || !user ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Sign in to set up reminder emails.
+              </p>
+            ) : (
+              <form onSubmit={handleSaveDigest} style={{ display: 'grid', gap: 14, maxWidth: 520 }}>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span>How often</span>
+                  <Select
+                    value={digestFrequency}
+                    onChange={(event) => {
+                      setDigestFrequency(event.target.value as DigestFrequency);
+                      setDigestSaved(false);
+                    }}
+                  >
+                    {DIGEST_FREQUENCIES.map((value) => (
+                      <option key={value} value={value}>
+                        {DIGEST_FREQUENCY_LABELS[value]}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={visitReminders}
+                    onChange={(event) => {
+                      setVisitReminders(event.target.checked);
+                      setDigestSaved(false);
+                    }}
+                    style={{ marginTop: 4 }}
+                  />
+                  <span style={{ textTransform: 'none', letterSpacing: 'normal', fontFamily: 'var(--font-body)', fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Also remind me the day before a technician is due. Worth keeping on
+                    even with monthly emails — a visit booked mid-month would otherwise
+                    arrive without warning.
+                  </span>
+                </label>
+
+                {digestError ? (
+                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{digestError}</p>
+                ) : null}
+                {digestSaved ? (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Saved.</p>
+                ) : null}
+
+                <div>
+                  <Button type="submit" disabled={digestSaving}>
+                    {digestSaving ? 'Saving...' : 'Save reminder settings'}
+                  </Button>
+                </div>
+                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14 }}>
+                  Sending is not switched on yet — these settings are saved and will
+                  apply as soon as it is.
+                </p>
+              </form>
+            )}
           </Card>
 
           <Card>
