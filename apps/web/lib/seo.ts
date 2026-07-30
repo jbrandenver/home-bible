@@ -58,4 +58,5 @@ export const DISALLOWED_PATHS = [
   '/automation',
   '/api',
   '/mvp-test',
+  '/welcome',
 ];

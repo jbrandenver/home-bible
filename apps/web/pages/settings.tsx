@@ -17,6 +17,22 @@ import {
   type PropertySummary
 } from '../lib/properties';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
+import {
+  buildAccountExport,
+  buildCsvSheets,
+  buildReadme,
+  downloadTextFile
+} from '../lib/accountExport';
+import { getAssetDataContext } from '../lib/assets';
+import { getAutomationContext } from '../lib/automation';
+import { getDocumentDataContext } from '../lib/documents';
+import { getIssueDataContext } from '../lib/issues';
+import { getReceiptDataContext } from '../lib/receipts';
+import { getReminderDataContext } from '../lib/reminders';
+import { getRepairDataContext } from '../lib/repairs';
+import { getServiceRecordDataContext } from '../lib/serviceRecords';
+import { getTrendFlagDataContext } from '../lib/trendFlags';
+import { getUtilityDataContext } from '../lib/utilities';
 
 export default function SettingsPage() {
   const [isReady, setIsReady] = useState(false);
@@ -37,6 +53,10 @@ export default function SettingsPage() {
   const [addressSaved, setAddressSaved] = useState(false);
   const [addressLoadFailed, setAddressLoadFailed] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
+
+  const [exporting, setExporting] = useState<'json' | 'csv' | null>(null);
+  const [exportError, setExportError] = useState('');
+  const [exportNote, setExportNote] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -162,6 +182,79 @@ export default function SettingsPage() {
     window.addEventListener('beforeunload', warnOnUnload);
     return () => window.removeEventListener('beforeunload', warnOnUnload);
   }, [addressDirty]);
+
+  async function handleExport(format: 'json' | 'csv') {
+    setExporting(format);
+    setExportError('');
+    setExportNote('');
+
+    try {
+      const [utility, asset, reminder, repair, serviceRecord, issue, trendFlag, documentCtx, receipt, automation] =
+        await Promise.all([
+          getUtilityDataContext(),
+          getAssetDataContext(),
+          getReminderDataContext(),
+          getRepairDataContext(),
+          getServiceRecordDataContext(),
+          getIssueDataContext(),
+          getTrendFlagDataContext(),
+          getDocumentDataContext(),
+          getReceiptDataContext(),
+          getAutomationContext()
+        ]);
+
+      const data = await buildAccountExport(property, {
+        utility,
+        asset,
+        reminder,
+        repair,
+        serviceRecord,
+        issue,
+        trendFlag,
+        document: documentCtx,
+        receipt,
+        automation
+      });
+
+      const stamp = data.generatedAt.slice(0, 10);
+
+      if (format === 'json') {
+        downloadTextFile(
+          `home-folder-export-${stamp}.json`,
+          JSON.stringify(data, null, 2),
+          'application/json'
+        );
+        downloadTextFile(`home-folder-export-${stamp}-README.txt`, buildReadme(data));
+        setExportNote('Downloaded your full record, plus a README explaining what is in it.');
+      } else {
+        const sheets = buildCsvSheets(data);
+        if (sheets.length === 0) {
+          setExportNote('There is nothing recorded to export yet.');
+          return;
+        }
+
+        for (const sheetFile of sheets) {
+          downloadTextFile(
+            `home-folder-${sheetFile.name}-${stamp}.csv`,
+            sheetFile.contents,
+            'text/csv'
+          );
+        }
+        downloadTextFile(`home-folder-export-${stamp}-README.txt`, buildReadme(data));
+        setExportNote(
+          `Downloaded ${sheets.length} spreadsheet${sheets.length === 1 ? '' : 's'}, plus a README.`
+        );
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof Error
+          ? `Could not build your export: ${error.message}`
+          : 'Could not build your export. Please try again.'
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
 
   async function handleSignOut() {
     await signOut();
@@ -455,15 +548,49 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Planned settings</h2>
-            <ul style={{ color: 'var(--text-muted)', lineHeight: 1.8 }}>
-              <li>Account</li>
-              <li>Properties</li>
-              <li>Sharing controls</li>
-              <li>Privacy</li>
-              <li>Data export</li>
-              <li>Support</li>
-            </ul>
+            <h2 style={{ marginTop: 0 }}>Download your data</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              Take a complete copy of your home record whenever you want it — as one
+              JSON file, or as spreadsheets you can open anywhere. Your record should
+              outlive any single app, including this one.
+            </p>
+            {!supabaseReady || !user ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Sign in to download your data.
+              </p>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <Button type="button" onClick={() => handleExport('json')} disabled={exporting !== null}>
+                    {exporting === 'json' ? 'Preparing...' : 'Download everything (JSON)'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => handleExport('csv')}
+                    disabled={exporting !== null}
+                  >
+                    {exporting === 'csv' ? 'Preparing...' : 'Download spreadsheets (CSV)'}
+                  </Button>
+                </div>
+                {exportError ? (
+                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, marginBottom: 0 }} role="alert">
+                    {exportError}
+                  </p>
+                ) : null}
+                {exportNote ? (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, marginBottom: 0 }} role="status">
+                    {exportNote}
+                  </p>
+                ) : null}
+                <p style={{ color: 'var(--text-muted)', marginBottom: 0, fontSize: 14 }}>
+                  The download is a complete, unredacted copy — unlike a service call
+                  sheet or handover report, which deliberately leave sensitive details
+                  out because someone else reads them. Uploaded files are listed but
+                  not included; download those from Documents.
+                </p>
+              </>
+            )}
           </Card>
 
           {process.env.NODE_ENV !== 'production' ? (
