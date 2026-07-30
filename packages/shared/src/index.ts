@@ -322,6 +322,36 @@ export const PLAN_NAMES = [
   'extra_property'
 ] as const;
 
+/**
+ * Only same-origin, in-app destinations may be used as a post-auth redirect.
+ *
+ * Next.js hands any scheme-bearing value to a hard `window.location` assignment
+ * with no scheme filter, so an unvalidated `?next=` is both an open redirect
+ * and a `javascript:` sink. A protocol-relative `//host` is rejected too — the
+ * browser reads it as another origin.
+ */
+export function safeRelativePath(value: unknown, fallback = '/'): string {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+
+  // Must start with a single slash, and carry no scheme, no authority, and no
+  // backslash (which some browsers normalise to '/').
+  if (!/^\/(?!\/)/.test(trimmed) || trimmed.includes('\\') || trimmed.includes(':')) {
+    return fallback;
+  }
+
+  // Control characters can be used to smuggle a scheme past the checks above.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
 export function safeHttpUrl(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;

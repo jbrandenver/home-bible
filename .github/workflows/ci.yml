@@ -18,6 +18,9 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+      # security:audit refuses to run without ripgrep rather than reporting a
+      # pass it never verified, so install it explicitly.
+      - run: sudo apt-get update && sudo apt-get install -y ripgrep
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint

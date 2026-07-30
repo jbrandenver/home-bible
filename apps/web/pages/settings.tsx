@@ -161,7 +161,24 @@ export default function SettingsPage() {
     setDeletingAccount(false);
 
     if (error) {
-      setAccountError(error.message || 'Failed to delete account.');
+      // functions.invoke reports a generic "non-2xx status" message; the useful
+      // text (for example the re-authentication prompt) is in the response body.
+      let message = 'Failed to delete account.';
+      const context: unknown = (error as { context?: unknown }).context;
+      if (context instanceof Response) {
+        try {
+          const body = await context.json();
+          if (body && typeof body.error === 'string') {
+            message = body.error;
+          }
+        } catch {
+          /* body was not JSON — fall back to the generic message */
+        }
+      } else if (error.message) {
+        message = error.message;
+      }
+
+      setAccountError(message);
       return;
     }
 
@@ -389,6 +406,7 @@ export default function SettingsPage() {
             </ul>
           </Card>
 
+          {process.env.NODE_ENV !== 'production' ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Development tools</h2>
             <p style={{ color: 'var(--text-muted)' }}>
@@ -396,6 +414,7 @@ export default function SettingsPage() {
             </p>
             <ActionLink href="/mvp-test" variant="secondary">Open private MVP test checklist</ActionLink>
           </Card>
+          ) : null}
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>

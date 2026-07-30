@@ -3,6 +3,17 @@ import { Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getCurrentUser } from '../lib/auth';
 
+// Internal QA checklist — a development tool, not a homeowner destination.
+// Robots already disallows it; this makes it genuinely unreachable in a
+// production build rather than merely unlisted.
+export const getServerSideProps = async () => {
+  if (process.env.NODE_ENV === 'production') {
+    return { notFound: true };
+  }
+
+  return { props: {} };
+};
+
 const routeGroups = [
   {
     title: 'Start and account',
