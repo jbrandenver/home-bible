@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [addressSaving, setAddressSaving] = useState(false);
   const [addressError, setAddressError] = useState('');
   const [addressSaved, setAddressSaved] = useState(false);
+  const [addressLoadFailed, setAddressLoadFailed] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -74,6 +75,7 @@ export default function SettingsPage() {
 
       setAddressLoading(true);
       setAddressError('');
+      setAddressLoadFailed(false);
 
       try {
         const nextProperty = await getPrimaryPropertyForUser(user.id);
@@ -92,6 +94,7 @@ export default function SettingsPage() {
         setAddressEnabled(details?.address_is_enabled || false);
       } catch (loadError) {
         if (isMounted) {
+          setAddressLoadFailed(true);
           setAddressError(loadError instanceof Error ? loadError.message : 'Failed to load the property address.');
         }
       } finally {
@@ -107,6 +110,12 @@ export default function SettingsPage() {
       isMounted = false;
     };
   }, [user]);
+
+  // Any edit invalidates the previous confirmation, so the user can't be shown
+  // "Address saved." while looking at unsaved changes.
+  function noteAddressEdited() {
+    setAddressSaved(false);
+  }
 
   async function handleSaveAddress(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -258,6 +267,21 @@ export default function SettingsPage() {
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>
                 Sign in to save your property address.
               </p>
+            ) : addressLoadFailed ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">
+                  We could not load your property address.
+                </p>
+                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                  {addressError} Nothing has been changed — this is a loading problem, not a
+                  missing property, so please retry rather than creating a new one.
+                </p>
+                <div>
+                  <Button type="button" variant="secondary" onClick={() => setUser((current) => (current ? { ...current } : current))}>
+                    Retry
+                  </Button>
+                </div>
+              </div>
             ) : !property && !addressLoading ? (
               <div style={{ display: 'grid', gap: 12 }}>
                 <p style={{ color: 'var(--text-muted)', margin: 0 }}>Create a property first — the address belongs to it.</p>
@@ -272,7 +296,7 @@ export default function SettingsPage() {
                     <span>Street address</span>
                     <Input
                       value={addressLine1}
-                      onChange={(event) => setAddressLine1(event.target.value)}
+                      onChange={(event) => { setAddressLine1(event.target.value); noteAddressEdited(); }}
                       placeholder="123 Main St"
                       autoComplete="address-line1"
                       disabled={addressLoading}
@@ -283,7 +307,7 @@ export default function SettingsPage() {
                     <span>Apt, unit, etc. (optional)</span>
                     <Input
                       value={addressLine2}
-                      onChange={(event) => setAddressLine2(event.target.value)}
+                      onChange={(event) => { setAddressLine2(event.target.value); noteAddressEdited(); }}
                       placeholder="Unit B"
                       autoComplete="address-line2"
                       disabled={addressLoading}
@@ -296,7 +320,7 @@ export default function SettingsPage() {
                     <span>City</span>
                     <Input
                       value={addressCity}
-                      onChange={(event) => setAddressCity(event.target.value)}
+                      onChange={(event) => { setAddressCity(event.target.value); noteAddressEdited(); }}
                       autoComplete="address-level2"
                       disabled={addressLoading}
                       style={{ marginTop: 6 }}
@@ -306,7 +330,7 @@ export default function SettingsPage() {
                     <span>State</span>
                     <Input
                       value={addressState}
-                      onChange={(event) => setAddressState(event.target.value)}
+                      onChange={(event) => { setAddressState(event.target.value); noteAddressEdited(); }}
                       autoComplete="address-level1"
                       disabled={addressLoading}
                       style={{ marginTop: 6 }}
@@ -316,7 +340,7 @@ export default function SettingsPage() {
                     <span>ZIP</span>
                     <Input
                       value={addressPostal}
-                      onChange={(event) => setAddressPostal(event.target.value)}
+                      onChange={(event) => { setAddressPostal(event.target.value); noteAddressEdited(); }}
                       autoComplete="postal-code"
                       disabled={addressLoading}
                       style={{ marginTop: 6 }}
@@ -327,7 +351,7 @@ export default function SettingsPage() {
                   <input
                     type="checkbox"
                     checked={addressEnabled}
-                    onChange={(event) => setAddressEnabled(event.target.checked)}
+                    onChange={(event) => { setAddressEnabled(event.target.checked); noteAddressEdited(); }}
                     disabled={addressLoading}
                     style={{ marginTop: 4 }}
                   />
@@ -335,6 +359,18 @@ export default function SettingsPage() {
                     Include this address on service call sheets and handover reports.
                   </span>
                 </label>
+                {!addressEnabled &&
+                formatAddressLine({
+                  address_line_1: addressLine1,
+                  address_line_2: addressLine2,
+                  city: addressCity,
+                  state: addressState,
+                  postal_code: addressPostal
+                }) ? (
+                  <p style={{ color: 'var(--status-attention)', fontWeight: 600, margin: 0 }}>
+                    Saved, but it will not appear anywhere until you tick the box above.
+                  </p>
+                ) : null}
                 {formatAddressLine({
                   address_line_1: addressLine1,
                   address_line_2: addressLine2,

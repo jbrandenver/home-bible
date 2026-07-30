@@ -35,13 +35,38 @@ export function formatAuthError(error: Error) {
   return message;
 }
 
+const AUTH_TIMEOUT_MS = 12_000;
+
+/**
+ * Bound any auth call so a stalled one cannot hang a page forever.
+ *
+ * A deadline on the HTTP client is not enough: the auth client also serialises
+ * calls behind a navigator lock, and a stall there never reaches fetch. Pages
+ * were left showing "Loading..." indefinitely with their primary action
+ * disabled and no way to find out why.
+ */
+function withAuthTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  return Promise.race([
+    operation,
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(
+        () => reject(new Error(`Timed out while ${label}. Check your connection and try again.`)),
+        AUTH_TIMEOUT_MS
+      );
+    })
+  ]);
+}
+
 export async function getCurrentUser() {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return null;
   }
 
-  const { data } = await supabase.auth.getUser();
+  // Deliberately throws rather than returning null on timeout: null means
+  // "signed out" to every caller, and quietly downgrading a signed-in user to
+  // demo data is precisely the failure this is meant to prevent.
+  const { data } = await withAuthTimeout(supabase.auth.getUser(), 'checking your sign-in');
   return data.user ?? null;
 }
 

@@ -50,13 +50,9 @@ export default function CreatePropertyPage() {
           property_type: propertyType
         });
 
-        setDemoActiveProperty({
-          id: property.id,
-          nickname: property.nickname,
-          property_type: property.property_type,
-          created_at: property.created_at
-        });
-
+        // Deliberately NOT written to demo storage: that key is the signed-out
+        // browser copy, and putting a real account property in it meant the next
+        // person to sign in on this browser inherited a property they do not own.
         router.push('/add-rooms');
         return;
       } catch (submitError) {

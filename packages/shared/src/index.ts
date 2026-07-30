@@ -396,6 +396,37 @@ export function toLocalDateString(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+/**
+ * Parse a date-only string ("2026-07-30") as local midnight.
+ *
+ * `new Date('2026-07-30')` is interpreted as UTC midnight, so anywhere west of
+ * UTC it renders as the previous day — which put every date on the printed
+ * handover report one day early for a US reader. Values that already carry a
+ * time component are passed through to the normal Date parser.
+ */
+export function parseCalendarDate(value: string | null | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  const parsed = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(trimmed);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** Human-readable calendar date with no timezone drift. */
+export function formatCalendarDate(
+  value: string | null | undefined,
+  options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' }
+): string | null {
+  const parsed = parseCalendarDate(value);
+  return parsed ? parsed.toLocaleDateString(undefined, options) : null;
+}
+
 export type WarrantyLike = {
   warranty_expires_at?: string | null;
   purchase_date?: string | null;
@@ -455,18 +486,46 @@ export const forbiddenSensitivePatterns = [
   // broadened: common secret phrasings and "code/pin: 1234" style entries
   /pass\s*codes?/i,
   /pass\s*words?/i,
-  /\bpins?\b/i,
-  /combination/i,
+  // "pin" and "combination" on their own are ordinary home vocabulary — a
+  // combination boiler, a cotter pin, hinge pins. Matching them bare blanked
+  // real shut-off notes out of the sheet a homeowner hands to a technician.
+  // Require the secret-bearing sense instead; the digit-proximity rule below
+  // still catches "combination 1234" and "pin 4417".
+  /\bpin\s*(?:codes?|numbers?|#)/i,
+  /combination\s*(?:locks?|codes?|numbers?)/i,
   /\bcodes?\b\s*[:#=-]/i,
-  /\b(code|pin|combo|combination)\b[^.\n]{0,12}\d{3,}/i
+  // Digits near a secret word. Two or more digits with optional separators, so
+  // hyphenated forms like a safe's "12-24-6" are caught as well as "4729" —
+  // requiring three *consecutive* digits missed them.
+  /\b(code|pin|combo|combination)\b[^.\n]{0,12}\d(?:[\s._-]*\d)+/i
 ] as const;
 
+/**
+ * Whether this text would be withheld from a shared sheet or handover report.
+ *
+ * Exposed so a form can say so while the user is typing, instead of the text
+ * silently becoming "Hidden by privacy rule" on a document they have already
+ * handed to a technician.
+ */
+export function containsSensitiveText(value: string | null | undefined): boolean {
+  if (!value || !value.trim()) {
+    return false;
+  }
+
+  return forbiddenSensitivePatterns.some((pattern) => pattern.test(value));
+}
+
+/**
+ * Redaction is deliberately whole-field, not span-level: these patterns match
+ * the *label* ("garage code"), and the secret usually sits right beside it, so
+ * blanking only the matched words would leave "… is 1234" in plain sight.
+ */
 export function safeText(value: string | null | undefined, fallback = 'Hidden by privacy rule') {
   if (!value || !value.trim()) {
     return null;
   }
 
-  return forbiddenSensitivePatterns.some((pattern) => pattern.test(value)) ? fallback : value.trim();
+  return containsSensitiveText(value) ? fallback : value.trim();
 }
 
 export function safeFileName(value: string | null | undefined) {

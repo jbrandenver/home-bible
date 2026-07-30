@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { ASSET_TYPES, formatEnumLabel, safeHttpUrl, toLocalDateString } from '@home-folder/shared';
+import { ASSET_TYPES, formatEnumLabel, getWarrantyMeta, safeHttpUrl, toLocalDateString } from '@home-folder/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
@@ -88,45 +88,6 @@ export default function AssetDetailPage() {
   const [editWarrantyExpires, setEditWarrantyExpires] = useState('');
   const [editNotes, setEditNotes] = useState('');
 
-  const getWarrantyMeta = (assetItem: AssetRow) => {
-    let expirationDate: Date | null = null;
-
-    if (assetItem.warranty_expires_at) {
-      expirationDate = new Date(assetItem.warranty_expires_at);
-    } else if (assetItem.purchase_date && assetItem.warranty_length_months) {
-      const purchaseDate = new Date(assetItem.purchase_date);
-      expirationDate = new Date(purchaseDate);
-      expirationDate.setMonth(expirationDate.getMonth() + assetItem.warranty_length_months);
-    }
-
-    if (!expirationDate || Number.isNaN(expirationDate.getTime())) {
-      return { status: 'unknown', daysRemaining: null, expirationDate: null };
-    }
-
-    const daysRemaining = Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-    if (daysRemaining < 0) {
-      return {
-        status: 'expired',
-        daysRemaining,
-        expirationDate: toLocalDateString(expirationDate)
-      };
-    }
-
-    if (daysRemaining <= 30) {
-      return {
-        status: 'expiring_soon',
-        daysRemaining,
-        expirationDate: toLocalDateString(expirationDate)
-      };
-    }
-
-    return {
-      status: 'active',
-      daysRemaining,
-      expirationDate: toLocalDateString(expirationDate)
-    };
-  };
 
   useEffect(() => {
     let isMounted = true;

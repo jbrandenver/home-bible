@@ -149,6 +149,8 @@ export function buildServiceCallSheet(params: {
   locationLabel?: string | null;
   onSiteContact?: ServiceCallContact | null;
   typeLabelFor: (value: string) => string;
+  /** Resolves a utility's room_id to a human label ("Basement · Utility Room"). */
+  roomLabelFor?: (roomId: string) => string | null;
 }): ServiceCallSheet {
   const {
     repair,
@@ -158,8 +160,19 @@ export function buildServiceCallSheet(params: {
     propertyAddress,
     locationLabel,
     onSiteContact,
-    typeLabelFor
+    typeLabelFor,
+    roomLabelFor
   } = params;
+
+  // A shut-off's location is the room it was assigned to, the free-text note,
+  // or both. Using only the note meant a utility carefully filed under
+  // "Basement" printed as "Location not written down" — and was dropped from
+  // the text message entirely.
+  const locationForUtility = (utility: UtilityRow): string | null => {
+    const roomLabel = utility.room_id && roomLabelFor ? roomLabelFor(utility.room_id) : null;
+    const note = safeText(utility.location_notes);
+    return [roomLabel, note].filter(Boolean).join(' — ') || null;
+  };
 
   const relevantTypes = relevantUtilityTypesForRepair(repair.repair_type);
 
@@ -206,7 +219,7 @@ export function buildServiceCallSheet(params: {
         utilityType: type,
         typeLabel: UTILITY_TYPE_LABELS[type] || typeLabelFor(type),
         name: safeText(utility.name),
-        location: safeText(utility.location_notes),
+        location: locationForUtility(utility),
         emergencyNotes: safeText(utility.emergency_notes),
         recorded: true
       });
@@ -317,7 +330,7 @@ export function serviceCallToPlainText(sheet: ServiceCallSheet): string {
     lines.push('RELEVANT SERVICE HISTORY:');
     for (const record of sheet.serviceHistory) {
       const parts = [record.title];
-      if (record.date) parts.push(record.date);
+      if (record.date) parts.push(formatFriendlyDate(record.date) || record.date);
       if (record.provider) parts.push(record.provider);
       lines.push(`• ${parts.join(' · ')}`);
       if (record.summary) lines.push(`    ${record.summary}`);
@@ -368,11 +381,15 @@ export function serviceCallToCompactText(sheet: ServiceCallSheet): string {
     );
   }
 
-  const recordedSafety = sheet.safety.filter((item) => item.recorded && item.location).slice(0, 4);
+  // Include every shut-off that is on file, not only those with a free-text
+  // note — omitting a recorded shut-off from the text message defeats the
+  // whole point of sending it. Fall back to the name, then to a prompt to ask.
+  const recordedSafety = sheet.safety.filter((item) => item.recorded).slice(0, 4);
   if (recordedSafety.length > 0) {
     lines.push('Shut-offs:');
     for (const item of recordedSafety) {
-      lines.push(`• ${item.typeLabel}: ${item.location}`);
+      const where = item.location || item.name || 'on file — ask on arrival';
+      lines.push(`• ${item.typeLabel}: ${where}`);
     }
   }
 

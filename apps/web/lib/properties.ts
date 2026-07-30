@@ -151,11 +151,19 @@ export async function getPrimaryPropertyForUser(userId: string): Promise<Propert
     .order('created_at', { ascending: false })
     .limit(1);
 
-  if (!ownedError && owned && owned.length > 0) {
+  // Errors must surface, not collapse to null. Callers read a null property as
+  // "this user has no property yet" and fall back to demo/localStorage data —
+  // so a momentary network failure used to replace a signed-in user's real
+  // records with leftover browser data, silently and with no error shown.
+  if (ownedError) {
+    throw new Error(formatPropertySetupError('load your property', ownedError.message));
+  }
+
+  if (owned && owned.length > 0) {
     return owned[0] as PropertySummary;
   }
 
-  const { data: memberRows } = await supabase
+  const { data: memberRows, error: memberRowsError } = await supabase
     .from('property_members')
     .select('property_id')
     .eq('user_id', userId)
@@ -163,18 +171,26 @@ export async function getPrimaryPropertyForUser(userId: string): Promise<Propert
     .order('created_at', { ascending: false })
     .limit(10);
 
+  if (memberRowsError) {
+    throw new Error(formatPropertySetupError('load your property', memberRowsError.message));
+  }
+
   const propertyIds = (memberRows ?? []).map((row) => row.property_id).filter(Boolean);
   if (propertyIds.length === 0) {
     return null;
   }
 
-  const { data: memberProperties } = await supabase
+  const { data: memberProperties, error: memberPropertiesError } = await supabase
     .from('properties')
     .select('id, household_id, owner_user_id, nickname, property_type, created_at')
     .in('id', propertyIds)
     .is('deleted_at', null)
     .order('created_at', { ascending: false })
     .limit(1);
+
+  if (memberPropertiesError) {
+    throw new Error(formatPropertySetupError('load your property', memberPropertiesError.message));
+  }
 
   if (!memberProperties || memberProperties.length === 0) {
     return null;

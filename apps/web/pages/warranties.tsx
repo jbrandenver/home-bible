@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel, safeHttpUrl, toLocalDateString } from '@home-folder/shared';
+import { formatEnumLabel, getWarrantyMeta, safeHttpUrl, toLocalDateString } from '@home-folder/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
@@ -16,52 +16,6 @@ import {
   getReminderDataContext,
   type ReminderDataContext
 } from '../lib/reminders';
-
-function getWarrantyMeta(asset: AssetRow): {
-  status: 'active' | 'expiring_soon' | 'expired' | 'unknown';
-  daysRemaining: number | null;
-  expirationDate: string | null;
-} {
-  let expirationDate: Date | null = null;
-
-  if (asset.warranty_expires_at) {
-    expirationDate = new Date(asset.warranty_expires_at);
-  } else if (asset.purchase_date && asset.warranty_length_months) {
-    const purchaseDate = new Date(asset.purchase_date);
-    expirationDate = new Date(purchaseDate);
-    expirationDate.setMonth(expirationDate.getMonth() + asset.warranty_length_months);
-  }
-
-  if (!expirationDate || Number.isNaN(expirationDate.getTime())) {
-    return { status: 'unknown', daysRemaining: null, expirationDate: null };
-  }
-
-  const now = new Date();
-  const diffTime = expirationDate.getTime() - now.getTime();
-  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  if (daysRemaining < 0) {
-    return {
-      status: 'expired',
-      daysRemaining,
-      expirationDate: toLocalDateString(expirationDate)
-    };
-  }
-
-  if (daysRemaining <= 30) {
-    return {
-      status: 'expiring_soon',
-      daysRemaining,
-      expirationDate: toLocalDateString(expirationDate)
-    };
-  }
-
-  return {
-    status: 'active',
-    daysRemaining,
-    expirationDate: toLocalDateString(expirationDate)
-  };
-}
 
 function getStatusColor(status: string): string {
   switch (status) {

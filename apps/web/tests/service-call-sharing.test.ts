@@ -66,7 +66,22 @@ function makeSheet(repairOverrides: Partial<RepairRow> = {}) {
     propertyAddress: '123 Main St, Denver, CO, 80202',
     locationLabel: 'Outside · East side of house',
     onSiteContact: { name: 'Alex (renter)', phone: '(555) 555-0100' },
-    typeLabelFor: formatEnumLabel
+    typeLabelFor: formatEnumLabel,
+    roomLabelFor: (roomId: string) => (roomId === 'room-basement' ? 'Basement · Utility Room' : null)
+  });
+}
+
+function sheetWithUtilities(utilities: UtilityRow[]) {
+  return buildServiceCallSheet({
+    repair: makeRepair(),
+    utilities,
+    serviceRecords: [],
+    propertyName: 'The Bransons',
+    propertyAddress: '123 Main St, Denver, CO, 80202',
+    locationLabel: null,
+    onSiteContact: null,
+    typeLabelFor: formatEnumLabel,
+    roomLabelFor: (roomId: string) => (roomId === 'room-basement' ? 'Basement · Utility Room' : null)
   });
 }
 
@@ -157,5 +172,88 @@ describe('formatAddressLine', () => {
     expect(
       formatAddressLine({ address_line_1: ' ', address_line_2: null, city: null, state: null, postal_code: null })
     ).toBeNull();
+  });
+});
+
+
+describe('a shut-off assigned to a room (BUG-5)', () => {
+  it('uses the room as its location when there is no free-text note', () => {
+    const sheet = sheetWithUtilities([
+      makeUtility({
+        id: 'util-water',
+        utility_type: 'main_water_shutoff',
+        name: 'Main water shut-off',
+        room_id: 'room-basement',
+        location_notes: null
+      })
+    ]);
+
+    const water = sheet.safety.find((item) => item.utilityType === 'main_water_shutoff');
+    expect(water?.recorded).toBe(true);
+    expect(water?.location).toBe('Basement · Utility Room');
+  });
+
+  it('combines the room and the note when both exist', () => {
+    const sheet = sheetWithUtilities([
+      makeUtility({
+        id: 'util-water',
+        utility_type: 'main_water_shutoff',
+        name: 'Main water shut-off',
+        room_id: 'room-basement',
+        location_notes: 'behind the furnace'
+      })
+    ]);
+
+    const water = sheet.safety.find((item) => item.utilityType === 'main_water_shutoff');
+    expect(water?.location).toBe('Basement · Utility Room — behind the furnace');
+  });
+
+  it('still lists a recorded shut-off in the SMS even with no location at all', () => {
+    const sheet = sheetWithUtilities([
+      makeUtility({
+        id: 'util-water',
+        utility_type: 'main_water_shutoff',
+        name: 'Main water shut-off',
+        room_id: null,
+        location_notes: null
+      })
+    ]);
+
+    // Previously the compact builder filtered on a non-empty location, so this
+    // shut-off vanished from the text message entirely.
+    expect(serviceCallToCompactText(sheet)).toContain('Main water shut-off');
+  });
+});
+
+describe('privacy filter false positives (BUG-4)', () => {
+  it('keeps ordinary heating and hardware vocabulary readable', () => {
+    const sheet = sheetWithUtilities([
+      makeUtility({
+        id: 'util-boiler',
+        utility_type: 'furnace',
+        name: 'Combination boiler',
+        room_id: null,
+        location_notes: 'valve is stiff — tap the cotter pin'
+      })
+    ]);
+
+    const boiler = sheet.safety.find((item) => item.utilityType === 'furnace');
+    expect(boiler?.name).toBe('Combination boiler');
+    expect(boiler?.location).toBe('valve is stiff — tap the cotter pin');
+  });
+
+  it('still withholds genuine access codes', () => {
+    const sheet = sheetWithUtilities([
+      makeUtility({
+        id: 'util-panel',
+        utility_type: 'electrical_panel',
+        name: 'Electrical panel',
+        room_id: null,
+        location_notes: 'behind the keypad, code 4417'
+      })
+    ]);
+
+    const panel = sheet.safety.find((item) => item.utilityType === 'electrical_panel');
+    expect(panel?.location).toBe('Hidden by privacy rule');
   });
 });

@@ -6,7 +6,8 @@ import { getDemoRooms } from '../lib/demoStorage';
 import {
   getAvailableLocationPresets,
   isLocationPresetValue,
-  resolveLocationRoomId
+  resolveLocationRoomId,
+  rollbackCreatedLocation
 } from '../lib/locationPresets';
 import { getRoomsForProperty } from '../lib/rooms';
 import {
@@ -136,24 +137,31 @@ export default function AddUtilityPage() {
     setSaving(true);
     setError('');
 
+    const resolutionContext =
+      context.mode === 'supabase' && context.property
+        ? ({ mode: 'supabase', propertyId: context.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
     try {
-      const resolvedRoomId = await resolveLocationRoomId(
-        roomId,
-        context.mode === 'supabase' && context.property
-          ? { mode: 'supabase', propertyId: context.property.id }
-          : { mode: 'demo' }
-      );
+      const resolved = await resolveLocationRoomId(roomId, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
 
       const createdUtility = await createUtilityForContext(context, {
         utility_type: utilityType,
         name: name.trim(),
-        room_id: resolvedRoomId,
+        room_id: resolved.roomId,
         location_notes: locationNotes.trim() || null,
         emergency_notes: emergencyNotes.trim() || null
       });
 
       router.push(`/utilities/${createdUtility.id}`);
     } catch (submitError) {
+      // Picking an outdoor preset creates a room before the utility is written.
+      // If that write fails, remove the room again rather than leaving an empty
+      // "Back yard" on the home map that the user never asked for.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
       setError(submitError instanceof Error ? submitError.message : 'Failed to save utility.');
       setSaving(false);
     }

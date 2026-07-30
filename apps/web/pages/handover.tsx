@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel, toLocalDateString } from '@home-folder/shared';
+import { formatCalendarDate, formatEnumLabel, getWarrantyMeta, toLocalDateString } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
@@ -94,9 +94,9 @@ function safeFileName(value: string | null | undefined) {
 
 function formatDate(value: string | null | undefined) {
   if (!value) return 'Not set';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  // Date-only strings must not be parsed as UTC midnight, or every date on the
+  // printed report lands a day early for anyone west of UTC.
+  return formatCalendarDate(value) || value;
 }
 
 function formatDateTime(value: string) {
@@ -124,31 +124,11 @@ function formatAmount(amount: number | null, currency: string) {
 }
 
 function warrantyExpiration(asset: HandoverReportData['assets'][number]) {
-  if (asset.warranty_expires_at) {
-    return asset.warranty_expires_at;
-  }
-
-  if (!asset.purchase_date || !asset.warranty_length_months) {
-    return null;
-  }
-
-  const date = new Date(asset.purchase_date);
-  if (Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  date.setMonth(date.getMonth() + asset.warranty_length_months);
-  return toLocalDateString(date);
+  return getWarrantyMeta(asset).expirationDate;
 }
 
 function warrantyStatus(asset: HandoverReportData['assets'][number]) {
-  const expiresAt = warrantyExpiration(asset);
-  if (!expiresAt) return 'unknown';
-
-  const daysRemaining = Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (daysRemaining < 0) return 'expired';
-  if (daysRemaining <= 30) return 'expiring_soon';
-  return 'active';
+  return getWarrantyMeta(asset).status;
 }
 
 function buildLookups(data: HandoverReportData): LookupMaps {

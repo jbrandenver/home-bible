@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-folder/shared';
 import { Button, Card, getControlStyle, Input, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
@@ -23,6 +23,7 @@ import {
 import {
   buildServiceCallEmail,
   buildServiceCallSheet,
+  formatFriendlyDate,
   sanitizePhoneForHref,
   serviceCallToCompactText,
   serviceCallToPlainText,
@@ -152,6 +153,15 @@ export default function ServiceCallSheetPage() {
     return null;
   }, [repair, rooms, assets, utilities]);
 
+  // Lets a shut-off's assigned room stand in as its location on the sheet.
+  const roomLabelFor = useCallback(
+    (roomId: string) => {
+      const room = rooms.find((candidate) => candidate.id === roomId);
+      return room ? formatRoomLocation(room) : null;
+    },
+    [rooms]
+  );
+
   const sheet: ServiceCallSheet | null = useMemo(() => {
     if (!repair) return null;
     return buildServiceCallSheet({
@@ -162,9 +172,10 @@ export default function ServiceCallSheetPage() {
       propertyAddress,
       locationLabel,
       onSiteContact: { name: contactName, phone: contactPhone },
-      typeLabelFor: formatEnumLabel
+      typeLabelFor: formatEnumLabel,
+      roomLabelFor
     });
-  }, [repair, utilities, serviceRecords, propertyName, propertyAddress, locationLabel, contactName, contactPhone]);
+  }, [repair, utilities, serviceRecords, propertyName, propertyAddress, locationLabel, contactName, contactPhone, roomLabelFor]);
 
   const plainText = useMemo(() => (sheet ? serviceCallToPlainText(sheet) : ''), [sheet]);
 
@@ -279,9 +290,9 @@ export default function ServiceCallSheetPage() {
             <p style={{ color: 'var(--text-muted)', marginBottom: 0 }}>
               No address is on this sheet.{' '}
               <Link href="/settings" style={{ textDecoration: 'underline', fontWeight: 600 }}>
-                Add your property address in Settings
-              </Link>{' '}
-              so the technician knows where to go.
+                Add it in Settings — and tick &ldquo;include this address&rdquo;
+              </Link>
+              , which is off by default, so the technician knows where to go.
             </p>
           ) : null}
         </Card>
@@ -317,7 +328,7 @@ export default function ServiceCallSheetPage() {
             <UtilityBadge label={sheet.issueTypeLabel} />
             <UtilityBadge label={`Priority: ${sheet.priorityLabel}`} tone={repair.priority === 'urgent' || repair.priority === 'high' ? 'urgent' : 'neutral'} />
             {sheet.locationLabel ? <UtilityBadge label={`Location: ${sheet.locationLabel}`} /> : null}
-            {sheet.reportedDate ? <UtilityBadge label={`Reported ${sheet.reportedDate}`} /> : null}
+            {sheet.reportedDate ? <UtilityBadge label={`Reported ${formatFriendlyDate(sheet.reportedDate)}`} /> : null}
           </div>
         </header>
 
@@ -407,7 +418,7 @@ export default function ServiceCallSheetPage() {
                 <div key={index} style={{ border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '10px 14px' }}>
                   <div style={{ fontWeight: 700 }}>{record.title}</div>
                   <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-                    {[record.date, record.provider].filter(Boolean).join(' · ') || '—'}
+                    {[formatFriendlyDate(record.date), record.provider].filter(Boolean).join(' · ') || '—'}
                   </div>
                   {record.summary ? <div style={{ marginTop: 4 }}>{record.summary}</div> : null}
                 </div>

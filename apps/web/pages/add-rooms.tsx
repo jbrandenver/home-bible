@@ -7,6 +7,7 @@ import { getPrimaryPropertyForUser } from '../lib/properties';
 import { createRoomsForProperty, getRoomsForProperty, updateRoomForProperty } from '../lib/rooms';
 import { formatRoomLocation, formatRoomTypeLabel } from '../lib/roomLabels';
 import { getDemoActiveProperty, getDemoRooms, setDemoRooms } from '../lib/demoStorage';
+import { ActionLink } from '../components/ActionLink';
 
 type Room = {
   id: string;
@@ -19,7 +20,14 @@ type Room = {
 export default function AddRoomsPage() {
   const router = useRouter();
 
-  const [userId, setUserId] = useState<string | null>(null);
+  // One explicit mode, so the reassurance banner and the write path can never
+  // disagree. Previously the banner branched on `userId` while the write
+  // branched on `userId && supabaseReady && activePropertyId`, so a signed-in
+  // user with no property saw "Saved to your account" while the data went to
+  // localStorage.
+  type DataMode = 'loading' | 'account' | 'needs-property' | 'demo' | 'error';
+
+  const [dataMode, setDataMode] = useState<DataMode>('loading');
   const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [roomName, setRoomName] = useState('');
@@ -49,25 +57,33 @@ export default function AddRoomsPage() {
           return;
         }
 
-        setUserId(user.id);
-
-        if (property) {
-          setActivePropertyId(property.id);
-          setPropertyNickname(property.nickname || 'Your property');
-          const remoteRooms = await getRoomsForProperty(property.id);
-          if (isMounted) {
-            setRooms(
-              remoteRooms.map((room) => ({
-                id: room.id,
-                name: room.name,
-                room_type: room.room_type,
-                floor_name: room.floor_name,
-                notes: room.notes || null
-              }))
-            );
-          }
+        if (!property) {
+          // Signed in but no property yet. Critically, do NOT fall through to
+          // the demo branch: adopting the localStorage property id here made
+          // the save path believe it was authorised, and Postgres rejected the
+          // insert with a raw "violates row-level security policy" message.
+          setDataMode('needs-property');
+          setActivePropertyId(null);
+          setRooms([]);
           return;
         }
+
+        setActivePropertyId(property.id);
+        setPropertyNickname(property.nickname || 'Your property');
+        const remoteRooms = await getRoomsForProperty(property.id);
+        if (isMounted) {
+          setRooms(
+            remoteRooms.map((room) => ({
+              id: room.id,
+              name: room.name,
+              room_type: room.room_type,
+              floor_name: room.floor_name,
+              notes: room.notes || null
+            }))
+          );
+          setDataMode('account');
+        }
+        return;
       }
 
       const demoProperty = getDemoActiveProperty();
@@ -83,10 +99,13 @@ export default function AddRoomsPage() {
       }
 
       setRooms(demoRooms);
+      setDataMode('demo');
     }
 
     load().catch((err) => {
       if (isMounted) {
+        // Never silently downgrade a signed-in user to demo data on a failure.
+        setDataMode('error');
         setError(err instanceof Error ? err.message : 'Failed to load data.');
       }
     });
@@ -94,7 +113,7 @@ export default function AddRoomsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [supabaseReady]);
 
   function saveRooms(nextRooms: Room[]) {
     setRooms(nextRooms);
@@ -131,7 +150,7 @@ export default function AddRoomsPage() {
 
     setIsSubmitting(true);
 
-    if (userId && supabaseReady && activePropertyId) {
+    if (dataMode === 'account' && activePropertyId) {
       try {
         const remoteRooms = await createRoomsForProperty(activePropertyId, [
           {
@@ -189,7 +208,7 @@ export default function AddRoomsPage() {
     setError('');
     setIsEditing(true);
 
-    if (userId && supabaseReady && activePropertyId) {
+    if (dataMode === 'account' && activePropertyId) {
       try {
         const remoteRooms = await updateRoomForProperty(activePropertyId, editingRoomId, {
           name: editRoomName.trim(),
@@ -249,11 +268,34 @@ export default function AddRoomsPage() {
           description="Start simple. You can add detailed outlets, vents, utilities, appliances, and accessories later."
         />
 
-        {userId ? (
+        {dataMode === 'account' ? (
           <Card>
             <p style={{ margin: 0, color: 'var(--status-good)' }}>
               Saved to your account.
             </p>
+          </Card>
+        ) : dataMode === 'needs-property' ? (
+          <Card>
+            <p style={{ margin: 0, fontWeight: 600 }}>Create a property first.</p>
+            <p style={{ marginTop: 8, marginBottom: 12, color: 'var(--text-muted)' }}>
+              Rooms and spaces belong to a property, so there is nowhere to save
+              them yet. This takes a moment and only needs doing once.
+            </p>
+            <ActionLink href="/create-property">Create property</ActionLink>
+          </Card>
+        ) : dataMode === 'error' ? (
+          <Card>
+            <p style={{ margin: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
+              We could not load your home record.
+            </p>
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--text-muted)' }}>
+              Nothing has been changed. Reload the page to try again — your saved
+              rooms are still in your account.
+            </p>
+          </Card>
+        ) : dataMode === 'loading' ? (
+          <Card>
+            <p style={{ margin: 0, color: 'var(--text-muted)' }}>Loading your home record...</p>
           </Card>
         ) : (
           <Card>
