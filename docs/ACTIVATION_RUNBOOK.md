@@ -212,6 +212,42 @@ when idle, and a paused project means someone pays and gets nothing. Stripe
 retries for three days, which saves you only if you notice. Against $29–79
 products that is one extra sale a month.
 
+### The Portfolio plan (recurring subscription)
+
+The landlord tier (migration 023, `product_key = portfolio_plan`) is a
+**recurring** price, unlike the two one-time packs. Same webhook, three extra
+moving parts:
+
+**1. Create one Product with a recurring monthly Price** (suggested anchor:
+$29/mo covering up to 10 doors — the 2026 market research in
+docs/PORTFOLIO.md justifies $29–49 + per-unit beyond, but start simple with
+one flat price). Create a **Payment Link** for it and set metadata
+`product_key` to `portfolio_plan` on the link. Enable email collection.
+
+**2. Subscribe the webhook to three more events** in addition to the ones in
+step 4 above: `invoice.paid`, `customer.subscription.deleted`. (You can also
+add `customer.subscription.updated`; the handler ignores what it doesn't
+know.) The lifecycle: checkout stamps `provider_subscription_id` and an
+`expires_at` at period end + 3 days grace; every `invoice.paid` rolls
+`expires_at` forward; `customer.subscription.deleted` revokes. A missed
+cancellation webhook therefore fails **safe** — access lapses at the end of
+the last paid period instead of living forever.
+
+**3. Expose the checkout to the app.** The portfolio page reads
+`NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK` at build time; set it in the
+host's env (Vercel/Cloudflare) to the Payment Link URL. Until it is set, the
+portfolio features stay visible but ungated (deliberate: never gate users
+behind a checkout that does not exist), and the upgrade card says "not yet
+available".
+
+Extra tests worth running for subscriptions:
+- Complete a subscription checkout → entitlement row with
+  `provider_subscription_id` set and `expires_at` ≈ one month + 3 days out.
+- `stripe trigger invoice.paid` for that subscription → `expires_at` moves.
+- Cancel the subscription in the Stripe dashboard → row flips to `revoked`.
+- Let a test-clock subscription lapse without events → `has_entitlement`
+  returns false after `expires_at` passes (no webhook needed).
+
 ### Tax
 
 Sell **US-only at first** and set a country restriction on the checkout. The EU

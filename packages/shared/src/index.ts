@@ -7,7 +7,9 @@ export const PROPERTY_TYPES = [
   'townhome',
   'duplex',
   'cabin',
-  'rental_home'
+  'rental_home',
+  'apartment_building',
+  'multi_family'
 ] as const;
 
 export const ROOM_TYPES = [
@@ -258,7 +260,10 @@ export const DOCUMENT_TYPES = [
   'asset_document',
   'repair_document',
   'issue_document',
-  'other'
+  'other',
+  'condition_photo',
+  'compliance_certificate',
+  'tenancy_document'
 ] as const;
 
 export const DOCUMENT_VISIBILITIES = [
@@ -1034,5 +1039,94 @@ export function formatEnumLabel(value: string) {
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
 }
+
+// --- Portfolio (landlord / multi-unit) -------------------------------------
+// Units are properties with parent_property_id set; see migration 023. These
+// mirror the DB check constraints exactly, same as every enum above.
+
+export const TENANCY_STATUSES = ['upcoming', 'active', 'ended'] as const;
+
+export const CONDITION_REPORT_TYPES = [
+  'move_in',
+  'move_out',
+  'move_out_after_repairs',
+  'periodic'
+] as const;
+
+export const CONDITION_REPORT_STATUSES = ['draft', 'completed'] as const;
+
+export const CONDITION_RATINGS = ['good', 'fair', 'poor', 'damaged'] as const;
+
+export const COMPLIANCE_OBLIGATION_TYPES = [
+  'registration',
+  'license',
+  'inspection',
+  'certification',
+  'notice',
+  'tax',
+  'insurance',
+  'other'
+] as const;
+
+// Product key the Stripe webhook grants for the recurring landlord plan.
+export const PORTFOLIO_PRODUCT_KEY = 'portfolio_plan';
+
+export type TenancyStatus = (typeof TENANCY_STATUSES)[number];
+export type ConditionReportType = (typeof CONDITION_REPORT_TYPES)[number];
+export type ConditionReportStatus = (typeof CONDITION_REPORT_STATUSES)[number];
+export type ConditionRating = (typeof CONDITION_RATINGS)[number];
+export type ComplianceObligationType = (typeof COMPLIANCE_OBLIGATION_TYPES)[number];
+
+export const createTenancySchema = z.object({
+  property_id: z.string().uuid(),
+  label: z.string().min(1, 'A label is required').max(200),
+  tenant_names: z.string().max(500).optional().nullable(),
+  start_date: z.string().optional().nullable(),
+  end_date: z.string().optional().nullable(),
+  deposit_amount_cents: z.coerce.number().int().min(0).optional().nullable(),
+  deposit_currency: z.string().max(8).default('usd'),
+  deposit_returned_on: z.string().optional().nullable(),
+  status: z.enum(TENANCY_STATUSES).default('active'),
+  notes: z.string().max(10000).optional().nullable()
+});
+
+export const createConditionReportSchema = z.object({
+  property_id: z.string().uuid(),
+  tenancy_id: z.string().uuid().optional().nullable(),
+  report_type: z.enum(CONDITION_REPORT_TYPES),
+  report_date: z.string().min(1, 'A report date is required'),
+  conducted_by: z.string().max(200).optional().nullable(),
+  summary: z.string().max(10000).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable()
+});
+
+export const createConditionReportEntrySchema = z.object({
+  report_id: z.string().uuid(),
+  property_id: z.string().uuid(),
+  room_id: z.string().uuid().optional().nullable(),
+  area_label: z.string().max(200).optional().nullable(),
+  condition_rating: z.enum(CONDITION_RATINGS).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable(),
+  sort_order: z.coerce.number().int().default(0)
+});
+
+export const createComplianceObligationSchema = z.object({
+  property_id: z.string().uuid(),
+  title: z.string().min(1, 'A title is required').max(300),
+  authority: z.string().max(300).optional().nullable(),
+  jurisdiction: z.string().max(200).optional().nullable(),
+  obligation_type: z.enum(COMPLIANCE_OBLIGATION_TYPES).default('other'),
+  frequency_months: z.coerce.number().int().min(1).max(240).optional().nullable(),
+  next_due: z.string().optional().nullable(),
+  last_completed_on: z.string().optional().nullable(),
+  retention_years: z.coerce.number().int().min(0).max(100).optional().nullable(),
+  reference_url: z.string().max(2000).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable()
+});
+
+export type CreateTenancyInput = z.infer<typeof createTenancySchema>;
+export type CreateConditionReportInput = z.infer<typeof createConditionReportSchema>;
+export type CreateConditionReportEntryInput = z.infer<typeof createConditionReportEntrySchema>;
+export type CreateComplianceObligationInput = z.infer<typeof createComplianceObligationSchema>;
 
 export * from './automation';

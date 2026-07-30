@@ -156,7 +156,9 @@ function buildDemoProperty(): PropertySummary | null {
     owner_user_id: 'demo',
     nickname: demoProperty.nickname,
     property_type: demoProperty.property_type,
-    created_at: demoProperty.created_at
+    created_at: demoProperty.created_at,
+    parent_property_id: null,
+    unit_label: null
   };
 }
 

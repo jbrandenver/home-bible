@@ -21,6 +21,27 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const PRODUCT_KEYS = new Set(['handover_pack', 'insurance_evidence_pack']);
 
+// Recurring plans. A subscription entitlement carries provider_subscription_id
+// and a rolling expires_at: stamped at checkout, extended by every paid
+// invoice, cut off by subscription deletion. has_entitlement() already honours
+// expires_at, so a missed cancellation webhook fails SAFE — access lapses at
+// the end of the last paid period plus grace, rather than living forever.
+const SUBSCRIPTION_PRODUCT_KEYS = new Set(['portfolio_plan']);
+
+// Grace beyond the paid period, covering invoice-retry windows and webhook
+// delivery lag so a paying customer never sees a flicker of lost access.
+const SUBSCRIPTION_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
+
+function subscriptionExpiry(periodEndSeconds: number | null | undefined): string {
+  const base =
+    typeof periodEndSeconds === 'number' && Number.isFinite(periodEndSeconds)
+      ? periodEndSeconds * 1000
+      : // No period on the object (rare) — 35 days covers monthly billing
+        // until the first invoice.paid arrives to set the real horizon.
+        Date.now() + 35 * 24 * 60 * 60 * 1000;
+  return new Date(base + SUBSCRIPTION_GRACE_MS).toISOString();
+}
+
 Deno.serve(async (request) => {
   if (request.method !== 'POST') {
     return json({ error: 'Method not allowed.' }, 405);
@@ -121,7 +142,9 @@ Deno.serve(async (request) => {
         userId = byEmail?.id ?? null;
       }
 
-      if (!userId || !PRODUCT_KEYS.has(productKey)) {
+      const isSubscription = SUBSCRIPTION_PRODUCT_KEYS.has(productKey);
+
+      if (!userId || (!PRODUCT_KEYS.has(productKey) && !isSubscription)) {
         // Money taken, nobody to credit. This must land somewhere visible
         // rather than vanishing into the logs.
         await supabase.from('unmatched_purchases').insert({
@@ -136,6 +159,27 @@ Deno.serve(async (request) => {
         return json({ ok: true, unmatched: true });
       }
 
+      const subscriptionId =
+        typeof session.subscription === 'string' ? session.subscription : null;
+
+      // For a subscription checkout, anchor expires_at to the subscription's
+      // real billing period rather than guessing from today.
+      let expiresAt: string | null = null;
+      if (isSubscription) {
+        let periodEnd: number | null = null;
+        if (subscriptionId) {
+          try {
+            const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+            periodEnd = subscription.current_period_end ?? null;
+          } catch (retrieveError) {
+            console.error('stripe-webhook: could not retrieve subscription', {
+              message: retrieveError instanceof Error ? retrieveError.message : 'unknown'
+            });
+          }
+        }
+        expiresAt = subscriptionExpiry(periodEnd);
+      }
+
       const { error: grantError } = await supabase.from('entitlements').insert({
         user_id: userId,
         product_key: productKey,
@@ -143,8 +187,10 @@ Deno.serve(async (request) => {
         provider_checkout_id: session.id,
         provider_payment_intent_id:
           typeof session.payment_intent === 'string' ? session.payment_intent : null,
+        provider_subscription_id: subscriptionId,
         amount_total_cents: session.amount_total ?? null,
         currency: session.currency ?? null,
+        expires_at: expiresAt,
         status: 'active'
       });
 
@@ -155,6 +201,41 @@ Deno.serve(async (request) => {
       }
 
       return json({ ok: true, granted: productKey });
+    }
+
+    if (event.type === 'invoice.paid') {
+      const invoice = event.data.object as Stripe.Invoice;
+      const subscriptionId =
+        typeof invoice.subscription === 'string' ? invoice.subscription : null;
+
+      if (subscriptionId) {
+        // Roll the horizon forward to the end of the period this invoice paid
+        // for. Update-if-exists on purpose: an invoice for a subscription we
+        // never granted (or already refunded) is not an invitation to grant.
+        const periodEnd = invoice.lines?.data?.[0]?.period?.end ?? null;
+        await supabase
+          .from('entitlements')
+          .update({ expires_at: subscriptionExpiry(periodEnd) })
+          .eq('provider_subscription_id', subscriptionId)
+          .eq('status', 'active');
+      }
+
+      return json({ ok: true, renewed: Boolean(subscriptionId) });
+    }
+
+    if (event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object as Stripe.Subscription;
+
+      // Same bookkeeping stance as refunds: never hard-delete, the row is the
+      // audit trail. Access ends now rather than at period end because Stripe
+      // only emits this event once the subscription is truly over.
+      await supabase
+        .from('entitlements')
+        .update({ status: 'revoked', revoked_at: new Date().toISOString() })
+        .eq('provider_subscription_id', subscription.id)
+        .eq('status', 'active');
+
+      return json({ ok: true, revoked: true });
     }
 
     if (event.type === 'charge.refunded' || event.type === 'charge.dispute.created') {

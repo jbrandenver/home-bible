@@ -111,6 +111,11 @@ What I need from you:
 - A **Stripe account**.
 - A **CPA's view** on whether your state taxes digital products. I deliberately
   did not research state tax rules; a wrong answer there costs real money.
+- **(New, 2026-07-30)** When you create the Stripe account, also create the
+  **Portfolio plan** recurring price (suggested $29/mo) alongside the two
+  one-time packs, and set `NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK` on the
+  web host. Steps and pricing rationale: docs/ACTIVATION_RUNBOOK.md §B and
+  docs/PORTFOLIO.md. Until then the landlord features run ungated on purpose.
 
 Two things worth knowing before you commit:
 - Selling **US-only avoids EU/UK VAT entirely**, which has no de-minimis
