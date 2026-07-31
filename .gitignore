@@ -10,3 +10,6 @@ build
 .DS_Store
 supabase/.branches
 supabase/.temp
+
+# OpenNext build output (Cloudflare Workers deploy)
+.open-next/

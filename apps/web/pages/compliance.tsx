@@ -134,7 +134,7 @@ function ObligationFormFields({
   draft: ObligationDraft;
   onChange: (next: ObligationDraft) => void;
   idPrefix: string;
-  titleInputRef?: React.RefObject<HTMLInputElement>;
+  titleInputRef?: React.RefObject<HTMLInputElement | null>;
 }) {
   const set = (patch: Partial<ObligationDraft>) => onChange({ ...draft, ...patch });
 
