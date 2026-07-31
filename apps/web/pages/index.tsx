@@ -302,7 +302,7 @@ export default function Home() {
           <span style={monoLabel}>Section IV</span>
         </div>
         <div style={{ display: 'grid', gap: 4 }}>
-          <PlateRow label="Free to begin" value="Your home and one more place, free — no card to start" />
+          <PlateRow label="Free to begin" value="The home you live in, free forever — no card to start" />
           <PlateRow label="Private by design" value="Your record is yours; sharing is by your invitation only" />
           <PlateRow label="Yours to take" value="Export everything, any time, in open formats" />
           <PlateRow label="Try before you commit" value="The in-browser demo keeps its data on your device" />

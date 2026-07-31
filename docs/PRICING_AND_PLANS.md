@@ -1,6 +1,6 @@
 # Pricing and plans — what, how much, and why
 
-Written 2026-07-30. Every price in the product, the evidence behind it, and
+Written 2026-07-30; fee ladder revised 2026-07-31 (first home free, $4.99/mo per additional home to 3, Portfolio from the 4th, $9.99 pro binder). Every price in the product, the evidence behind it, and
 the unit economics. The reasoning trail: market research summarized in
 PORTFOLIO.md and THREAT_MITIGATION.md; decisions cross-referenced to
 DECISIONS.md.
@@ -22,16 +22,26 @@ DECISIONS.md.
 
 | Plan | Price | Who | What it includes | Status |
 |---|---|---|---|---|
-| **Free** | $0 forever | Homeowners | The entire home record: rooms, systems, assets, documents, repairs, sharing, handover report, export (incl. files), reminders, recall monitoring | Live |
-| **Portfolio** | **$29/mo** (product_key `portfolio_plan`) | Landlords, 3+ doors or any building | Everything, across unlimited properties/units + roll-up dashboard, tenancies, condition reports & deposit packets, compliance calendar | Built; gated softly until Stripe exists |
+| **Free** | $0 forever | Homeowners | The entire home record for the home you live in: rooms, systems, assets, documents, repairs, sharing, handover report, export (incl. files), reminders, recall monitoring | Live |
+| **Additional Homes** | **$4.99/mo per additional home** (homes 2–3) | Second place, cabin, a parent's house | The same complete record, per home, up to 3 homes in all | Ruled 2026-07-31; on /pricing; needs Stripe product + entitlement |
+| **Portfolio** | **$29/mo** (product_key `portfolio_plan`) | Landlords, 4+ homes or any building | Everything, across unlimited properties/units + roll-up dashboard, tenancies, condition reports & deposit packets, compliance calendar | Built; gated softly until Stripe exists |
 | **Handover Pack** | $49 one-time (indicative $29–79) | Sellers | The polished, buyer-ready handover artifact | Plumbing built; product artifact not yet |
 | **Insurance / Claim-Ready Pack** | $49 one-time (indicative) | Claimants | Adjuster-formatted inventory + condition photos + maintenance log | Plumbing built; formatting is Phase 1 |
-| **Pro binder** (future, Phase 5) | $10–25 per report, pro pays | Inspectors/agents | Pre-seeded, co-branded record handed to the buyer | Designed (THREAT_MITIGATION T6) |
+| **Pro binder** | **$9.99 per binder**, one-time, pro pays (ruled 2026-07-31; free during early access) | Inspectors/agents | Pre-seeded, co-branded record handed to the buyer; recipient free forever | Channel live (/pro); billing not switched on |
 
-**Free allowance inside Free:** 2 properties (`FREE_PROPERTY_ALLOWANCE`) —
-a home plus one more (rental, cabin, parent's house). The plan boundary is
-the *third* door or the first building, because that's where a portfolio
-starts and where roll-ups/compliance become the daily tool.
+**Free allowance inside Free:** 1 property — the home you live in (ruled
+2026-07-31, superseding the earlier 2-property allowance). Homes 2–3 are
+$4.99/mo each; the Portfolio boundary is the *fourth* home or the first
+building, because that's where a portfolio starts and where
+roll-ups/compliance become the daily tool.
+
+> **Enforcement lag (deliberate):** `FREE_PROPERTY_ALLOWANCE` in
+> `apps/web/lib/entitlements.ts` still allows 2 free properties. Do not
+> tighten it until the $4.99/home Stripe product and entitlement exist —
+> blocking a second home with nothing to buy would only lose signups, and
+> the lag errs in the customer's favor. Stripe work needed: a $4.99/mo
+> per-home recurring price, a per-home entitlement, and the $9.99 pro-binder
+> one-time price.
 
 ## Why these numbers
 
@@ -42,6 +52,20 @@ starts and where roll-ups/compliance become the daily tool.
   chain, and asset registry, which justifies the Hemlane-style flat anchor.
   $29 covers ~10 doors comfortably; per-unit pricing beyond (~$2–3/unit) is
   a later step once real portfolios show up (D-20).
+- **$4.99/mo per additional home.** Market-checked 2026-07-31: HomeZada —
+  the closest living competitor — charges $99/yr (~$8.25/mo) per property
+  beyond its included three, on top of Premium $15.95/mo / Deluxe $189/yr.
+  Per-home add-on pricing is an accepted pattern and $4.99 undercuts it by
+  ~40% while keeping the first home free (philosophy #1 intact).
+- **$9.99 pro binder.** Market-checked 2026-07-31: HomeBinder charges
+  inspectors $49/mo for unlimited binders (effective $1–2.50/binder at
+  volume, $5–10 low-volume); RecallChek's consumer report price is $29.95
+  and inspectors charge ~$25 as an add-on; inspectors bundling a binder
+  raise inspection prices $20–80. $9.99 one-time sits under every anchor
+  while roughly doubling revenue vs the $4.99 floor Jesse first proposed;
+  the per-binder gate (not per-account) is what prevents free-account
+  farming, since the co-branded pre-seeded binder is the thing a pro
+  cannot get free.
 - **$49 packs.** Anchored against: competitor pricing the sale moment at $99
   one-time; RecallChek charging consumers $29.95 for a recall report;
   closing-gift budgets of $50–300. One-time, no Stripe Billing fee.

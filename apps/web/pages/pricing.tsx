@@ -7,10 +7,14 @@ import { Seo } from '../components/Seo';
 /* Schedule of fees — the register's pricing page (Persuade). Same direction
    contract as pages/index.tsx: a fee schedule inside the instrument, not a
    SaaS pricing-card triptych. Every particular below is drawn from the code
-   (lib/entitlements.ts FREE_PROPERTY_ALLOWANCE, pages/pro.tsx early-access
-   status); Portfolio is $29/mo per docs/PRICING_AND_PLANS.md — if that ruling
-   ever changes, change the Stripe Payment Link, the doc, and this page
-   together so the page never contradicts the bill. */
+   (pages/pro.tsx early-access status); the fee ladder is the 2026-07-31
+   ruling in docs/PRICING_AND_PLANS.md — first home free, $4.99/mo per
+   additional home through the third, Portfolio $29/mo unlimited from the
+   fourth, pro binders $9.99 one-time. If a number changes, change the Stripe
+   products, the doc, and this page together so the page never contradicts
+   the bill. NOTE: enforcement is soft until the Stripe products exist —
+   lib/entitlements.ts still allows 2 free properties, which only ever errs
+   in the customer's favor. */
 
 const monoLabel: CSSProperties = {
   fontFamily: 'var(--font-mono)',
@@ -26,7 +30,7 @@ export default function PricingPage() {
     <div style={{ display: 'grid', gap: 28 }}>
       <Seo
         title="Pricing — Our Home Folder"
-        description="The schedule of fees: your home and one more place free, the Portfolio plan for more properties, and a professional channel for inspectors. No card to begin."
+        description="The schedule of fees: the home you live in free forever, $4.99 a month per additional home up to three, the Portfolio plan for unlimited homes, and a professional channel for inspectors. No card to begin."
         path="/pricing"
       />
 
@@ -60,15 +64,15 @@ export default function PricingPage() {
         </div>
         <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
           <div>
-            <h2 style={{ marginTop: 0, marginBottom: 8 }}>Your home, and one more place</h2>
+            <h2 style={{ marginTop: 0, marginBottom: 8 }}>The home you live in, free forever</h2>
             <p style={{ marginBottom: 0 }}>
-              The free register covers a homeowner&rsquo;s normal life: the home you live in plus
-              one more place — a rental, the cabin, a parent&rsquo;s house. Everything the record
-              does is included; nothing is held back to sell it to you later.
+              Your home&rsquo;s complete record costs nothing — rooms, systems, papers, repairs,
+              sharing, and the handover. Everything the record does is included; nothing is held
+              back to sell it to you later.
             </p>
           </div>
           <div>
-            <PlateRow label="Properties" value="Two, complete" />
+            <PlateRow label="Properties" value="One, complete" />
             <PlateRow label="Rooms · systems · papers" value="Unlimited entries" />
             <PlateRow label="Sharing" value="Invite your household, roles you control" />
             <PlateRow label="Handover & export" value="Included, any time" />
@@ -80,10 +84,34 @@ export default function PricingPage() {
         </div>
       </Card>
 
-      {/* ── Entry 2 · The portfolio ───────────────────────────────────── */}
+      {/* ── Entry 2 · Additional homes ────────────────────────────────── */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-          <span className="hb-registry">Entry 2 · The Portfolio</span>
+          <span className="hb-registry">Entry 2 · Additional Homes</span>
+          <PlateSeal>Subscription</PlateSeal>
+        </div>
+        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
+          <div>
+            <h2 style={{ marginTop: 0, marginBottom: 8 }}>A second or third place</h2>
+            <p style={{ marginBottom: 0 }}>
+              The cabin, a rental, a parent&rsquo;s house — each additional home gets the same
+              complete record as your first, for a small monthly fee per home, up to three homes
+              in all.
+            </p>
+          </div>
+          <div>
+            <PlateRow label="Fee" value="$4.99 a month, per additional home" />
+            <PlateRow label="Covers" value="Homes two and three" />
+            <PlateRow label="Everything in the free register" value="Included, per home" />
+            <PlateRow label="Cancel" value="Any time — your records remain exportable" />
+          </div>
+        </div>
+      </Card>
+
+      {/* ── Entry 3 · The portfolio ───────────────────────────────────── */}
+      <Card>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+          <span className="hb-registry">Entry 3 · The Portfolio</span>
           <PlateSeal>Subscription</PlateSeal>
         </div>
         <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
@@ -92,7 +120,7 @@ export default function PricingPage() {
             <p style={{ marginBottom: 0 }}>
               Landlords and caretakers of several properties keep a register per property —
               tenancies, condition reports, compliance dates, and a clean handover for each. The
-              Portfolio plan opens the third property and beyond.
+              Portfolio plan opens the fourth home and beyond.
             </p>
           </div>
           <div>
@@ -104,14 +132,14 @@ export default function PricingPage() {
           </div>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: 16, marginBottom: 0 }}>
-          Begin free; upgrade from inside your account when the third property arrives.
+          Begin free; upgrade from inside your account when the fourth home arrives.
         </p>
       </Card>
 
-      {/* ── Entry 3 · The professional channel ────────────────────────── */}
+      {/* ── Entry 4 · The professional channel ────────────────────────── */}
       <Card>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-          <span className="hb-registry">Entry 3 · The Professional Channel</span>
+          <span className="hb-registry">Entry 4 · The Professional Channel</span>
           <PlateSeal tone="good">Free in early access</PlateSeal>
         </div>
         <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', alignItems: 'start' }}>
@@ -124,7 +152,7 @@ export default function PricingPage() {
             </p>
           </div>
           <div>
-            <PlateRow label="For the professional" value="Per binder issued, one-time" />
+            <PlateRow label="For the professional" value="$9.99 per binder issued, one-time" />
             <PlateRow label="During early access" value="Binders are free" />
             <PlateRow label="For the recipient" value="Free, forever" />
           </div>
