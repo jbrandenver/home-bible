@@ -407,6 +407,12 @@ verify_jwt = false
 [functions.check-recalls]
 verify_jwt = false
 
+# Signed-in users only: Supabase validates the caller's JWT at the gateway
+# before invoking, so the handler can trust the token payload it reads the
+# user id from. Inert (503) until ANTHROPIC_API_KEY is set.
+[functions.analyze-plate]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

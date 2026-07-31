@@ -13,6 +13,16 @@ import {
   type SharingPreview,
   type SharingRole
 } from '../lib/sharing';
+import { getHandoverContext } from '../lib/handover';
+import {
+  createPropertyTransfer,
+  formatTransferCode,
+  listPropertyTransfers,
+  revokePropertyTransfer,
+  transferStatus,
+  type PropertyTransferRow,
+  type TransferKeepRole
+} from '../lib/transfers';
 
 type Linkable = {
   room_id?: string | null;
@@ -129,6 +139,31 @@ export default function SharingPage() {
   const [inviteError, setInviteError] = useState('');
   const [inviteNotice, setInviteNotice] = useState('');
 
+  // Transfer ownership (migration 025). Only the property owner sees this
+  // section — same signal the RPC enforces (properties.owner_user_id), read
+  // from the shared handover context the rest of this page's data flows from.
+  const [transferProperty, setTransferProperty] = useState<{
+    id: string;
+    nickname: string;
+    isOwner: boolean;
+    isUnit: boolean;
+  } | null>(null);
+  const [transfers, setTransfers] = useState<PropertyTransferRow[]>([]);
+  const [transfersLoading, setTransfersLoading] = useState(true);
+  const [creatingTransfer, setCreatingTransfer] = useState(false);
+  const [revokingTransferId, setRevokingTransferId] = useState('');
+  const [transferEmail, setTransferEmail] = useState('');
+  const [transferKeepRole, setTransferKeepRole] = useState<'' | TransferKeepRole>('');
+  const [transferExpiryDays, setTransferExpiryDays] = useState('14');
+  const [transferError, setTransferError] = useState('');
+  const [transferNotice, setTransferNotice] = useState('');
+  // The raw code lives only in this state, only until the page unmounts.
+  const [createdTransfer, setCreatedTransfer] = useState<{
+    code: string;
+    expiresAt: string;
+    claimUrl: string;
+  } | null>(null);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -188,6 +223,111 @@ export default function SharingPage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadTransfers() {
+      setTransfersLoading(true);
+      setTransferError('');
+
+      try {
+        const context = await getHandoverContext();
+        if (!isMounted) return;
+
+        if (context.mode !== 'supabase' || !context.user || !context.property) {
+          setTransferProperty(null);
+          return;
+        }
+
+        const property = {
+          id: context.property.id,
+          nickname: context.property.nickname,
+          isOwner: context.property.owner_user_id === context.user.id,
+          isUnit: Boolean(context.property.parent_property_id)
+        };
+        setTransferProperty(property);
+
+        if (property.isOwner) {
+          const rows = await listPropertyTransfers(property.id);
+          if (isMounted) {
+            setTransfers(rows);
+          }
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setTransferError(loadError instanceof Error ? loadError.message : 'Failed to load transfers.');
+        }
+      } finally {
+        if (isMounted) {
+          setTransfersLoading(false);
+        }
+      }
+    }
+
+    loadTransfers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const createTransfer = async (event: FormEvent) => {
+    event.preventDefault();
+    if (creatingTransfer || !transferProperty) return;
+
+    const confirmed = window.confirm(
+      `Create a transfer code for “${transferProperty.nickname}”? Whoever claims it becomes the owner of this entire record — the property, any units, and everything documented inside. Every existing share and open invitation is removed when they claim, and a claimed transfer cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setCreatingTransfer(true);
+    setTransferError('');
+    setTransferNotice('');
+    setCreatedTransfer(null);
+
+    try {
+      const created = await createPropertyTransfer({
+        propertyId: transferProperty.id,
+        recipientEmail: transferEmail || null,
+        keepIssuerRole: transferKeepRole || null,
+        expiresInSeconds: Number(transferExpiryDays) * 86400
+      });
+      setCreatedTransfer({
+        code: created.transferCode,
+        expiresAt: created.expiresAt,
+        claimUrl: `${window.location.origin}/claim`
+      });
+      setTransfers(await listPropertyTransfers(transferProperty.id));
+    } catch (createError) {
+      setTransferError(createError instanceof Error ? createError.message : 'Failed to create the transfer.');
+    } finally {
+      setCreatingTransfer(false);
+    }
+  };
+
+  const revokeTransfer = async (transferId: string) => {
+    if (revokingTransferId || !transferProperty) return;
+
+    const confirmed = window.confirm(
+      'Revoke this transfer code? The code stops working immediately and the record stays with you.'
+    );
+    if (!confirmed) return;
+
+    setRevokingTransferId(transferId);
+    setTransferError('');
+    setTransferNotice('');
+
+    try {
+      await revokePropertyTransfer(transferId);
+      setTransferNotice('Transfer revoked. The code no longer works.');
+      setTransfers(await listPropertyTransfers(transferProperty.id));
+    } catch (revokeError) {
+      setTransferError(revokeError instanceof Error ? revokeError.message : 'Failed to revoke the transfer.');
+    } finally {
+      setRevokingTransferId('');
+    }
+  };
 
   const createInvite = async (event: FormEvent) => {
     event.preventDefault();
@@ -381,6 +521,170 @@ export default function SharingPage() {
             })}
           </div>
         </Card>
+
+        {transferProperty?.isOwner ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Transfer ownership</h2>
+            <p style={subtleText}>
+              When a home sells — or passes to an heir, or an inspector prepares it for a buyer — its entire living
+              record can go with it: every serial number, paint code, repair, and manual, intact. A transfer hands this
+              whole record, units included, to a new owner.
+            </p>
+            <p style={subtleText}>
+              This is not an invitation. When the code is claimed, the claimant becomes the owner, every existing share
+              and open invitation on this record is removed, and the handoff cannot be undone. You keep access only if
+              you choose a kept role below.
+            </p>
+
+            {transferProperty.isUnit ? (
+              <p style={{ ...subtleText, marginBottom: 0 }}>
+                Units transfer with their building. Switch to the building itself to transfer the whole record.
+              </p>
+            ) : (
+              <form onSubmit={createTransfer} style={{ display: 'grid', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Recipient email (optional)</span>
+                    <input
+                      type="email"
+                      value={transferEmail}
+                      onChange={(event) => setTransferEmail(event.target.value)}
+                      placeholder="name@example.com"
+                      style={fieldStyle}
+                    />
+                    <span style={{ ...subtleText, fontSize: 13 }}>
+                      If set, only an account with this email can claim the code.
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Keep me on the record as</span>
+                    <select
+                      value={transferKeepRole}
+                      onChange={(event) => setTransferKeepRole(event.target.value as '' | TransferKeepRole)}
+                      style={fieldStyle}
+                    >
+                      <option value="">No access after handoff (recommended)</option>
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                    </select>
+                    <span style={{ ...subtleText, fontSize: 13 }}>
+                      A seller might keep read access briefly during the handoff. The new owner can remove it any time.
+                    </span>
+                  </label>
+
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Code expires in</span>
+                    <select
+                      value={transferExpiryDays}
+                      onChange={(event) => setTransferExpiryDays(event.target.value)}
+                      style={fieldStyle}
+                    >
+                      <option value="7">7 days</option>
+                      <option value="14">14 days</option>
+                      <option value="30">30 days</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div>
+                  <Button type="submit" disabled={creatingTransfer}>
+                    {creatingTransfer ? 'Creating...' : 'Create transfer code'}
+                  </Button>
+                </div>
+
+                {createdTransfer ? (
+                  <div
+                    style={{
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 8,
+                      padding: 14,
+                      display: 'grid',
+                      gap: 10
+                    }}
+                  >
+                    <strong>Your transfer code — we can’t show this again.</strong>
+                    <input
+                      readOnly
+                      value={formatTransferCode(createdTransfer.code)}
+                      aria-label="Transfer code"
+                      style={{ ...fieldStyle, width: '100%', fontFamily: 'var(--font-mono)' }}
+                    />
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={async () => {
+                          await navigator.clipboard?.writeText(formatTransferCode(createdTransfer.code));
+                          setTransferNotice('Transfer code copied.');
+                        }}
+                      >
+                        Copy code
+                      </Button>
+                      <span style={subtleText}>
+                        Send it to the new owner along with {createdTransfer.claimUrl} — they claim it there. Expires{' '}
+                        {formatDate(createdTransfer.expiresAt)}.
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {transferNotice ? <p style={{ margin: 0, color: 'var(--status-good)' }}>{transferNotice}</p> : null}
+                {transferError ? <p style={{ margin: 0, color: 'var(--status-urgent)' }}>{transferError}</p> : null}
+              </form>
+            )}
+
+            {!transferProperty.isUnit ? (
+              <div style={{ marginTop: 20 }}>
+                <h3 style={{ marginBottom: 8 }}>Issued transfers</h3>
+                {transfersLoading ? <p style={subtleText}>Loading transfers...</p> : null}
+                {!transfersLoading && transfers.length === 0 ? (
+                  <p style={{ ...subtleText, marginBottom: 0 }}>No transfers issued for this record.</p>
+                ) : null}
+                <div style={{ display: 'grid', gap: 12 }}>
+                  {transfers.map((transfer) => {
+                    const status = transferStatus(transfer, new Date().toISOString());
+                    const statusLabel =
+                      status === 'claimed' ? 'Claimed' : status === 'revoked' ? 'Revoked' : status === 'expired' ? 'Expired' : 'Active';
+
+                    return (
+                      <div
+                        key={transfer.id}
+                        style={{
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 8,
+                          padding: 12,
+                          display: 'flex',
+                          gap: 12,
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap'
+                        }}
+                      >
+                        <div>
+                          <strong>{transfer.recipient_email || 'Anyone with the code'}</strong>
+                          <div style={subtleText}>
+                            {statusLabel} · Expires {formatDate(transfer.expires_at)}
+                            {transfer.keep_issuer_role ? ` · You stay on as ${transfer.keep_issuer_role}` : ' · You keep no access after claim'}
+                          </div>
+                        </div>
+                        {status === 'active' ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={revokingTransferId === transfer.id}
+                            onClick={() => revokeTransfer(transfer.id)}
+                          >
+                            {revokingTransferId === transfer.id ? 'Revoking...' : 'Revoke'}
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </Card>
+        ) : null}
 
         <Card>
           <label style={{ display: 'grid', gap: 6, maxWidth: 360 }}>

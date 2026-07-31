@@ -19,7 +19,9 @@
 import Stripe from 'https://esm.sh/stripe@14?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const PRODUCT_KEYS = new Set(['handover_pack', 'insurance_evidence_pack']);
+// 'pro_binder' is the one-time per-binder purchase for the pro channel
+// (inspector/agent provisioning — see docs/THREAT_MITIGATION.md T6).
+const PRODUCT_KEYS = new Set(['handover_pack', 'insurance_evidence_pack', 'pro_binder']);
 
 // Recurring plans. A subscription entitlement carries provider_subscription_id
 // and a rolling expires_at: stamped at checkout, extended by every paid

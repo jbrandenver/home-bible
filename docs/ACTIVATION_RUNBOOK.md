@@ -248,6 +248,19 @@ Extra tests worth running for subscriptions:
 - Let a test-clock subscription lapse without events → `has_entitlement`
   returns false after `expires_at` passes (no webhook needed).
 
+### The pro binder (one-time, per report)
+
+The professional channel (migration 025, `/pro` page) adds a **third Payment
+Link**: one Product with a **one-time** Price — suggested **$15–25 per binder**,
+matching the RecallChek per-report benchmark cited in
+docs/THREAT_MITIGATION.md (T6) — with metadata `product_key` set to
+`pro_binder` on the link, email collection enabled, exactly like the two packs
+in step 2 above. Expose it to the app by setting
+`NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK` in the host's env. Until it is
+set, the pro page honestly says binders are free during early access — same
+soft-gate stance as the Portfolio plan: never gate behind a checkout that does
+not exist.
+
 ### Tax
 
 Sell **US-only at first** and set a country restriction on the checkout. The EU
@@ -327,3 +340,66 @@ Expect `{"ok":true, ...}` with `assetsConsidered` / `brandsQueried` /
 `matchesInserted`. Matches surface on the Warranties page as a "Safety
 recalls" section; a dismissed match never returns to "open" (the insert is
 `ON CONFLICT DO NOTHING`).
+
+---
+
+## D. Data-plate scanning
+
+**Founder-approved paid API (the only one).** The `analyze-plate` Edge
+Function turns a photo of an appliance label into brand / model / serial /
+year via a single Claude Haiku vision call. Cost is roughly **$3–5 per 1,000
+scans** at Haiku pricing, and caps are enforced server-side (in the
+`plate_scans` table from migration `025_record_transfer_partners.sql`):
+**30 lifetime scans free**, **1,000 with an active Portfolio plan** — the
+Portfolio number is an abuse ceiling, not a metered product limit.
+
+**Privacy stance (also stated in the function header): the photo is processed
+in one stateless call and discarded.** It is never written to storage, never
+logged, never retained, and never used to train a model. Only a usage row
+(who, when, ok/failed) persists.
+
+Like every other function, it is inert until configured: with no
+`ANTHROPIC_API_KEY` set it refuses every request with a 503 and the app shows
+"Scanning isn't enabled yet."
+
+**1. Secret and deploy.**
+
+```bash
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+supabase functions deploy analyze-plate
+```
+
+(Migration `025_record_transfer_partners.sql` must already be applied — it
+creates `plate_scans`, which the function requires for cap enforcement.)
+
+**2. Smoke test.** The function is JWT-gated (`verify_jwt = true`), so you
+need a signed-in user's access token — grab one from the browser devtools
+(`sb-<ref>-auth-token` local storage entry) or via the Supabase JS client.
+
+```bash
+# A tiny valid JPEG is enough to prove the pipeline end to end.
+IMAGE_B64=$(base64 -i some-label-photo.jpg | tr -d '\n')
+
+curl -s -X POST \
+  -H "Authorization: Bearer $USER_ACCESS_TOKEN" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"image_base64\":\"$IMAGE_B64\",\"media_type\":\"image/jpeg\"}" \
+  https://gdntnlhnjyyzxcjuypuy.supabase.co/functions/v1/analyze-plate
+```
+
+Expect `{"brand":..., "model_number":..., "serial_number":...,
+"manufacture_year":..., "confidence":"high|medium|low", "notes":...,
+"scans_used":N, "scan_cap":30}`. Before the key is set, the same call returns
+`503 {"error":"Not configured.","detail":"Data-plate scanning is not enabled
+yet."}`; past the cap it returns a friendly 429.
+
+**3. Verify the usage log.** Each call (ok or failed) writes one row:
+
+```sql
+select user_id, status, created_at from plate_scans order by created_at desc limit 10;
+```
+
+The seasonal maintenance plan that ships alongside this feature needs **no
+activation at all** — it is a deterministic, $0 rules engine computed in the
+browser from the home profile.

@@ -158,14 +158,14 @@ proves revenue.
 
 ## Build sequence (impact ÷ effort)
 
-| Phase | Work | Threats hit | Effort |
+| Phase | Work | Threats hit | Status (2026-07-30) |
 |---|---|---|---|
-| 1 | Full-file export + data longevity pledge; Claim-Ready Pack formatting | T1, T3 | ~2–3 days |
-| 2 | CPSC recall cron + lifespan flags | T4, T2 | ~2–3 days |
-| 3 | Data-plate scan Edge Function (needs key approval) + seasonal plan rules | T4 | ~1 week |
-| 4 | Record-transfer primitive | T6, T3 | ~3–4 days |
-| 5 | Partner provisioning + per-binder billing | T6, T1, T2 | ~1–2 weeks |
-| — | Moment-based content (disaster-season, closing, UP statistics) | T3 | ongoing |
+| 1 | Full-file export + data longevity pledge; Claim-Ready Pack formatting | T1, T3 | **SHIPPED** |
+| 2 | CPSC recall cron + lifespan flags | T4, T2 | **SHIPPED — live in prod** (daily cron) |
+| 3 | Data-plate scan Edge Function + seasonal plan rules | T4 | **SHIPPED** — scanner deployed, inert until `ANTHROPIC_API_KEY` is set (runbook §D); seasonal plan live |
+| 4 | Record-transfer primitive | T6, T3 | **SHIPPED** — migration 025 applied; full lifecycle proven in a rolled-back live test |
+| 5 | Partner provisioning + per-binder billing | T6, T1, T2 | **SHIPPED (v1)** — /pro registration, co-branded claims, `pro_binder` soft-gated until Stripe |
+| — | Moment-based content (disaster-season, closing, UP statistics) | T3 | open — needs the marketing site |
 
 Standing constraints unchanged: $0 default config, no paid API without an
 explicit key + Jesse's approval, one-shot LLM calls only, WCAG 2.2 AA, and the
