@@ -13,6 +13,8 @@ export type PropertyInput = {
   state?: string | null;
   postal_code?: string | null;
   country?: string | null;
+  parent_property_id?: string | null;
+  unit_label?: string | null;
 };
 
 export type PropertySummary = {
@@ -22,7 +24,12 @@ export type PropertySummary = {
   nickname: string;
   property_type: string;
   created_at: string;
+  parent_property_id: string | null;
+  unit_label: string | null;
 };
+
+const PROPERTY_SUMMARY_COLUMNS =
+  'id, household_id, owner_user_id, nickname, property_type, created_at, parent_property_id, unit_label';
 
 function formatPropertySetupError(step: string, message?: string) {
   const fallback = `Failed to ${step}.`;
@@ -177,30 +184,57 @@ export async function getPrimaryPropertyForUser(userId: string): Promise<Propert
   return promise;
 }
 
-async function loadPrimaryPropertyForUser(userId: string): Promise<PropertySummary | null> {
+// The property the user is currently working in, persisted across page loads
+// so the portfolio switcher survives navigation. localStorage rather than a
+// cookie: this is a UI preference, not an authorization input — RLS decides
+// what any property id actually yields.
+const ACTIVE_PROPERTY_STORAGE_KEY = 'home-folder.active-property-id';
+
+export function getActivePropertyId(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    return window.localStorage.getItem(ACTIVE_PROPERTY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActivePropertyId(propertyId: string | null) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    if (propertyId) {
+      window.localStorage.setItem(ACTIVE_PROPERTY_STORAGE_KEY, propertyId);
+    } else {
+      window.localStorage.removeItem(ACTIVE_PROPERTY_STORAGE_KEY);
+    }
+  } catch {
+    // Storage may be unavailable (private mode); the switcher just won't stick.
+  }
+  clearCachedProperty();
+}
+
+// Every property the user can see: owned first, then memberships, deduped.
+// Buildings sort before their units so pickers read naturally.
+export async function listPropertiesForUser(userId: string): Promise<PropertySummary[]> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
-    return null;
+    return [];
   }
 
   const { data: owned, error: ownedError } = await supabase
     .from('properties')
-    .select('id, household_id, owner_user_id, nickname, property_type, created_at')
+    .select(PROPERTY_SUMMARY_COLUMNS)
     .eq('owner_user_id', userId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1);
+    .order('created_at', { ascending: true })
+    .limit(500);
 
-  // Errors must surface, not collapse to null. Callers read a null property as
-  // "this user has no property yet" and fall back to demo/localStorage data —
-  // so a momentary network failure used to replace a signed-in user's real
-  // records with leftover browser data, silently and with no error shown.
   if (ownedError) {
-    throw new Error(formatPropertySetupError('load your property', ownedError.message));
-  }
-
-  if (owned && owned.length > 0) {
-    return owned[0] as PropertySummary;
+    throw new Error(formatPropertySetupError('load your properties', ownedError.message));
   }
 
   const { data: memberRows, error: memberRowsError } = await supabase
@@ -208,35 +242,109 @@ async function loadPrimaryPropertyForUser(userId: string): Promise<PropertySumma
     .select('property_id')
     .eq('user_id', userId)
     .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(10);
+    .limit(500);
 
   if (memberRowsError) {
-    throw new Error(formatPropertySetupError('load your property', memberRowsError.message));
+    throw new Error(formatPropertySetupError('load your properties', memberRowsError.message));
   }
 
-  const propertyIds = (memberRows ?? []).map((row) => row.property_id).filter(Boolean);
-  if (propertyIds.length === 0) {
+  const ownedList = (owned ?? []) as PropertySummary[];
+  const ownedIds = new Set(ownedList.map((property) => property.id));
+  const memberIds = (memberRows ?? [])
+    .map((row) => row.property_id)
+    .filter((id): id is string => Boolean(id) && !ownedIds.has(id));
+
+  let memberList: PropertySummary[] = [];
+  if (memberIds.length > 0) {
+    const { data: memberProperties, error: memberPropertiesError } = await supabase
+      .from('properties')
+      .select(PROPERTY_SUMMARY_COLUMNS)
+      .in('id', memberIds)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: true });
+
+    if (memberPropertiesError) {
+      throw new Error(formatPropertySetupError('load your properties', memberPropertiesError.message));
+    }
+
+    memberList = (memberProperties ?? []) as PropertySummary[];
+  }
+
+  return sortPortfolio([...ownedList, ...memberList]);
+}
+
+// Buildings (and standalone homes) in creation order, each followed by its
+// units. Pure and exported so the switcher, the portfolio page and tests agree.
+export function sortPortfolio(properties: PropertySummary[]): PropertySummary[] {
+  const topLevel = properties
+    .filter((property) => !property.parent_property_id)
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const unitsByParent = new Map<string, PropertySummary[]>();
+  const orphans: PropertySummary[] = [];
+
+  for (const property of properties) {
+    if (!property.parent_property_id) {
+      continue;
+    }
+    const bucket = unitsByParent.get(property.parent_property_id);
+    if (bucket) {
+      bucket.push(property);
+    } else {
+      unitsByParent.set(property.parent_property_id, [property]);
+    }
+  }
+
+  const ordered: PropertySummary[] = [];
+  for (const parent of topLevel) {
+    ordered.push(parent);
+    const units = (unitsByParent.get(parent.id) ?? []).sort(
+      (a, b) =>
+        (a.unit_label ?? '').localeCompare(b.unit_label ?? '', undefined, { numeric: true }) ||
+        a.created_at.localeCompare(b.created_at)
+    );
+    ordered.push(...units);
+    unitsByParent.delete(parent.id);
+  }
+
+  // Units whose building the user cannot see (e.g. invited to one unit only).
+  for (const units of unitsByParent.values()) {
+    orphans.push(...units);
+  }
+  orphans.sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+  return [...ordered, ...orphans];
+}
+
+async function loadPrimaryPropertyForUser(userId: string): Promise<PropertySummary | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
     return null;
   }
 
-  const { data: memberProperties, error: memberPropertiesError } = await supabase
-    .from('properties')
-    .select('id, household_id, owner_user_id, nickname, property_type, created_at')
-    .in('id', propertyIds)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (memberPropertiesError) {
-    throw new Error(formatPropertySetupError('load your property', memberPropertiesError.message));
-  }
-
-  if (!memberProperties || memberProperties.length === 0) {
+  // Errors must surface, not collapse to null. Callers read a null property as
+  // "this user has no property yet" and fall back to demo/localStorage data —
+  // so a momentary network failure used to replace a signed-in user's real
+  // records with leftover browser data, silently and with no error shown.
+  const properties = await listPropertiesForUser(userId);
+  if (properties.length === 0) {
     return null;
   }
 
-  return memberProperties[0] as PropertySummary;
+  // An explicit switcher choice wins; otherwise prefer a building or home over
+  // a unit, newest first — matching the old "newest owned" behaviour while
+  // keeping "Unit 12" from becoming someone's whole app after a bulk import.
+  const activeId = getActivePropertyId();
+  if (activeId) {
+    const active = properties.find((property) => property.id === activeId);
+    if (active) {
+      return active;
+    }
+  }
+
+  const newestFirst = [...properties].sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const owned = newestFirst.filter((property) => property.owner_user_id === userId);
+  const pool = owned.length > 0 ? owned : newestFirst;
+  return pool.find((property) => !property.parent_property_id) ?? pool[0];
 }
 
 async function ensureHouseholdForUser(user: User, fallbackName: string) {
@@ -342,6 +450,8 @@ export async function createPropertyForUser(user: User, input: PropertyInput) {
       state: input.state ?? null,
       postal_code: input.postal_code ?? null,
       country: input.country ?? null,
+      parent_property_id: input.parent_property_id ?? null,
+      unit_label: input.unit_label ?? null,
       address_is_enabled: false,
       created_at: createdAt
     });
@@ -372,6 +482,45 @@ export async function createPropertyForUser(user: User, input: PropertyInput) {
     owner_user_id: user.id,
     nickname: input.nickname,
     property_type: input.property_type,
-    created_at: createdAt
+    created_at: createdAt,
+    parent_property_id: input.parent_property_id ?? null,
+    unit_label: input.unit_label ?? null
   } as PropertySummary;
+}
+
+// Bulk unit creation for a building. Sequential on purpose: each insert runs
+// the nesting guard trigger, and a landlord adding 30 units should get a
+// precise "unit 17 failed" rather than an all-or-nothing mystery.
+export async function createUnitsForBuilding(
+  user: User,
+  building: PropertySummary,
+  unitLabels: string[]
+): Promise<{ created: PropertySummary[]; failed: { label: string; message: string }[] }> {
+  const created: PropertySummary[] = [];
+  const failed: { label: string; message: string }[] = [];
+
+  for (const rawLabel of unitLabels) {
+    const label = rawLabel.trim();
+    if (!label) {
+      continue;
+    }
+
+    try {
+      const unit = await createPropertyForUser(user, {
+        nickname: `${building.nickname} — ${label}`,
+        property_type: 'apartment',
+        parent_property_id: building.id,
+        unit_label: label
+      });
+      created.push(unit);
+    } catch (unitError) {
+      failed.push({
+        label,
+        message: unitError instanceof Error ? unitError.message : 'Failed to create unit.'
+      });
+    }
+  }
+
+  clearCachedProperty();
+  return { created, failed };
 }

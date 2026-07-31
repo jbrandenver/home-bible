@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useRef, useState } from 'react';
 import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
+import { PropertySwitcher } from './PropertySwitcher';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -19,6 +20,9 @@ function deriveTitle(pathname: string): string {
 }
 
 function sectionHref(section: NavSection, item: NavSectionLink) {
+  if (item.href) {
+    return item.href;
+  }
   return item.hash ? `${section.href}#${item.hash}` : section.href;
 }
 
@@ -201,6 +205,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               <span className="brand-tagline">A home, documented.</span>
             </Link>
             <div className="flex items-center gap-2 flex-wrap text-sm">
+              <PropertySwitcher />
               <span className="header-meta">
                 {userEmail ? "Everything's saved to your account." : 'Demo data is stored only in this browser.'}
               </span>
@@ -303,6 +308,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             <nav className="app-footer-links" aria-label="Legal">
               <Link href="/terms">Terms of Service</Link>
               <Link href="/privacy">Privacy Policy</Link>
+              <Link href="/data-promise">Our data promise</Link>
               <Link href="/settings">Account</Link>
               <a href="mailto:support@ourhomefolder.com?subject=Our%20Home%20Folder%20problem%20report">Report a problem</a>
             </nav>
@@ -377,6 +383,8 @@ type NavSectionLink = {
   label: string;
   /** Anchor id on the section's page; omitted = top of the page. */
   hash?: string;
+  /** Full route for entries that live on their own page rather than an anchor. */
+  href?: string;
 };
 
 type NavSection = {
@@ -388,6 +396,16 @@ type NavSection = {
   /** When present, the tab gets a jump menu listing the page's sections. */
   sections?: NavSectionLink[];
 };
+
+// The portfolio surfaces are real routes, not anchors, so these entries carry
+// full hrefs. They appear under the Portfolio tab on desktop and are folded
+// into the More tab on mobile (the bottom bar holds five tabs).
+const portfolioSectionLinks: NavSectionLink[] = [
+  { label: 'Overview', href: '/portfolio' },
+  { label: 'Compliance', href: '/compliance' },
+  { label: 'Tenancies', href: '/tenancies' },
+  { label: 'Condition reports', href: '/condition-reports' }
+];
 
 const desktopSections: NavSection[] = [
   {
@@ -417,6 +435,13 @@ const desktopSections: NavSection[] = [
     label: 'Home',
     icon: 'H',
     activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms', '/utilities', '/automation']
+  },
+  {
+    href: '/portfolio',
+    label: 'Portfolio',
+    icon: 'P',
+    activeRoutes: ['/portfolio', '/compliance', '/tenancies', '/condition-reports'],
+    sections: portfolioSectionLinks
   },
   {
     href: '/assets',
@@ -452,4 +477,21 @@ const desktopSections: NavSection[] = [
   }
 ];
 
-const mobileSections = desktopSections.filter((section) => section.href !== '/documents');
+const mobileSections = desktopSections
+  .filter((section) => section.href !== '/documents' && section.href !== '/portfolio')
+  .map((section) =>
+    section.href === '/more'
+      ? {
+          ...section,
+          activeRoutes: [...section.activeRoutes, '/portfolio', '/compliance', '/tenancies', '/condition-reports'],
+          // "Overview" is already taken by the More page itself, so the
+          // portfolio overview entry is labeled by its own name here.
+          sections: [
+            ...portfolioSectionLinks.map((item) =>
+              item.href === '/portfolio' ? { ...item, label: 'Portfolio' } : item
+            ),
+            ...(section.sections ?? [])
+          ]
+        }
+      : section
+  );

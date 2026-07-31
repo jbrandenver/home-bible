@@ -10,6 +10,8 @@
 // January 2025 it offered CSV but no bulk file export, and users who missed the
 // window lost everything. A record you cannot take with you is not a record.
 
+import { safeFileName } from '@home-folder/shared';
+import { strToU8, zipSync, type Zippable } from 'fflate';
 import { getAssetsForContext, type AssetDataContext, type AssetRow } from './assets';
 import {
   getDevicesForContext,
@@ -20,12 +22,13 @@ import {
 } from './automation';
 import { getDocumentsForContext, type DocumentDataContext, type DocumentRow } from './documents';
 import { getIssuesForContext, type IssueDataContext } from './issues';
-import { getPropertyAddressDetails, type PropertySummary } from './properties';
+import { getPropertyAddressDetails, listPropertiesForUser, type PropertySummary } from './properties';
 import { getReceiptsForContext, type ReceiptDataContext, type ReceiptRow } from './receipts';
 import { getRemindersForContext, type ReminderDataContext } from './reminders';
 import { getRepairsForContext, type RepairDataContext } from './repairs';
 import { getFloorsForProperty, getRoomsForProperty } from './rooms';
 import { getServiceRecordsForContext, type ServiceRecordDataContext } from './serviceRecords';
+import { getSupabaseBrowserClient } from './supabase/client';
 import { getTrendFlagsForContext, type TrendFlagDataContext } from './trendFlags';
 import { getUtilitiesForContext, type UtilityDataContext } from './utilities';
 
@@ -259,14 +262,25 @@ export function buildCsvSheets(data: AccountExport): CsvSheet[] {
   ].filter((entry) => entry.rowCount > 0);
 }
 
+/** Which shape of export the README describes. */
+export type ReadmeFileInfo = {
+  /** True for the full zip archive, which carries the files/ folder. */
+  filesIncluded: boolean;
+  includedFileCount?: number;
+  missingFileCount?: number;
+};
+
 /**
  * Files live in private storage and are reachable only through short-lived
- * signed URLs, so a JSON/CSV export can carry their metadata but not the bytes.
- * Saying so plainly is the difference between a real backup and a false one.
+ * signed URLs, so a plain JSON/CSV export can carry their metadata but not the
+ * bytes. The full archive (zip) closes that gap and the README says which kind
+ * it is sitting inside — saying so plainly is the difference between a real
+ * backup and a false one.
  */
-export function buildReadme(data: AccountExport): string {
+export function buildReadme(data: AccountExport, fileInfo?: ReadmeFileInfo): string {
   const lines: string[] = [];
   const stamp = data.generatedAt.slice(0, 10);
+  const filesIncluded = fileInfo?.filesIncluded === true;
 
   lines.push('OUR HOME FOLDER — YOUR DATA EXPORT');
   lines.push(`Generated ${stamp}`);
@@ -274,6 +288,9 @@ export function buildReadme(data: AccountExport): string {
   lines.push('WHAT IS IN THIS EXPORT');
   lines.push('  home-folder-export.json   Everything, in full, in one machine-readable file.');
   lines.push('  *.csv                     The same records as spreadsheets, one per section.');
+  if (filesIncluded) {
+    lines.push('  files/                    Your uploaded files, one folder per property.');
+  }
   lines.push('  README.txt                This file.');
   lines.push('');
   lines.push('WHAT IS RECORDED');
@@ -286,12 +303,27 @@ export function buildReadme(data: AccountExport): string {
     lines.push('  (nothing recorded yet)');
   }
   lines.push('');
-  lines.push('YOUR UPLOADED FILES ARE NOT IN THIS EXPORT');
-  lines.push('  Photos, manuals, receipts and other uploads are stored privately and can');
-  lines.push('  only be downloaded one at a time through the app. This export lists their');
-  lines.push('  names, types and sizes so you know exactly what to collect, but it does not');
-  lines.push('  contain the files themselves. Download anything you need from Documents');
-  lines.push('  before closing your account.');
+  if (filesIncluded) {
+    const included = fileInfo?.includedFileCount ?? 0;
+    const missingCount = fileInfo?.missingFileCount ?? 0;
+    lines.push('YOUR UPLOADED FILES');
+    lines.push(`  The files/ folder holds your uploaded photos, manuals, receipts and`);
+    lines.push(`  documents — ${included} file${included === 1 ? '' : 's'} in this archive, grouped one folder per`);
+    lines.push('  property. If a file could not be downloaded while the archive was being');
+    lines.push('  built, it is listed in files/MISSING.txt with the reason, rather than');
+    lines.push('  silently left out — this export never claims completeness it does not have.');
+    if (missingCount > 0) {
+      lines.push(`  NOTE: ${missingCount} file${missingCount === 1 ? '' : 's'} could not be fetched this time — see files/MISSING.txt.`);
+    }
+  } else {
+    lines.push('YOUR UPLOADED FILES ARE NOT IN THIS EXPORT');
+    lines.push('  Photos, manuals, receipts and other uploads are stored privately and can');
+    lines.push('  only be downloaded one at a time through the app. This export lists their');
+    lines.push('  names, types and sizes so you know exactly what to collect, but it does not');
+    lines.push('  contain the files themselves. Download anything you need from Documents');
+    lines.push('  before closing your account, or use the full archive download, which');
+    lines.push('  includes them.');
+  }
   lines.push('');
   lines.push('PLEASE STORE THIS SAFELY');
   lines.push('  This is a complete, unredacted copy of your home record, including any');
@@ -341,4 +373,299 @@ export function listUploadedFiles(
 /** Assets carry the values an insurer asks for; surface the total. */
 export function documentedValue(assets: AssetRow[]): number {
   return assets.reduce((total, asset) => total + (asset.purchase_price ?? 0), 0);
+}
+
+// ---------------------------------------------------------------------------
+// The full archive — records AND the uploaded files, in one zip (D-16).
+//
+// Centriq's shutdown offered CSV but no bulk file export; users who missed the
+// window lost their photos. This archive is the structural answer: everything
+// above, plus a files/ folder, plus an honest MISSING.txt for anything that
+// could not be fetched. The export never claims completeness it doesn't have.
+// ---------------------------------------------------------------------------
+
+/**
+ * Warn (in the UI, before starting) above this total: the zip is assembled in
+ * browser memory, so a very large archive deserves a heads-up, not a surprise.
+ */
+export const EXPORT_SIZE_WARNING_BYTES = 200 * 1024 * 1024;
+
+export function exceedsExportSizeWarning(totalBytes: number): boolean {
+  return totalBytes > EXPORT_SIZE_WARNING_BYTES;
+}
+
+export type ExportableFile = {
+  documentId: string;
+  propertyNickname: string | null;
+  title: string;
+  fileName: string;
+  filePath: string;
+  bucketName: string;
+  fileSizeBytes: number | null;
+};
+
+export function totalFileSizeBytes(files: Array<Pick<ExportableFile, 'fileSizeBytes'>>): number {
+  return files.reduce((total, file) => total + (file.fileSizeBytes ?? 0), 0);
+}
+
+/** Property nickname -> a stable, filesystem-friendly folder name. */
+function slugifyFolderName(value: string | null | undefined): string {
+  const slug = (value || '')
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+    .replace(/-+$/, '');
+
+  return slug || 'property';
+}
+
+/** Strip characters that break paths on common filesystems; keep it readable. */
+function sanitizeZipEntryName(value: string): string {
+  return value
+    .trim()
+    .replace(/[/\\?%*:|"<>]/g, '-')
+    .replace(/\s+/g, ' ')
+    .replace(/^\.+/, '')
+    .slice(0, 120)
+    .trim();
+}
+
+function extensionOf(fileName: string | null | undefined): string {
+  const match = /\.([a-zA-Z0-9]{1,8})$/.exec((fileName || '').trim());
+  return match ? `.${match[1].toLowerCase()}` : '';
+}
+
+/**
+ * A name is usable only when the shared safeFileName helper passes it through
+ * UNCHANGED: it returns null for empty/URL-shaped names and substitutes a
+ * redaction phrase for secret phrasings ("garage code…"), and a substituted
+ * name is no name at all — the caller should fall back instead.
+ */
+function usableName(value: string | null | undefined): string | null {
+  if (!value || !value.trim()) {
+    return null;
+  }
+
+  const safe = safeFileName(value);
+  return safe === value.trim() ? safe : null;
+}
+
+/**
+ * Where a document's bytes live inside the zip:
+ * `files/<property-nickname-slug>/<document-title-or-file_name><ext>`.
+ *
+ * safeFileName() is used for NAME hygiene only (it rejects URL-shaped names and
+ * names matching secret phrasings); when it declines the title we fall back to
+ * the stored file name, then to "document" — the file's CONTENT is always
+ * included either way, and the real title still lives in the JSON export.
+ * Collisions get a numeric suffix; the original extension is preserved.
+ * The caller threads one `usedPaths` set through the whole archive.
+ */
+export function buildExportFilePath(
+  propertyNickname: string | null | undefined,
+  title: string | null | undefined,
+  fileName: string | null | undefined,
+  usedPaths: Set<string>
+): string {
+  const folder = slugifyFolderName(propertyNickname);
+  const extension = extensionOf(fileName);
+
+  let base = sanitizeZipEntryName(usableName(title) || usableName(fileName) || 'document');
+  if (!base) {
+    base = 'document';
+  }
+  // Preserve the original extension without doubling it when the chosen name
+  // already carries it (titles are often just the file name).
+  if (extension && base.toLowerCase().endsWith(extension)) {
+    base = base.slice(0, base.length - extension.length);
+  }
+  if (!base) {
+    base = 'document';
+  }
+
+  let candidate = `files/${folder}/${base}${extension}`;
+  let suffix = 2;
+  while (usedPaths.has(candidate)) {
+    candidate = `files/${folder}/${base}-${suffix}${extension}`;
+    suffix += 1;
+  }
+
+  usedPaths.add(candidate);
+  return candidate;
+}
+
+export type MissingFileEntry = {
+  /** The zip path the file would have had. */
+  path: string;
+  title: string;
+  reason: string;
+};
+
+/**
+ * files/MISSING.txt — the honest manifest. A file that fails to download gets
+ * a line here rather than silently vanishing from the archive.
+ */
+export function buildMissingManifest(entries: MissingFileEntry[]): string {
+  const lines: string[] = [];
+  lines.push('FILES THAT COULD NOT BE INCLUDED');
+  lines.push('  Each file below exists in your record but could not be downloaded while');
+  lines.push('  this archive was being built. Nothing was deleted — try the export again,');
+  lines.push('  or download these individually from Documents in the app.');
+  lines.push('');
+
+  for (const entry of entries) {
+    lines.push(`  ${entry.path}`);
+    lines.push(`    title:  ${entry.title}`);
+    lines.push(`    reason: ${entry.reason}`);
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
+/**
+ * Every uploaded file the signed-in user can read, across ALL their properties
+ * (the documents query carries no property filter — Row-Level Security scopes
+ * it). Property nicknames come along so the zip can group files per property.
+ */
+export async function listExportableFiles(userId: string): Promise<ExportableFile[]> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return [];
+  }
+
+  // Nicknames are a nicety; a failure here must not block the file export.
+  const properties = await listPropertiesForUser(userId).catch(() => [] as PropertySummary[]);
+  const nicknameByPropertyId = new Map(properties.map((entry) => [entry.id, entry.nickname]));
+
+  const { data, error } = await supabase
+    .from('documents')
+    .select('id, property_id, title, file_name, file_path, bucket_name, file_size_bytes')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true })
+    .limit(2000);
+
+  if (error) {
+    throw new Error(`Could not list your uploaded files: ${error.message}`);
+  }
+
+  type FileRow = {
+    id: string;
+    property_id: string;
+    title: string | null;
+    file_name: string | null;
+    file_path: string | null;
+    bucket_name: string | null;
+    file_size_bytes: number | null;
+  };
+
+  return ((data ?? []) as FileRow[])
+    .filter((row) => typeof row.file_path === 'string' && row.file_path.length > 0)
+    .map((row) => ({
+      documentId: row.id,
+      propertyNickname: nicknameByPropertyId.get(row.property_id) ?? null,
+      title: row.title?.trim() || row.file_name?.trim() || 'Untitled document',
+      fileName: row.file_name?.trim() || 'document',
+      filePath: row.file_path as string,
+      bucketName: row.bucket_name || 'home-documents',
+      fileSizeBytes:
+        typeof row.file_size_bytes === 'number' && Number.isFinite(row.file_size_bytes)
+          ? row.file_size_bytes
+          : null
+    }));
+}
+
+export type ArchiveBuildResult = {
+  zip: Uint8Array;
+  includedCount: number;
+  missing: MissingFileEntry[];
+};
+
+/**
+ * Build the one-zip archive: JSON + per-section CSVs + README + files/ (+
+ * files/MISSING.txt when anything failed). Files are fetched one at a time
+ * through short-lived signed URLs — the same access path the app itself uses —
+ * and a failure degrades to a MISSING.txt line, never to a silent gap.
+ *
+ * zipSync is deliberate: exports are small at this stage, and callers warn the
+ * user first (EXPORT_SIZE_WARNING_BYTES) when the total argues otherwise.
+ */
+export async function buildArchiveZip(
+  data: AccountExport,
+  files: ExportableFile[],
+  onFileProgress?: (current: number, total: number) => void
+): Promise<ArchiveBuildResult> {
+  const supabase = getSupabaseBrowserClient();
+  const entries: Zippable = {};
+  const usedPaths = new Set<string>();
+  const missing: MissingFileEntry[] = [];
+  let includedCount = 0;
+
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
+    onFileProgress?.(index + 1, files.length);
+
+    const zipPath = buildExportFilePath(file.propertyNickname, file.title, file.fileName, usedPaths);
+
+    try {
+      if (!supabase) {
+        throw new Error('Supabase is not configured.');
+      }
+
+      const { data: signed, error: signError } = await supabase.storage
+        .from(file.bucketName)
+        .createSignedUrl(file.filePath, 300);
+
+      if (signError || !signed?.signedUrl) {
+        throw new Error(signError?.message || 'could not create a download link');
+      }
+
+      const response = await fetch(signed.signedUrl);
+      if (!response.ok) {
+        throw new Error(`download failed (HTTP ${response.status})`);
+      }
+
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      // Uploads are already-compressed formats (JPEG/PNG/WebP/PDF); store them
+      // uncompressed so building the zip stays fast.
+      entries[zipPath] = [bytes, { level: 0 }];
+      includedCount += 1;
+    } catch (error) {
+      missing.push({
+        path: zipPath,
+        title: file.title,
+        reason: error instanceof Error ? error.message : 'unknown error'
+      });
+    }
+  }
+
+  entries['README.txt'] = strToU8(
+    buildReadme(data, {
+      filesIncluded: true,
+      includedFileCount: includedCount,
+      missingFileCount: missing.length
+    })
+  );
+  entries['home-folder-export.json'] = strToU8(JSON.stringify(data, null, 2));
+  for (const sheet of buildCsvSheets(data)) {
+    entries[`${sheet.name}.csv`] = strToU8(sheet.contents);
+  }
+  if (missing.length > 0) {
+    entries['files/MISSING.txt'] = strToU8(buildMissingManifest(missing));
+  }
+
+  return { zip: zipSync(entries, { level: 6 }), includedCount, missing };
+}
+
+export function downloadBinaryFile(filename: string, bytes: Uint8Array, mime = 'application/zip') {
+  const blob = new Blob([bytes as BlobPart], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
