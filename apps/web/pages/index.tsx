@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/router';
 import type { CSSProperties } from 'react';
 import { Card } from '@home-folder/ui';
@@ -311,8 +312,9 @@ export default function Home() {
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: 14, marginBottom: 0 }}>
           The particulars are written down like everything else here — see{' '}
-          <a href="/pricing">the schedule of fees</a>, <a href="/data-promise">our data promise</a>,
-          and the <a href="/privacy">privacy policy</a>.
+          <Link href="/pricing">the schedule of fees</Link>,{' '}
+          <Link href="/data-promise">our data promise</Link>, and the{' '}
+          <Link href="/privacy">privacy policy</Link>.
         </p>
       </Card>
 
