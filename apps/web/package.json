@@ -8,25 +8,31 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "next lint",
     "test": "vitest run",
-    "start": "next start"
+    "start": "next start",
+    "build:worker": "opennextjs-cloudflare build",
+    "preview:worker": "opennextjs-cloudflare preview",
+    "deploy:worker": "opennextjs-cloudflare deploy"
   },
   "dependencies": {
     "@home-folder/shared": "workspace:*",
     "@home-folder/ui": "workspace:*",
     "@hookform/resolvers": "^5.4.0",
     "@supabase/supabase-js": "^2.27.0",
+    "eslint-config-next": "^15.5.22",
     "fflate": "^0.8.3",
-    "next": "^14.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "next": "^15.5.22",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-hook-form": "^7.80.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.2",
     "@types/node": "^20.19.25",
-    "@types/react": "^18.3.27",
-    "@types/react-dom": "^18.3.7",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "vitest": "^3.2.4",
-    "vitest-axe": "^0.1.0"
+    "vitest-axe": "^0.1.0",
+    "wrangler": "^4.118.0"
   }
 }

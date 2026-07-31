@@ -1,0 +1,26 @@
+// Cloudflare Workers deployment config for the web app, consumed by the
+// OpenNext adapter (see open-next.config.ts) and by Workers Builds.
+//
+// Deploy path: `opennextjs-cloudflare build` runs `next build` and transforms
+// the output into .open-next/, then `wrangler deploy` ships worker + assets.
+// The three NEXT_PUBLIC_* values the app needs are BUILD-time variables (Next
+// inlines them into the bundle) — they are set in the Workers Builds
+// environment, not here. Nothing secret is involved: the Supabase anon key is
+// publishable by design, and RLS is the enforcement boundary (docs/DECISIONS.md D-1).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "home-folder-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-01",
+  // nodejs_compat: required by the OpenNext runtime.
+  // global_fetch_strictly_public: required so server-side fetches resolve
+  // public hostnames rather than same-zone Worker routes.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
