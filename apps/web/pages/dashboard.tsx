@@ -397,7 +397,10 @@ export default function DashboardPage() {
   );
 
   const criticalUtilities = useMemo(() => {
-    const criticalTypes = new Set([
+    // One entry per singleton system — a home has one water main and one
+    // panel, and recording it twice (welcome flow + utilities page) shouldn't
+    // list it twice here. Detectors legitimately repeat, so they all show.
+    const singletonTypes = new Set([
       'main_water_shutoff',
       'electrical_panel',
       'gas_shutoff',
@@ -407,11 +410,47 @@ export default function DashboardPage() {
       'air_conditioner',
       'breaker_panel',
       'sump_pump',
+      'irrigation_shutoff',
       'internet_modem',
       'router'
     ]);
+    const repeatableTypes = new Set(['smoke_detector', 'carbon_monoxide_detector']);
 
-    return utilities.filter((utility) => criticalTypes.has(utility.utility_type)).slice(0, 6);
+    const seen = new Set<string>();
+    const result: UtilityRow[] = [];
+    for (const utility of utilities) {
+      if (singletonTypes.has(utility.utility_type)) {
+        if (seen.has(utility.utility_type)) continue;
+        seen.add(utility.utility_type);
+        result.push(utility);
+      } else if (repeatableTypes.has(utility.utility_type)) {
+        result.push(utility);
+      }
+    }
+    return result;
+  }, [utilities]);
+
+  // Critical systems with no entry yet — the ones you want findable before
+  // you need them. Surfaced as prompts under the recorded list.
+  const missingCriticalUtilities = useMemo(() => {
+    const recorded = new Set<string>(utilities.map((utility) => utility.utility_type));
+    const wanted: Array<{ type: string; label: string }> = [
+      { type: 'main_water_shutoff', label: 'Main water shut-off' },
+      { type: 'electrical_panel', label: 'Electrical panel' },
+      { type: 'gas_shutoff', label: 'Gas shut-off' },
+      { type: 'water_heater', label: 'Water heater' },
+      { type: 'furnace', label: 'Furnace / HVAC' },
+      { type: 'smoke_detector', label: 'Smoke detectors' },
+      { type: 'carbon_monoxide_detector', label: 'CO detectors' },
+      { type: 'irrigation_shutoff', label: 'Sprinkler shut-off' }
+    ];
+    return wanted.filter((entry) => {
+      // Any heating/cooling entry satisfies the furnace prompt.
+      if (entry.type === 'furnace') {
+        return !recorded.has('furnace') && !recorded.has('hvac_unit') && !recorded.has('air_conditioner');
+      }
+      return !recorded.has(entry.type);
+    });
   }, [utilities]);
 
   const openRepairCount = useMemo(
@@ -766,33 +805,30 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
+            {missingCriticalUtilities.length > 0 ? (
+              <div style={{ marginTop: 14 }}>
+                <p style={{ color: 'rgba(255,248,234,0.72)', margin: '0 0 8px', fontSize: '0.875rem' }}>
+                  Not recorded yet — worth finding before you need them:
+                </p>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {missingCriticalUtilities.map((entry) => (
+                    <ActionLink
+                      key={entry.type}
+                      href={`/add-utility?utilityType=${entry.type}`}
+                      variant="secondary"
+                      style={{ color: 'var(--text-inverse)', borderColor: 'rgba(236,226,207,0.42)', minHeight: 36, padding: '6px 12px', fontSize: 13 }}
+                    >
+                      {`Add ${entry.label.toLowerCase()}`}
+                    </ActionLink>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div style={{ marginTop: 12 }}>
               <ActionLink href="/utilities" variant="secondary" style={{ color: 'var(--text-inverse)', borderColor: 'rgba(236,226,207,0.42)' }}>
                 Open utilities
               </ActionLink>
             </div>
-          </Card>
-
-          <Card tone="dark" id="handover">
-            <h2 style={{ marginTop: 0 }}>Home Handover</h2>
-            <p style={{ color: 'rgba(255,248,234,0.78)' }}>
-              Hand the whole home over in one document for family, buyer, maintenance, insurance, or personal archive use.
-            </p>
-            <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
-              No public link, email, background job, or stored report file is created.
-            </p>
-            <ActionLink href="/handover" variant="secondary">Build handover</ActionLink>
-          </Card>
-
-          <Card id="sharing">
-            <h2 style={{ marginTop: 0 }}>Sharing Review</h2>
-            <p style={{ color: 'var(--text-muted)' }}>
-              Preview role-based access before future invitations, guests, or share links are enabled.
-            </p>
-            <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
-              This is review-only and does not create public links, emails, guests, or background jobs.
-            </p>
-            <ActionLink href="/sharing" variant="secondary">Open sharing review</ActionLink>
           </Card>
 
           <Card id="service-history">
@@ -976,6 +1012,31 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
+          </Card>
+
+          {/* Occasional-use tools stay at the bottom — the dashboard reads in
+              order of expected use, and a handover or sharing review happens a
+              few times in a home's life, not weekly. */}
+          <Card tone="dark" id="handover">
+            <h2 style={{ marginTop: 0 }}>Home Handover</h2>
+            <p style={{ color: 'rgba(255,248,234,0.78)' }}>
+              Hand the whole home over in one document for family, buyer, maintenance, insurance, or personal archive use.
+            </p>
+            <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
+              No public link, email, background job, or stored report file is created.
+            </p>
+            <ActionLink href="/handover" variant="secondary">Build handover</ActionLink>
+          </Card>
+
+          <Card id="sharing">
+            <h2 style={{ marginTop: 0 }}>Sharing Review</h2>
+            <p style={{ color: 'var(--text-muted)' }}>
+              Preview role-based access before future invitations, guests, or share links are enabled.
+            </p>
+            <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
+              This is review-only and does not create public links, emails, guests, or background jobs.
+            </p>
+            <ActionLink href="/sharing" variant="secondary">Open sharing review</ActionLink>
           </Card>
         </div>
       </>

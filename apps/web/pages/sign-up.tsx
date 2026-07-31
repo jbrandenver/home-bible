@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button, Card, PageHeader } from '@home-folder/ui';
 import { Seo } from '../components/Seo';
 import {
+  enabledOAuthProviders,
   formatAuthError,
   isSupabaseConfigured,
   signInWithApple,
@@ -19,6 +20,7 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
 
   const setupMissing = !isSupabaseConfigured();
+  const oauthProviders = enabledOAuthProviders();
 
   const handleSignUp = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -84,34 +86,38 @@ export default function SignUpPage() {
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button type="submit" disabled={loading}>{loading ? 'Creating account...' : 'Create account with email'}</Button>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={async () => {
-                setError('');
-                const result = await signInWithGoogle();
-                if (result.error) {
-                  setError(formatAuthError(result.error));
-                }
-              }}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
-            >
-              Continue with Google
-            </button>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={async () => {
-                setError('');
-                const result = await signInWithApple();
-                if (result.error) {
-                  setError(formatAuthError(result.error));
-                }
-              }}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
-            >
-              Continue with Apple
-            </button>
+            {oauthProviders.includes('google') ? (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setError('');
+                  const result = await signInWithGoogle();
+                  if (result.error) {
+                    setError(formatAuthError(result.error));
+                  }
+                }}
+                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
+              >
+                Continue with Google
+              </button>
+            ) : null}
+            {oauthProviders.includes('apple') ? (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setError('');
+                  const result = await signInWithApple();
+                  if (result.error) {
+                    setError(formatAuthError(result.error));
+                  }
+                }}
+                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
+              >
+                Continue with Apple
+              </button>
+            ) : null}
           </div>
         </form>
 

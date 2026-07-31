@@ -356,8 +356,8 @@ export default function WelcomePage() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 18 }}>
-                <ActionLink href="/inventory" variant="secondary">Start an inventory</ActionLink>
                 <ActionLink href="/add-rooms" variant="secondary">Add rooms</ActionLink>
+                <ActionLink href="/inventory" variant="secondary">Start an inventory</ActionLink>
                 <ActionLink href="/utilities" variant="secondary">Add another utility</ActionLink>
               </div>
             </Card>

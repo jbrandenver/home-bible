@@ -10,6 +10,28 @@ Last updated: 2026-07-30
 
 ## Blocking a public launch
 
+### 0. Enable Google / Apple sign-in (added 2026-07-31)
+The "Continue with Google/Apple" buttons are hidden until you finish this —
+both providers are disabled in Supabase, and clicking through used to land on
+a raw JSON error page. To switch them on:
+
+1. **Google:** Google Cloud Console → create an OAuth client (Web application);
+   authorized redirect URI: `https://<your-project-ref>.supabase.co/auth/v1/callback`.
+   Copy client ID + secret into Supabase → Authentication → Providers → Google.
+2. **Apple** (needs the paid Apple Developer account): create a Services ID +
+   Sign in with Apple key, same redirect URI, then fill Supabase → Providers → Apple.
+3. Supabase → Authentication → URL Configuration → add
+   `https://ourhomefolder.com/dashboard` and `https://ourhomefolder.com/reset-password`
+   to Redirect URLs (Site URL should already be `https://ourhomefolder.com`).
+4. In the Cloudflare Workers Builds environment set
+   `NEXT_PUBLIC_OAUTH_PROVIDERS=google,apple` (or just `google`) and redeploy —
+   that is what un-hides the buttons.
+
+Password reset (forgot-password → emailed link → reset-password) works with
+email/password accounts as soon as step 3's redirect URL is in place.
+
+
+
 ### 1. ~~Point the domain at a host~~ — DONE 2026-07-31
 Live on Cloudflare Workers (OpenNext, PR #7). All routes verified 200 on
 `ourhomefolder.com` and `www`, sitemap/canonicals emit the production URL,

@@ -178,6 +178,9 @@ export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
       {...props}
       style={{
         width: '100%',
+        // width:100% + padding + border overflowed parent cards without this —
+        // there is no global box-sizing reset in the app.
+        boxSizing: 'border-box',
         padding: '12px 14px',
         fontSize: 16,
         ...props.style
@@ -192,6 +195,7 @@ export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
       {...props}
       style={{
         width: '100%',
+        boxSizing: 'border-box',
         padding: '12px 14px',
         fontSize: 16,
         ...props.style

@@ -182,13 +182,32 @@ export async function signInWithEmail(email: string, password: string): Promise<
   };
 }
 
-export async function signInWithGoogle(): Promise<AuthResult> {
+// OAuth buttons render only for providers named in NEXT_PUBLIC_OAUTH_PROVIDERS
+// (comma-separated, e.g. "google,apple"). A provider that is not ALSO enabled
+// in the Supabase dashboard (Authentication → Providers, with real Google
+// Cloud / Apple Developer credentials) sends the visitor to a bare JSON error
+// page — so the buttons stay hidden until both halves exist. Setup steps live
+// in docs/NEEDS_JESSE.md.
+export function enabledOAuthProviders(): Array<'google' | 'apple'> {
+  const raw = process.env.NEXT_PUBLIC_OAUTH_PROVIDERS || '';
+  return raw
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry): entry is 'google' | 'apple' => entry === 'google' || entry === 'apple');
+}
+
+async function signInWithProvider(provider: 'google' | 'apple'): Promise<AuthResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return { data: null, error: new Error(getSupabaseSetupMessage()) };
   }
 
-  const result = await supabase.auth.signInWithOAuth({ provider: 'google' });
+  const result = await supabase.auth.signInWithOAuth({
+    provider,
+    // Land back in the app after the provider round-trip. The URL must also be
+    // listed in Supabase → Authentication → URL Configuration → Redirect URLs.
+    options: { redirectTo: `${window.location.origin}/dashboard` }
+  });
 
   return {
     data: result.data,
@@ -196,18 +215,45 @@ export async function signInWithGoogle(): Promise<AuthResult> {
   };
 }
 
+export async function signInWithGoogle(): Promise<AuthResult> {
+  return signInWithProvider('google');
+}
+
 export async function signInWithApple(): Promise<AuthResult> {
+  return signInWithProvider('apple');
+}
+
+/**
+ * Send the password-reset email. Always resolves without revealing whether the
+ * address has an account — the page copy stays "if an account exists" either
+ * way, so this is not an enumeration oracle.
+ */
+export async function requestPasswordReset(email: string): Promise<AuthResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return { data: null, error: new Error(getSupabaseSetupMessage()) };
   }
 
-  const result = await supabase.auth.signInWithOAuth({ provider: 'apple' });
+  const result = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`
+  });
 
-  return {
-    data: result.data,
-    error: result.error
-  };
+  return { data: result.data, error: result.error };
+}
+
+/** Set a new password for the recovery session opened by the emailed link. */
+export async function updatePassword(password: string): Promise<AuthResult> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return { data: null, error: new Error(getSupabaseSetupMessage()) };
+  }
+
+  const result = await withAuthTimeout(
+    supabase.auth.updateUser({ password }),
+    'updating your password'
+  );
+
+  return { data: result.data, error: result.error };
 }
 
 export async function signOut() {

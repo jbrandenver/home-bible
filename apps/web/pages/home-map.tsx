@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { PageHeader, Card, FloorSection, RoomCard, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { isOutdoorArea, sortFloorNames } from '../lib/floorOrder';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import { getDocumentDataContext, getDocumentsForContext, type DocumentRow } from '../lib/documents';
@@ -230,7 +231,7 @@ export default function HomeMapPage() {
   }, []);
 
   const roomsByFloor = useMemo(() => {
-    return rooms.reduce<Record<string, Room[]>>((acc, room) => {
+    const groups = rooms.reduce<Record<string, Room[]>>((acc, room) => {
       if (!acc[room.floor_name]) {
         acc[room.floor_name] = [];
       }
@@ -238,9 +239,24 @@ export default function HomeMapPage() {
       acc[room.floor_name].push(room);
       return acc;
     }, {});
+
+    // Rooms read A→Z inside each floor.
+    for (const floor of Object.keys(groups)) {
+      groups[floor].sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return groups;
   }, [rooms]);
 
-  const floorNames = Object.keys(roomsByFloor);
+  // Canonical order: basement → main → upper floors → attic, with outdoor
+  // areas ("Outside") always last — they're areas, not floors.
+  const floorNames = useMemo(() => sortFloorNames(Object.keys(roomsByFloor)), [roomsByFloor]);
+
+  // Outdoor areas don't count toward the floor tally.
+  const indoorFloorCount = useMemo(
+    () => floorNames.filter((name) => !isOutdoorArea(name)).length,
+    [floorNames]
+  );
 
   const assetCountsByRoom = useMemo(() => {
     return assets.reduce<Record<string, number>>((acc, asset) => {
@@ -342,7 +358,8 @@ export default function HomeMapPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Map overview</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <UtilityBadge label={`${floorNames.length} floor${floorNames.length === 1 ? '' : 's'}`} />
+              <UtilityBadge label={`${indoorFloorCount} floor${indoorFloorCount === 1 ? '' : 's'}`} />
+              {floorNames.length > indoorFloorCount ? <UtilityBadge label="Outside areas" /> : null}
               <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? '' : 's'}`} />
               <UtilityBadge label={`${utilities.length} utilit${utilities.length === 1 ? 'y' : 'ies'}`} />
               <UtilityBadge label={`${assets.length} asset${assets.length === 1 ? '' : 's'}`} />

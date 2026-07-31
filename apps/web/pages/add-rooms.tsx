@@ -1,13 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { ROOM_TYPES } from '@home-folder/shared';
 import { PageHeader, Card, Input, Select, Button } from '@home-folder/ui';
 import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
+import { FLOOR_SUGGESTIONS, sortFloorNames } from '../lib/floorOrder';
 import { getPrimaryPropertyForUser } from '../lib/properties';
 import { createRoomsForProperty, getRoomsForProperty, updateRoomForProperty } from '../lib/rooms';
-import { formatRoomLocation, formatRoomTypeLabel } from '../lib/roomLabels';
+import { formatRoomTypeLabel } from '../lib/roomLabels';
+import { CLOSET_PROMPT_TYPES, inferRoomTypeFromName, titleCaseName } from '../lib/roomNameHints';
 import { getDemoActiveProperty, getDemoRooms, setDemoRooms } from '../lib/demoStorage';
 import { ActionLink } from '../components/ActionLink';
+
+// Sentinel for "type a floor that isn't in the dropdown yet". Once a room is
+// saved on that floor, the floor becomes a normal dropdown option.
+const NEW_FLOOR = '__new_floor__';
 
 type Room = {
   id: string;
@@ -32,7 +38,12 @@ export default function AddRoomsPage() {
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [roomName, setRoomName] = useState('');
   const [roomType, setRoomType] = useState<(typeof ROOM_TYPES)[number]>('bedroom');
-  const [floorName, setFloorName] = useState('Main Floor');
+  // True once the person picks a type by hand — stops the name-based
+  // auto-match from fighting their choice.
+  const [typeTouched, setTypeTouched] = useState(false);
+  const [hasCloset, setHasCloset] = useState(false);
+  const [floorChoice, setFloorChoice] = useState('Main Floor');
+  const [newFloorName, setNewFloorName] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
   const [editRoomName, setEditRoomName] = useState('');
@@ -44,6 +55,41 @@ export default function AddRoomsPage() {
   const [isEditing, setIsEditing] = useState(false);
 
   const supabaseReady = isSupabaseConfigured();
+
+  // Floors you can pick from: the home's own floors plus common suggestions.
+  // A typed-in floor joins this list as soon as its first room is saved.
+  const floorOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const suggestion of FLOOR_SUGGESTIONS) {
+      seen.set(suggestion.toLowerCase(), suggestion);
+    }
+    for (const room of rooms) {
+      const name = (room.floor_name || '').trim();
+      if (name) seen.set(name.toLowerCase(), name);
+    }
+    if (floorChoice !== NEW_FLOOR && floorChoice.trim()) {
+      seen.set(floorChoice.toLowerCase(), floorChoice);
+    }
+    return sortFloorNames([...seen.values()]);
+  }, [rooms, floorChoice]);
+
+  // Group the added rooms by floor (canonical floor order, rooms A→Z) so each
+  // level reads as its own section.
+  const roomsByFloor = useMemo(() => {
+    const groups = new Map<string, Room[]>();
+    for (const room of rooms) {
+      const floor = (room.floor_name || 'Main Floor').trim() || 'Main Floor';
+      const existing = groups.get(floor) || [];
+      existing.push(room);
+      groups.set(floor, existing);
+    }
+    return sortFloorNames([...groups.keys()]).map((floor) => ({
+      floor,
+      rooms: (groups.get(floor) || []).slice().sort((a, b) => a.name.localeCompare(b.name))
+    }));
+  }, [rooms]);
+
+  const closetEligible = CLOSET_PROMPT_TYPES.includes(roomType);
 
   useEffect(() => {
     let isMounted = true;
@@ -146,19 +192,47 @@ export default function AddRoomsPage() {
       return;
     }
 
-    setError('');
+    const floor =
+      floorChoice === NEW_FLOOR
+        ? titleCaseName(newFloorName) || ''
+        : titleCaseName(floorChoice) || 'Main Floor';
 
+    if (!floor) {
+      setError('Name the new floor, or pick one from the list.');
+      return;
+    }
+
+    // Names are stored title-cased so "master bedroom" files as
+    // "Master Bedroom" without anyone thinking about it.
+    const name = titleCaseName(roomName);
+
+    const entries = [
+      { name, room_type: roomType, floor_name: floor },
+      // The closet rides along as its own selectable space — "Master Bedroom
+      // Closet" — so the modem on its shelf has a real location without every
+      // room needing a closet entered by hand.
+      ...(hasCloset && closetEligible
+        ? [{ name: `${name} Closet`, room_type: 'closet' as (typeof ROOM_TYPES)[number], floor_name: floor }]
+        : [])
+    ];
+
+    setError('');
     setIsSubmitting(true);
+
+    function resetForm() {
+      setRoomName('');
+      setRoomType('bedroom');
+      setTypeTouched(false);
+      setHasCloset(false);
+      // Keep the floor selected — the next room is usually on the same one,
+      // and a freshly typed floor becomes a normal dropdown pick.
+      setFloorChoice(floor);
+      setNewFloorName('');
+    }
 
     if (dataMode === 'account' && activePropertyId) {
       try {
-        const remoteRooms = await createRoomsForProperty(activePropertyId, [
-          {
-            name: roomName.trim(),
-            room_type: roomType,
-            floor_name: floorName.trim() || 'Main Floor'
-          }
-        ]);
+        const remoteRooms = await createRoomsForProperty(activePropertyId, entries);
 
         setRooms(
           remoteRooms.map((room) => ({
@@ -169,8 +243,7 @@ export default function AddRoomsPage() {
             notes: room.notes || null
           }))
         );
-        setRoomName('');
-        setRoomType('bedroom');
+        resetForm();
         setIsSubmitting(false);
         return;
       } catch (submitError) {
@@ -182,17 +255,16 @@ export default function AddRoomsPage() {
 
     const nextRooms = [
       ...rooms,
-      {
+      ...entries.map((entry) => ({
         id: crypto.randomUUID(),
-        name: roomName.trim(),
-        room_type: roomType,
-        floor_name: floorName.trim() || 'Main Floor'
-      }
+        name: entry.name,
+        room_type: entry.room_type,
+        floor_name: entry.floor_name
+      }))
     ];
 
     saveRooms(nextRooms);
-    setRoomName('');
-    setRoomType('bedroom');
+    resetForm();
     setIsSubmitting(false);
   }
 
@@ -211,9 +283,9 @@ export default function AddRoomsPage() {
     if (dataMode === 'account' && activePropertyId) {
       try {
         const remoteRooms = await updateRoomForProperty(activePropertyId, editingRoomId, {
-          name: editRoomName.trim(),
+          name: titleCaseName(editRoomName),
           room_type: editRoomType,
-          floor_name: editFloorName.trim() || 'Main Floor',
+          floor_name: titleCaseName(editFloorName) || 'Main Floor',
           notes: editNotes.trim() || null
         });
 
@@ -239,9 +311,9 @@ export default function AddRoomsPage() {
       room.id === editingRoomId
         ? {
             ...room,
-            name: editRoomName.trim(),
+            name: titleCaseName(editRoomName),
             room_type: editRoomType,
-            floor_name: editFloorName.trim() || 'Main Floor',
+            floor_name: titleCaseName(editFloorName) || 'Main Floor',
             notes: editNotes.trim() || null
           }
         : room
@@ -320,7 +392,18 @@ export default function AddRoomsPage() {
                 <Input
                   id="roomName"
                   value={roomName}
-                  onChange={(event) => setRoomName(event.target.value)}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setRoomName(value);
+                    // "Guest bedroom" self-selects the Bedroom type; a
+                    // hand-picked type is never overridden.
+                    if (!typeTouched) {
+                      const inferred = inferRoomTypeFromName(value);
+                      if (inferred) {
+                        setRoomType(inferred);
+                      }
+                    }
+                  }}
                   placeholder="Example: Kitchen"
                 />
               </div>
@@ -332,7 +415,10 @@ export default function AddRoomsPage() {
                 <Select
                   id="roomType"
                   value={roomType}
-                  onChange={(event) => setRoomType(event.target.value as (typeof ROOM_TYPES)[number])}
+                  onChange={(event) => {
+                    setRoomType(event.target.value as (typeof ROOM_TYPES)[number]);
+                    setTypeTouched(true);
+                  }}
                 >
                   {ROOM_TYPES.map((type) => (
                     <option key={type} value={type}>
@@ -342,16 +428,55 @@ export default function AddRoomsPage() {
                 </Select>
               </div>
 
+              {closetEligible ? (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600 }}>
+                  <input
+                    type="checkbox"
+                    checked={hasCloset}
+                    onChange={(event) => setHasCloset(event.target.checked)}
+                    style={{ width: 18, height: 18 }}
+                  />
+                  <span>
+                    This room has a closet
+                    <span style={{ display: 'block', fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                      {roomName.trim()
+                        ? `Adds "${titleCaseName(roomName)} Closet" as its own selectable space.`
+                        : 'Adds the closet as its own selectable space.'}
+                    </span>
+                  </span>
+                </label>
+              ) : null}
+
               <div>
-                <label htmlFor="floorName" style={{ display: 'block', fontWeight: 700, marginBottom: 8 }}>
+                <label htmlFor="floorChoice" style={{ display: 'block', fontWeight: 700, marginBottom: 8 }}>
                   Floor
                 </label>
-                <Input
-                  id="floorName"
-                  value={floorName}
-                  onChange={(event) => setFloorName(event.target.value)}
-                  placeholder="Example: Main Floor"
-                />
+                <Select
+                  id="floorChoice"
+                  value={floorChoice}
+                  onChange={(event) => setFloorChoice(event.target.value)}
+                >
+                  {floorOptions.map((floor) => (
+                    <option key={floor} value={floor}>
+                      {floor}
+                    </option>
+                  ))}
+                  <option value={NEW_FLOOR}>Add another floor…</option>
+                </Select>
+                {floorChoice === NEW_FLOOR ? (
+                  <div style={{ marginTop: 8 }}>
+                    <label htmlFor="newFloorName" style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>
+                      New floor name
+                    </label>
+                    <Input
+                      id="newFloorName"
+                      value={newFloorName}
+                      onChange={(event) => setNewFloorName(event.target.value)}
+                      placeholder="Example: Garden Level"
+                      autoFocus
+                    />
+                  </div>
+                ) : null}
               </div>
 
               {error ? (
@@ -373,8 +498,12 @@ export default function AddRoomsPage() {
             {rooms.length === 0 ? (
               <p style={{ color: 'var(--text-muted)' }}>No rooms yet - let's map the house.</p>
             ) : (
-              <div style={{ display: 'grid', gap: 12 }}>
-                {rooms.map((room) => (
+              <div style={{ display: 'grid', gap: 20 }}>
+                {roomsByFloor.map((group) => (
+                  <section key={group.floor}>
+                    <h3 className="hb-leader" style={{ margin: '0 0 12px', paddingBottom: 4 }}>{group.floor}</h3>
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {group.rooms.map((room) => (
                   <div
                     key={room.id}
                     style={{
@@ -435,7 +564,7 @@ export default function AddRoomsPage() {
                         <div>
                           <strong>{room.name}</strong>
                           <div style={{ color: 'var(--text-muted)' }}>
-                            {formatRoomTypeLabel(room.room_type)} • {formatRoomLocation(room)}
+                            {formatRoomTypeLabel(room.room_type)}
                           </div>
                           {room.notes ? <div style={{ color: 'var(--text-muted)', marginTop: 4 }}>{room.notes}</div> : null}
                         </div>
@@ -456,6 +585,9 @@ export default function AddRoomsPage() {
                       </div>
                     )}
                   </div>
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             )}

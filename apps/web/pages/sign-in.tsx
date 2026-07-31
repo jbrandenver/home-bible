@@ -5,6 +5,7 @@ import { safeRelativePath } from '@home-folder/shared';
 import { Button, Card, PageHeader } from '@home-folder/ui';
 import { Seo } from '../components/Seo';
 import {
+  enabledOAuthProviders,
   formatAuthError,
   isSupabaseConfigured,
   signInWithApple,
@@ -21,6 +22,7 @@ export default function SignInPage() {
   const [oauthProvider, setOauthProvider] = useState<'google' | 'apple' | null>(null);
 
   const setupMissing = !isSupabaseConfigured();
+  const oauthProviders = enabledOAuthProviders();
   // Never redirect anywhere but back into this app — an attacker-supplied
   // `?next=` would otherwise be an open redirect and a `javascript:` sink.
   const nextPath = safeRelativePath(router.query.next, '/dashboard');
@@ -101,26 +103,33 @@ export default function SignInPage() {
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button type="submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign in with email'}</Button>
-            <button
-              type="button"
-              disabled={loading || Boolean(oauthProvider)}
-              onClick={() => handleOAuthSignIn('google')}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
-            >
-              {oauthProvider === 'google' ? 'Redirecting...' : 'Continue with Google'}
-            </button>
-            <button
-              type="button"
-              disabled={loading || Boolean(oauthProvider)}
-              onClick={() => handleOAuthSignIn('apple')}
-              style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
-            >
-              {oauthProvider === 'apple' ? 'Redirecting...' : 'Continue with Apple'}
-            </button>
+            {oauthProviders.includes('google') ? (
+              <button
+                type="button"
+                disabled={loading || Boolean(oauthProvider)}
+                onClick={() => handleOAuthSignIn('google')}
+                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
+              >
+                {oauthProvider === 'google' ? 'Redirecting...' : 'Continue with Google'}
+              </button>
+            ) : null}
+            {oauthProviders.includes('apple') ? (
+              <button
+                type="button"
+                disabled={loading || Boolean(oauthProvider)}
+                onClick={() => handleOAuthSignIn('apple')}
+                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
+              >
+                {oauthProvider === 'apple' ? 'Redirecting...' : 'Continue with Apple'}
+              </button>
+            ) : null}
           </div>
         </form>
 
-        <p style={{ marginTop: 16, color: 'var(--text-muted)' }}>
+        <p style={{ marginTop: 16, marginBottom: 0, color: 'var(--text-muted)' }}>
+          <Link href="/forgot-password">Forgot your password?</Link>
+        </p>
+        <p style={{ marginTop: 8, color: 'var(--text-muted)' }}>
           New here? <Link href="/sign-up">Create an account</Link>
         </p>
       </Card>

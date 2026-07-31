@@ -38,7 +38,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   // masthead — no app navigation, property switcher, or demo-storage note.
   // The app chrome returns the moment they enter the app (or sign in).
   const isPublicSurface =
-    (PUBLIC_ROUTES.includes(router.pathname) || router.pathname === '/data-promise') && !userEmail;
+    (PUBLIC_ROUTES.includes(router.pathname) ||
+      ['/data-promise', '/forgot-password', '/reset-password'].includes(router.pathname)) &&
+    !userEmail;
 
   const isActiveRoute = (path: string) => {
     if (path === '/') return router.pathname === '/';
