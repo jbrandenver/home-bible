@@ -69,7 +69,7 @@ export default function Home() {
     <div style={{ display: 'grid', gap: 28 }}>
       <Seo
         title="Our Home Folder — the complete record of the place you live"
-        description="Document your home the way a family keeps a deed: rooms, shut-offs, appliances, warranties, repairs, and the papers that prove it — clear enough to hand to a stranger. Free to begin."
+        description="A complete record of your home — rooms, shut-offs, appliances, warranties, repairs, and the papers that prove it — drawn up and documented so you and your family are protected. Free to begin."
         path="/"
         structuredData={[organizationSchema, websiteSchema, softwareApplicationSchema]}
       />
@@ -113,9 +113,9 @@ export default function Home() {
                 installed the boiler, whether the roof is still under warranty.
               </p>
               <p style={{ maxWidth: 640 }}>
-                Our Home Folder is a private register of your home: rooms, systems, appliances,
-                warranties, repairs, and the papers that prove it all — kept the way a family keeps
-                a deed, and clear enough to hand to a stranger.
+                Our Home Folder is a complete record of your home — drawn up and documented so you
+                and your family are protected. Rooms, systems, appliances, warranties, repairs, and
+                the papers that prove it all, in one place.
               </p>
             </div>
           </div>
@@ -134,9 +134,6 @@ export default function Home() {
             </span>
           </div>
 
-          <div className="hb-mrz" style={{ marginTop: 26, maxWidth: 640 }} aria-hidden="true">
-            OUR·HOME·FOLDER&lt;&lt;A·COMPLETE·RECORD&lt;&lt;KEEP&lt;&lt;HAND·ON&lt;&lt;OHF
-          </div>
         </div>
       </Card>
 
