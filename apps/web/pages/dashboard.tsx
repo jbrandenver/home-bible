@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel } from '@home-folder/shared';
+import { formatEnumLabel, getWarrantyMeta } from '@home-folder/shared';
 import { PageHeader, Card, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { DemoImportBanner } from '../components/DemoImportBanner';
 import {
   getAutomationContext,
   getDevicesForContext,
@@ -32,34 +33,6 @@ type Room = {
   floor_name: string;
 };
 
-function getWarrantyStatus(asset: AssetRow): 'active' | 'expiring_soon' | 'expired' | 'unknown' {
-  let expirationDate: Date | null = null;
-
-  if (asset.warranty_expires_at) {
-    expirationDate = new Date(asset.warranty_expires_at);
-  } else if (asset.purchase_date && asset.warranty_length_months) {
-    const purchaseDate = new Date(asset.purchase_date);
-    expirationDate = new Date(purchaseDate);
-    expirationDate.setMonth(expirationDate.getMonth() + asset.warranty_length_months);
-  }
-
-  if (!expirationDate || Number.isNaN(expirationDate.getTime())) {
-    return 'unknown';
-  }
-
-  const daysRemaining = Math.ceil((expirationDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-
-  if (daysRemaining < 0) {
-    return 'expired';
-  }
-
-  if (daysRemaining <= 30) {
-    return 'expiring_soon';
-  }
-
-  return 'active';
-};
-
 export default function DashboardPage() {
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
@@ -86,6 +59,8 @@ export default function DashboardPage() {
   const [trendFlagError, setTrendFlagError] = useState('');
   const [roomError, setRoomError] = useState('');
   const [automationSummary, setAutomationSummary] = useState<AutomationOverview | null>(null);
+  const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Isolated, best-effort automation summary — never blocks the main dashboard.
   useEffect(() => {
@@ -246,6 +221,7 @@ export default function DashboardPage() {
 
       if (utilityContext.mode === 'supabase') {
         setHasProperty(Boolean(utilityContext.property));
+        setActivePropertyId(utilityContext.property?.id ?? null);
         setPropertyNickname(utilityContext.property?.nickname || 'Your property');
 
         if (utilityContext.property) {
@@ -302,7 +278,7 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [reloadKey]);
 
   const floors = floorCount || Array.from(new Set(rooms.map((room) => room.floor_name))).length;
   const roomSpaceSummary = useMemo(() => getRoomSpaceSummary(rooms), [rooms]);
@@ -337,10 +313,10 @@ export default function DashboardPage() {
 
   const warrantySummary = useMemo(
     () => ({
-      active: assets.filter((asset) => getWarrantyStatus(asset) === 'active').length,
-      expiringSoon: assets.filter((asset) => getWarrantyStatus(asset) === 'expiring_soon').length,
-      expired: assets.filter((asset) => getWarrantyStatus(asset) === 'expired').length,
-      unknown: assets.filter((asset) => getWarrantyStatus(asset) === 'unknown').length
+      active: assets.filter((asset) => getWarrantyMeta(asset).status === 'active').length,
+      expiringSoon: assets.filter((asset) => getWarrantyMeta(asset).status === 'expiring_soon').length,
+      expired: assets.filter((asset) => getWarrantyMeta(asset).status === 'expired').length,
+      unknown: assets.filter((asset) => getWarrantyMeta(asset).status === 'unknown').length
     }),
     [assets]
   );
@@ -514,6 +490,13 @@ export default function DashboardPage() {
       />
 
         <div style={{ display: 'grid', gap: 24 }}>
+          {dataMode === 'supabase' ? (
+            <DemoImportBanner
+              propertyId={activePropertyId}
+              onImported={() => setReloadKey((key) => key + 1)}
+            />
+          ) : null}
+
           <Card tone="dark">
             <h2 style={{ marginTop: 0 }}>{nextStep.title}</h2>
             <p style={{ color: 'rgba(255,248,234,0.78)' }}>{nextStep.description}</p>

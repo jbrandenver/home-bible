@@ -386,6 +386,33 @@ deno_version = 2
 [functions.delete-account]
 verify_jwt = true
 
+# Called by pg_cron, which cannot present a user JWT. Protected instead by the
+# DIGEST_CRON_SECRET shared secret checked inside the handler.
+[functions.send-digest]
+verify_jwt = false
+
+# Reached from a link in an email, by someone who is not signed in. Protected
+# by an HMAC of the user id in the URL, verified in constant time.
+[functions.unsubscribe]
+verify_jwt = false
+
+# Stripe cannot present a JWT. The Stripe-Signature check inside the handler is
+# the only authentication, so it runs before anything touches the database.
+[functions.stripe-webhook]
+verify_jwt = false
+
+# Called by pg_cron, which cannot present a user JWT. Protected instead by the
+# RECALL_CRON_SECRET shared secret checked inside the handler; refuses with a
+# 503 while that secret is unset.
+[functions.check-recalls]
+verify_jwt = false
+
+# Signed-in users only: Supabase validates the caller's JWT at the gateway
+# before invoking, so the handler can trust the token payload it reads the
+# user id from. Inert (503) until ANTHROPIC_API_KEY is set.
+[functions.analyze-plate]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

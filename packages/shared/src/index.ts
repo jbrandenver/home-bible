@@ -7,7 +7,9 @@ export const PROPERTY_TYPES = [
   'townhome',
   'duplex',
   'cabin',
-  'rental_home'
+  'rental_home',
+  'apartment_building',
+  'multi_family'
 ] as const;
 
 export const ROOM_TYPES = [
@@ -258,7 +260,10 @@ export const DOCUMENT_TYPES = [
   'asset_document',
   'repair_document',
   'issue_document',
-  'other'
+  'other',
+  'condition_photo',
+  'compliance_certificate',
+  'tenancy_document'
 ] as const;
 
 export const DOCUMENT_VISIBILITIES = [
@@ -322,6 +327,36 @@ export const PLAN_NAMES = [
   'extra_property'
 ] as const;
 
+/**
+ * Only same-origin, in-app destinations may be used as a post-auth redirect.
+ *
+ * Next.js hands any scheme-bearing value to a hard `window.location` assignment
+ * with no scheme filter, so an unvalidated `?next=` is both an open redirect
+ * and a `javascript:` sink. A protocol-relative `//host` is rejected too — the
+ * browser reads it as another origin.
+ */
+export function safeRelativePath(value: unknown, fallback = '/'): string {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const trimmed = value.trim();
+
+  // Must start with a single slash, and carry no scheme, no authority, and no
+  // backslash (which some browsers normalise to '/').
+  if (!/^\/(?!\/)/.test(trimmed) || trimmed.includes('\\') || trimmed.includes(':')) {
+    return fallback;
+  }
+
+  // Control characters can be used to smuggle a scheme past the checks above.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001F\u007F]/.test(trimmed)) {
+    return fallback;
+  }
+
+  return trimmed;
+}
+
 export function safeHttpUrl(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null;
@@ -364,6 +399,37 @@ export function toLocalDateString(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Parse a date-only string ("2026-07-30") as local midnight.
+ *
+ * `new Date('2026-07-30')` is interpreted as UTC midnight, so anywhere west of
+ * UTC it renders as the previous day — which put every date on the printed
+ * handover report one day early for a US reader. Values that already carry a
+ * time component are passed through to the normal Date parser.
+ */
+export function parseCalendarDate(value: string | null | undefined): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  const parsed = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(trimmed);
+
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** Human-readable calendar date with no timezone drift. */
+export function formatCalendarDate(
+  value: string | null | undefined,
+  options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'short', day: 'numeric' }
+): string | null {
+  const parsed = parseCalendarDate(value);
+  return parsed ? parsed.toLocaleDateString(undefined, options) : null;
 }
 
 export type WarrantyLike = {
@@ -425,18 +491,46 @@ export const forbiddenSensitivePatterns = [
   // broadened: common secret phrasings and "code/pin: 1234" style entries
   /pass\s*codes?/i,
   /pass\s*words?/i,
-  /\bpins?\b/i,
-  /combination/i,
+  // "pin" and "combination" on their own are ordinary home vocabulary — a
+  // combination boiler, a cotter pin, hinge pins. Matching them bare blanked
+  // real shut-off notes out of the sheet a homeowner hands to a technician.
+  // Require the secret-bearing sense instead; the digit-proximity rule below
+  // still catches "combination 1234" and "pin 4417".
+  /\bpin\s*(?:codes?|numbers?|#)/i,
+  /combination\s*(?:locks?|codes?|numbers?)/i,
   /\bcodes?\b\s*[:#=-]/i,
-  /\b(code|pin|combo|combination)\b[^.\n]{0,12}\d{3,}/i
+  // Digits near a secret word. Two or more digits with optional separators, so
+  // hyphenated forms like a safe's "12-24-6" are caught as well as "4729" —
+  // requiring three *consecutive* digits missed them.
+  /\b(code|pin|combo|combination)\b[^.\n]{0,12}\d(?:[\s._-]*\d)+/i
 ] as const;
 
+/**
+ * Whether this text would be withheld from a shared sheet or handover report.
+ *
+ * Exposed so a form can say so while the user is typing, instead of the text
+ * silently becoming "Hidden by privacy rule" on a document they have already
+ * handed to a technician.
+ */
+export function containsSensitiveText(value: string | null | undefined): boolean {
+  if (!value || !value.trim()) {
+    return false;
+  }
+
+  return forbiddenSensitivePatterns.some((pattern) => pattern.test(value));
+}
+
+/**
+ * Redaction is deliberately whole-field, not span-level: these patterns match
+ * the *label* ("garage code"), and the secret usually sits right beside it, so
+ * blanking only the matched words would leave "… is 1234" in plain sight.
+ */
 export function safeText(value: string | null | undefined, fallback = 'Hidden by privacy rule') {
   if (!value || !value.trim()) {
     return null;
   }
 
-  return forbiddenSensitivePatterns.some((pattern) => pattern.test(value)) ? fallback : value.trim();
+  return containsSensitiveText(value) ? fallback : value.trim();
 }
 
 export function safeFileName(value: string | null | undefined) {
@@ -946,4 +1040,94 @@ export function formatEnumLabel(value: string) {
     .join(' ');
 }
 
+// --- Portfolio (landlord / multi-unit) -------------------------------------
+// Units are properties with parent_property_id set; see migration 023. These
+// mirror the DB check constraints exactly, same as every enum above.
+
+export const TENANCY_STATUSES = ['upcoming', 'active', 'ended'] as const;
+
+export const CONDITION_REPORT_TYPES = [
+  'move_in',
+  'move_out',
+  'move_out_after_repairs',
+  'periodic'
+] as const;
+
+export const CONDITION_REPORT_STATUSES = ['draft', 'completed'] as const;
+
+export const CONDITION_RATINGS = ['good', 'fair', 'poor', 'damaged'] as const;
+
+export const COMPLIANCE_OBLIGATION_TYPES = [
+  'registration',
+  'license',
+  'inspection',
+  'certification',
+  'notice',
+  'tax',
+  'insurance',
+  'other'
+] as const;
+
+// Product key the Stripe webhook grants for the recurring landlord plan.
+export const PORTFOLIO_PRODUCT_KEY = 'portfolio_plan';
+
+export type TenancyStatus = (typeof TENANCY_STATUSES)[number];
+export type ConditionReportType = (typeof CONDITION_REPORT_TYPES)[number];
+export type ConditionReportStatus = (typeof CONDITION_REPORT_STATUSES)[number];
+export type ConditionRating = (typeof CONDITION_RATINGS)[number];
+export type ComplianceObligationType = (typeof COMPLIANCE_OBLIGATION_TYPES)[number];
+
+export const createTenancySchema = z.object({
+  property_id: z.string().uuid(),
+  label: z.string().min(1, 'A label is required').max(200),
+  tenant_names: z.string().max(500).optional().nullable(),
+  start_date: z.string().optional().nullable(),
+  end_date: z.string().optional().nullable(),
+  deposit_amount_cents: z.coerce.number().int().min(0).optional().nullable(),
+  deposit_currency: z.string().max(8).default('usd'),
+  deposit_returned_on: z.string().optional().nullable(),
+  status: z.enum(TENANCY_STATUSES).default('active'),
+  notes: z.string().max(10000).optional().nullable()
+});
+
+export const createConditionReportSchema = z.object({
+  property_id: z.string().uuid(),
+  tenancy_id: z.string().uuid().optional().nullable(),
+  report_type: z.enum(CONDITION_REPORT_TYPES),
+  report_date: z.string().min(1, 'A report date is required'),
+  conducted_by: z.string().max(200).optional().nullable(),
+  summary: z.string().max(10000).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable()
+});
+
+export const createConditionReportEntrySchema = z.object({
+  report_id: z.string().uuid(),
+  property_id: z.string().uuid(),
+  room_id: z.string().uuid().optional().nullable(),
+  area_label: z.string().max(200).optional().nullable(),
+  condition_rating: z.enum(CONDITION_RATINGS).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable(),
+  sort_order: z.coerce.number().int().default(0)
+});
+
+export const createComplianceObligationSchema = z.object({
+  property_id: z.string().uuid(),
+  title: z.string().min(1, 'A title is required').max(300),
+  authority: z.string().max(300).optional().nullable(),
+  jurisdiction: z.string().max(200).optional().nullable(),
+  obligation_type: z.enum(COMPLIANCE_OBLIGATION_TYPES).default('other'),
+  frequency_months: z.coerce.number().int().min(1).max(240).optional().nullable(),
+  next_due: z.string().optional().nullable(),
+  last_completed_on: z.string().optional().nullable(),
+  retention_years: z.coerce.number().int().min(0).max(100).optional().nullable(),
+  reference_url: z.string().max(2000).optional().nullable(),
+  notes: z.string().max(10000).optional().nullable()
+});
+
+export type CreateTenancyInput = z.infer<typeof createTenancySchema>;
+export type CreateConditionReportInput = z.infer<typeof createConditionReportSchema>;
+export type CreateConditionReportEntryInput = z.infer<typeof createConditionReportEntrySchema>;
+export type CreateComplianceObligationInput = z.infer<typeof createComplianceObligationSchema>;
+
 export * from './automation';
+export * from './lifespans';

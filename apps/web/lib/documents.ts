@@ -503,6 +503,7 @@ export async function updateDocumentMetadataForContext(
     .update(payload)
     .eq('id', documentId)
     .eq('property_id', context.property.id)
+    .is('deleted_at', null)
     .select(DOCUMENT_SELECT)
     .maybeSingle();
 
@@ -533,13 +534,15 @@ export async function deleteDocumentForContext(context: DocumentDataContext, doc
     .select('file_path, thumbnail_path')
     .eq('id', documentId)
     .eq('property_id', context.property.id)
+    .is('deleted_at', null)
     .maybeSingle();
 
   const { error } = await supabase
     .from('documents')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', documentId)
-    .eq('property_id', context.property.id);
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null);
 
   if (error) {
     throw new Error(formatDocumentError('delete document metadata', error.message));

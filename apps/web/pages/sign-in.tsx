@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
+import { safeRelativePath } from '@home-folder/shared';
 import { Button, Card, PageHeader } from '@home-folder/ui';
 import { Seo } from '../components/Seo';
 import {
@@ -20,7 +21,9 @@ export default function SignInPage() {
   const [oauthProvider, setOauthProvider] = useState<'google' | 'apple' | null>(null);
 
   const setupMissing = !isSupabaseConfigured();
-  const nextPath = typeof router.query.next === 'string' ? router.query.next : '/dashboard';
+  // Never redirect anywhere but back into this app — an attacker-supplied
+  // `?next=` would otherwise be an open redirect and a `javascript:` sink.
+  const nextPath = safeRelativePath(router.query.next, '/dashboard');
 
   const handleEmailSignIn = async (event: React.FormEvent) => {
     event.preventDefault();

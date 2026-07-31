@@ -132,8 +132,13 @@ export default function RepairsPage() {
 
   // "Report a problem" links (e.g. from a utility page) prefill the new-repair
   // form with the thing being reported.
+  //
+  // Waits for the option lists to load, then only applies ids that actually
+  // exist. A stale or hand-edited link previously wrote its id straight into
+  // state: the <select> rendered blank (selectedIndex -1) while still holding
+  // the value, and submitting produced a raw foreign-key violation.
   useEffect(() => {
-    if (!router.isReady) {
+    if (!router.isReady || loading) {
       return;
     }
 
@@ -144,10 +149,45 @@ export default function RepairsPage() {
     const prefillRoomId = queryValue(router.query.roomId);
     const prefillTitle = queryValue(router.query.title);
 
-    if (prefillUtilityId) setRepairUtilityId(prefillUtilityId);
-    if (prefillRoomId) setRepairRoomId(prefillRoomId);
-    if (prefillTitle) setRepairTitle(prefillTitle);
-  }, [router.isReady, router.query.utilityId, router.query.roomId, router.query.title]);
+    const stale: string[] = [];
+
+    if (prefillUtilityId) {
+      if (utilities.some((option) => option.id === prefillUtilityId)) {
+        setRepairUtilityId(prefillUtilityId);
+      } else {
+        stale.push('utility');
+      }
+    }
+
+    if (prefillRoomId) {
+      if (rooms.some((option) => option.id === prefillRoomId)) {
+        setRepairRoomId(prefillRoomId);
+      } else {
+        stale.push('room');
+      }
+    }
+
+    if (prefillTitle) {
+      // Strip control characters and cap the length — this string ends up as
+      // the heading of a printed sheet and the subject of an email.
+      // eslint-disable-next-line no-control-regex
+      setRepairTitle(prefillTitle.replace(/[\u0000-\u001F\u007F]/g, ' ').trim().slice(0, 200));
+    }
+
+    if (stale.length > 0) {
+      setFormError(
+        `That ${stale.join(' and ')} no longer exists, so it was not pre-selected. Pick another below.`
+      );
+    }
+  }, [
+    router.isReady,
+    router.query.utilityId,
+    router.query.roomId,
+    router.query.title,
+    loading,
+    rooms,
+    utilities
+  ]);
 
   useEffect(() => {
     let isMounted = true;

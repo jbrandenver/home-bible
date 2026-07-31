@@ -69,7 +69,7 @@ export default function Home() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 26 }}>
-            <ActionLink href="/create-property">Begin your record</ActionLink>
+            <ActionLink href="/welcome">Begin your record</ActionLink>
             <ActionLink
               href="/sign-in"
               variant="secondary"

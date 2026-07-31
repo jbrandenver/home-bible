@@ -10,7 +10,8 @@ import { getDemoRooms } from '../../lib/demoStorage';
 import {
   getAvailableLocationPresets,
   isLocationPresetValue,
-  resolveLocationRoomId
+  resolveLocationRoomId,
+  rollbackCreatedLocation
 } from '../../lib/locationPresets';
 import {
   getDocumentDataContext,
@@ -168,7 +169,7 @@ export default function UtilityDetailPage() {
   }, [utilityId]);
 
   const roomName = utility?.room_id
-    ? formatRoomLocation(rooms.find((room) => room.id === utility.room_id) || { name: 'Unknown room' })
+    ? formatRoomLocation(rooms.find((room) => room.id === utility.room_id) || { name: 'Room was deleted' })
     : 'Not assigned';
 
   const locationPresets = useMemo(() => getAvailableLocationPresets(rooms), [rooms]);
@@ -185,19 +186,22 @@ export default function UtilityDetailPage() {
     setSaving(true);
     setFormError('');
 
+    const resolutionContext =
+      context.mode === 'supabase' && context.property
+        ? ({ mode: 'supabase', propertyId: context.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
     try {
       const wasPreset = isLocationPresetValue(roomId);
-      const resolvedRoomId = await resolveLocationRoomId(
-        roomId,
-        context.mode === 'supabase' && context.property
-          ? { mode: 'supabase', propertyId: context.property.id }
-          : { mode: 'demo' }
-      );
+      const resolved = await resolveLocationRoomId(roomId, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
 
       const updatedUtility = await updateUtilityForContext(context, utility.id, {
         name,
         utility_type: utilityType,
-        room_id: resolvedRoomId,
+        room_id: resolved.roomId,
         location_notes: locationNotes,
         emergency_notes: emergencyNotes
       });
@@ -215,6 +219,8 @@ export default function UtilityDetailPage() {
         setRooms(refreshedRooms);
       }
     } catch (saveError) {
+      // Don't leave behind a room created for a preset whose save then failed.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
       setFormError(saveError instanceof Error ? saveError.message : 'Failed to update utility.');
     } finally {
       setSaving(false);
@@ -319,7 +325,7 @@ export default function UtilityDetailPage() {
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <ActionLink
-              href={`/repairs?utilityId=${encodeURIComponent(utility.id)}${utility.room_id ? `&roomId=${encodeURIComponent(utility.room_id)}` : ''}&title=${encodeURIComponent(`${utility.name} — `)}`}
+              href={`/repairs?utilityId=${encodeURIComponent(utility.id)}${utility.room_id ? `&roomId=${encodeURIComponent(utility.room_id)}` : ''}&title=${encodeURIComponent(utility.name)}`}
             >
               Report a problem
             </ActionLink>

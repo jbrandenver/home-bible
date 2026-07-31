@@ -887,15 +887,20 @@ for insert with check (
   and inviter_user_id = auth.uid()
 );
 
+-- SECURITY: the invitee must NOT hold UPDATE on their own invitation.
+-- accept_property_invitation() is SECURITY DEFINER and performs the
+-- accepted_at/accepted_by write itself, so an `or accepted_by = auth.uid()`
+-- branch buys nothing — and because such a branch does not reference
+-- property_id, it would let an invitee re-point their row at any property whose
+-- UUID they know, set role = 'co_owner', reset the token hash to one they chose,
+-- and re-accept. Manager-only, both directions.
 drop policy if exists p10_property_invitations_update_manager on public.property_invitations;
 create policy p10_property_invitations_update_manager on public.property_invitations
 for update using (
   public.can_manage_property_members(property_id)
-  or accepted_by = auth.uid()
 )
 with check (
   public.can_manage_property_members(property_id)
-  or accepted_by = auth.uid()
 );
 
 drop policy if exists p10_property_invitations_delete_manager on public.property_invitations;
@@ -1005,6 +1010,32 @@ begin
     raise exception 'this invitation is for a different email address';
   end if;
 
+  -- Defence in depth: the role guard is disarmed for the insert below, so
+  -- re-establish here that the person who issued this invitation is STILL
+  -- entitled to grant access. Otherwise an invitation minted by someone who has
+  -- since been demoted or removed would keep working indefinitely.
+  if not exists (
+    select 1
+    from public.properties p
+    where p.id = invitation.property_id
+      and p.deleted_at is null
+      and (
+        p.owner_user_id = invitation.inviter_user_id
+        or exists (
+          select 1
+          from public.property_members pm
+          where pm.property_id = p.id
+            and pm.user_id = invitation.inviter_user_id
+            and pm.deleted_at is null
+            and pm.role in ('owner', 'co_owner')
+        )
+      )
+  ) then
+    raise exception 'the person who sent this invitation can no longer grant access to this home';
+  end if;
+
+  -- Narrow window: armed immediately before the membership write and disarmed
+  -- immediately after, so nothing else in this transaction runs unguarded.
   perform set_config('app.accepting_property_invitation', 'on', true);
 
   insert into public.property_members (property_id, user_id, role, deleted_at)
@@ -1014,6 +1045,8 @@ begin
     role = excluded.role,
     deleted_at = null,
     updated_at = now();
+
+  perform set_config('app.accepting_property_invitation', 'off', true);
 
   update public.property_invitations
   set accepted_at = now(),
@@ -1075,6 +1108,225 @@ begin
   else
     raise notice 'Skipped rooms_property_floor_name_type_active_unique_idx because duplicates exist.';
   end if;
+end $$;
+
+notify pgrst, 'reload schema';
+
+-- ============================================================================
+-- HARDENING (audit 2026-07-29). Everything below closes gaps found by auditing
+-- the LIVE database rather than these files. Kept as one appended block so the
+-- original migration body stays reviewable against its history.
+-- ============================================================================
+
+-- 1. Drop legacy policies this migration did not already supersede ------------
+-- Postgres OR-combines permissive policies, so any survivor from the p6*
+-- generation silently re-opens whatever the p10_ policy above tightened.
+-- These are the exact survivors found on the live database.
+
+-- p6e_* duplicated the p6a_* reminder policies. Both use bare
+-- is_property_member, which would OR straight around p10_reminders_select's
+-- visibility gating and hand guests the whole reminder list.
+drop policy if exists p6e_reminders_select on public.reminders;
+drop policy if exists p6e_reminders_insert on public.reminders;
+drop policy if exists p6e_reminders_update on public.reminders;
+drop policy if exists p6e_reminders_delete on public.reminders;
+
+-- Allowed any *editor* to add members; p10_property_members_insert_manager
+-- restricts that to owner/co-owner via can_manage_property_members.
+drop policy if exists p6d_property_members_insert_editor on public.property_members;
+drop policy if exists p6d_properties_insert_owner on public.properties;
+drop policy if exists p6d_households_insert_owner on public.households;
+drop policy if exists p6d_household_members_insert_editor on public.household_members;
+
+-- (profiles and audit_events keep their p6a_ policies deliberately: this
+-- migration defines no replacement for them and they are already correctly
+-- self-scoped to auth.uid().)
+
+-- 2. created_by / visibility immutability ------------------------------------
+-- Insert policies pin created_by = auth.uid(), but the update policies only
+-- checked editor status. Since can_read_property_row() grants read when
+-- created_by = auth.uid(), an editor could claim authorship of an owner's
+-- private row and thereby unlock reading (and downloading) it.
+create or replace function public.guard_row_provenance()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  old_row jsonb := to_jsonb(old);
+  new_row jsonb := to_jsonb(new);
+begin
+  -- Column-agnostic on purpose: these triggers are attached to tables that do
+  -- not all carry visibility columns (rooms, floors, repairs, trend_flags and
+  -- receipts have none), and referencing a missing field directly would raise
+  -- at runtime. Reading through to_jsonb keeps one function for every table.
+  if new_row -> 'created_by' is distinct from old_row -> 'created_by' then
+    raise exception 'created_by cannot be changed';
+  end if;
+
+  if (
+    new_row -> 'visibility' is distinct from old_row -> 'visibility'
+    or new_row -> 'visibility_contexts' is distinct from old_row -> 'visibility_contexts'
+  ) then
+    -- Only someone who can already read the row may change how widely it is
+    -- shared. Editors keep normal edit rights; they simply cannot re-classify a
+    -- row they were never entitled to see.
+    if not public.can_read_property_row(
+      old.property_id,
+      old_row ->> 'visibility',
+      (select array(select jsonb_array_elements_text(old_row -> 'visibility_contexts'))),
+      (old_row ->> 'created_by')::uuid
+    ) then
+      raise exception 'you cannot change the visibility of a row you cannot read';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'floors','rooms','utilities','systems','assets','reminders',
+    'repairs','service_records','issues','trend_flags','documents','receipts'
+  ] loop
+    execute format('drop trigger if exists %I_guard_provenance on public.%I', t, t);
+    execute format(
+      'create trigger %I_guard_provenance before update on public.%I '
+      'for each row execute function public.guard_row_provenance()',
+      t, t
+    );
+  end loop;
+end $$;
+
+-- 3. Guest roles must not read the whole home --------------------------------
+-- repairs / trend_flags / rooms / floors gated on bare is_property_member,
+-- which is true for maintenance_guest, buyer_preview and insurance_view alike.
+-- The product's own sharing copy promises otherwise, and that promise was
+-- enforced only in client-side JavaScript. Mirrors the explicit role allow-list
+-- already used by receipts.
+create or replace function public.is_trusted_property_member(target_property_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select public.current_property_role(target_property_id) in ('owner','co_owner','editor','viewer');
+$$;
+
+drop policy if exists p10_rooms_select on public.rooms;
+create policy p10_rooms_select on public.rooms
+for select using (public.is_trusted_property_member(property_id) and deleted_at is null);
+
+drop policy if exists p10_floors_select on public.floors;
+create policy p10_floors_select on public.floors
+for select using (public.is_trusted_property_member(property_id) and deleted_at is null);
+
+drop policy if exists p10_repairs_select on public.repairs;
+create policy p10_repairs_select on public.repairs
+for select using (public.is_trusted_property_member(property_id) and deleted_at is null);
+
+drop policy if exists p10_trend_flags_select on public.trend_flags;
+create policy p10_trend_flags_select on public.trend_flags
+for select using (public.is_trusted_property_member(property_id) and deleted_at is null);
+
+-- Automation tables carry network SSIDs, gateway/VLAN notes, credential
+-- references, recovery instructions and MAC addresses. A contractor invited to
+-- look at a boiler had read access to all of it.
+do $$
+declare
+  t text;
+  soft_deletable text[] := array[
+    'automation_devices','automation_hubs','automation_networks','automation_routines',
+    'automation_relationships'
+  ];
+begin
+  foreach t in array array[
+    'automation_devices','automation_hubs','automation_networks','automation_routines',
+    'automation_relationships','automation_device_protocols','automation_device_ecosystems',
+    'automation_device_hubs','automation_device_networks','automation_routine_devices',
+    'automation_routine_hubs','automation_routine_networks','automation_health_checks',
+    'automation_battery_events','automation_firmware_events'
+  ] loop
+    execute format('drop policy if exists %I_select on public.%I', t, t);
+    if t = any(soft_deletable) then
+      -- also fixes soft-deleted automation rows staying visible
+      execute format(
+        'create policy %I_select on public.%I for select '
+        'using (public.is_trusted_property_member(property_id) and deleted_at is null)',
+        t, t
+      );
+    else
+      execute format(
+        'create policy %I_select on public.%I for select '
+        'using (public.is_trusted_property_member(property_id))',
+        t, t
+      );
+    end if;
+  end loop;
+end $$;
+
+-- 4. Invitations are append-then-accept only ---------------------------------
+-- Belt-and-braces behind the manager-only UPDATE policy: even a manager must
+-- not be able to mutate an issued invitation's identity, and no one may reset
+-- an accepted invitation back to unaccepted for a second use.
+create or replace function public.guard_property_invitation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.property_id is distinct from old.property_id
+    or new.role is distinct from old.role
+    or new.token_hash is distinct from old.token_hash
+    or new.inviter_user_id is distinct from old.inviter_user_id
+    or new.expires_at is distinct from old.expires_at
+    or new.invited_email is distinct from old.invited_email then
+    raise exception 'an issued invitation cannot be rewritten; revoke it and send a new one';
+  end if;
+
+  if old.accepted_at is not null and new.accepted_at is null then
+    raise exception 'an accepted invitation cannot be reopened';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists property_invitations_guard on public.property_invitations;
+create trigger property_invitations_guard
+before update on public.property_invitations
+for each row execute function public.guard_property_invitation();
+
+-- 5. RLS helpers are not a public API ----------------------------------------
+-- They return false without a session, so this is hygiene rather than a hole,
+-- but there is no reason to expose them on /rest/v1/rpc to anonymous callers.
+do $$
+declare
+  f record;
+begin
+  for f in
+    select p.oid::regprocedure as sig
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname in (
+        'is_property_owner','is_property_owner_or_co_owner','is_property_member',
+        'is_property_editor','is_trusted_property_member','can_manage_property_members',
+        'current_property_role','can_read_property_row','can_read_property_documents',
+        'can_write_property_documents','is_household_member','is_household_editor',
+        'can_manage_household_members','current_household_role',
+        'document_storage_property_id'
+      )
+  loop
+    execute format('revoke execute on function %s from anon', f.sig);
+  end loop;
 end $$;
 
 notify pgrst, 'reload schema';

@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "apps/web/pages/repairs/[id]/service-call.tsx"
+        ],
+        "createdAt": "2026-07-30T16:25:06.913Z",
+        "reason": "Confirmed intentional: the left edge encodes whether a shut-off is on file (brass) or not (grey) — semantic, and the visual half of the sheet's 'not on file — ask on arrival' honesty"
+      }
+    ]
+  }
+}

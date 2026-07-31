@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel } from '@home-folder/shared';
 import { Button, Card, getControlStyle, Input, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
@@ -23,6 +23,7 @@ import {
 import {
   buildServiceCallEmail,
   buildServiceCallSheet,
+  formatFriendlyDate,
   sanitizePhoneForHref,
   serviceCallToCompactText,
   serviceCallToPlainText,
@@ -49,6 +50,12 @@ export default function ServiceCallSheetPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Kept per repair in this browser: the sheet is typically filled in, printed,
+  // then reopened later to text it, and losing the on-site contact in between
+  // meant retyping it every time. It is a local convenience only — never sent
+  // anywhere and never written to the account.
+  const contactStorageKey = repairId ? `homeFolder.serviceCallContact.${repairId}` : null;
+
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [copied, setCopied] = useState(false);
@@ -58,7 +65,13 @@ export default function ServiceCallSheetPage() {
     let isMounted = true;
 
     async function load() {
-      if (!repairId) return;
+      // Router params are not ready on the first render. Bail before touching
+      // any state, so `loading` cannot be stranded true by an early return
+      // that skips the try/finally below.
+      if (!repairId) {
+        return;
+      }
+
       setLoading(true);
       setError('');
 
@@ -136,6 +149,39 @@ export default function ServiceCallSheetPage() {
     };
   }, [repairId]);
 
+  useEffect(() => {
+    if (!contactStorageKey || typeof window === 'undefined') {
+      return;
+    }
+
+    try {
+      const saved = window.localStorage.getItem(contactStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as { name?: string; phone?: string };
+        setContactName(parsed.name || '');
+        setContactPhone(parsed.phone || '');
+      }
+    } catch {
+      /* unreadable or corrupt — just start blank */
+    }
+  }, [contactStorageKey]);
+
+  useEffect(() => {
+    if (!contactStorageKey || typeof window === 'undefined') {
+      return;
+    }
+
+    if (!contactName && !contactPhone) {
+      window.localStorage.removeItem(contactStorageKey);
+      return;
+    }
+
+    window.localStorage.setItem(
+      contactStorageKey,
+      JSON.stringify({ name: contactName, phone: contactPhone })
+    );
+  }, [contactStorageKey, contactName, contactPhone]);
+
   const locationLabel = useMemo(() => {
     if (!repair) return null;
     if (repair.room_id) {
@@ -152,6 +198,15 @@ export default function ServiceCallSheetPage() {
     return null;
   }, [repair, rooms, assets, utilities]);
 
+  // Lets a shut-off's assigned room stand in as its location on the sheet.
+  const roomLabelFor = useCallback(
+    (roomId: string) => {
+      const room = rooms.find((candidate) => candidate.id === roomId);
+      return room ? formatRoomLocation(room) : null;
+    },
+    [rooms]
+  );
+
   const sheet: ServiceCallSheet | null = useMemo(() => {
     if (!repair) return null;
     return buildServiceCallSheet({
@@ -162,9 +217,10 @@ export default function ServiceCallSheetPage() {
       propertyAddress,
       locationLabel,
       onSiteContact: { name: contactName, phone: contactPhone },
-      typeLabelFor: formatEnumLabel
+      typeLabelFor: formatEnumLabel,
+      roomLabelFor
     });
-  }, [repair, utilities, serviceRecords, propertyName, propertyAddress, locationLabel, contactName, contactPhone]);
+  }, [repair, utilities, serviceRecords, propertyName, propertyAddress, locationLabel, contactName, contactPhone, roomLabelFor]);
 
   const plainText = useMemo(() => (sheet ? serviceCallToPlainText(sheet) : ''), [sheet]);
 
@@ -199,9 +255,14 @@ export default function ServiceCallSheetPage() {
 
   // Pre-address the text and email to the technician when their contact info
   // is on the repair; otherwise the links open with just the body filled in.
-  const contractorPhone = sanitizePhoneForHref(repair?.contractor_phone);
-  const contractorEmail = repair?.contractor_email?.trim() || '';
+  // Take the phone from the sheet, not the raw row: the sheet's copy has been
+  // through safeText, so the link can never carry a value the page redacted.
+  const contractorPhone = sanitizePhoneForHref(sheet?.contractor?.phone);
+  const contractorEmail = sheet?.contractor?.email?.trim() || '';
   const smsHref = `sms:${contractorPhone || ''}?&body=${encodeURIComponent(compactText)}`;
+  // On a desktop browser with no number to address, `sms:` does nothing at all.
+  // Offer the share sheet or Copy instead of a link that silently fails.
+  const canText = Boolean(contractorPhone) || (typeof navigator !== 'undefined' && 'share' in navigator);
   const email = sheet ? buildServiceCallEmail(sheet) : null;
   const mailtoHref = email
     ? `mailto:${encodeURIComponent(contractorEmail)}?subject=${encodeURIComponent(email.subject)}&body=${encodeURIComponent(email.body)}`
@@ -244,9 +305,11 @@ export default function ServiceCallSheetPage() {
         >
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button onClick={() => window.print()}>Print</Button>
-            <a href={smsHref} className="action-link hb-control" style={getControlStyle({ variant: 'secondary' })}>
-              {contractorPhone ? 'Text the technician' : 'Text this'}
-            </a>
+            {canText ? (
+              <a href={smsHref} className="action-link hb-control" style={getControlStyle({ variant: 'secondary' })}>
+                {contractorPhone ? 'Text the technician' : 'Text this'}
+              </a>
+            ) : null}
             <a href={mailtoHref} className="action-link hb-control" style={getControlStyle({ variant: 'secondary' })}>
               {contractorEmail ? 'Email the technician' : 'Email this'}
             </a>
@@ -279,9 +342,9 @@ export default function ServiceCallSheetPage() {
             <p style={{ color: 'var(--text-muted)', marginBottom: 0 }}>
               No address is on this sheet.{' '}
               <Link href="/settings" style={{ textDecoration: 'underline', fontWeight: 600 }}>
-                Add your property address in Settings
-              </Link>{' '}
-              so the technician knows where to go.
+                Add it in Settings — and tick &ldquo;include this address&rdquo;
+              </Link>
+              , which is off by default, so the technician knows where to go.
             </p>
           ) : null}
         </Card>
@@ -317,7 +380,7 @@ export default function ServiceCallSheetPage() {
             <UtilityBadge label={sheet.issueTypeLabel} />
             <UtilityBadge label={`Priority: ${sheet.priorityLabel}`} tone={repair.priority === 'urgent' || repair.priority === 'high' ? 'urgent' : 'neutral'} />
             {sheet.locationLabel ? <UtilityBadge label={`Location: ${sheet.locationLabel}`} /> : null}
-            {sheet.reportedDate ? <UtilityBadge label={`Reported ${sheet.reportedDate}`} /> : null}
+            {sheet.reportedDate ? <UtilityBadge label={`Reported ${formatFriendlyDate(sheet.reportedDate)}`} /> : null}
           </div>
         </header>
 
@@ -407,7 +470,7 @@ export default function ServiceCallSheetPage() {
                 <div key={index} style={{ border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '10px 14px' }}>
                   <div style={{ fontWeight: 700 }}>{record.title}</div>
                   <div style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-                    {[record.date, record.provider].filter(Boolean).join(' · ') || '—'}
+                    {[formatFriendlyDate(record.date), record.provider].filter(Boolean).join(' · ') || '—'}
                   </div>
                   {record.summary ? <div style={{ marginTop: 4 }}>{record.summary}</div> : null}
                 </div>

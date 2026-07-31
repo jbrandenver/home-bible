@@ -4,6 +4,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useRef, useState } from 'react';
 import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
+import { PropertySwitcher } from './PropertySwitcher';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -19,6 +20,9 @@ function deriveTitle(pathname: string): string {
 }
 
 function sectionHref(section: NavSection, item: NavSectionLink) {
+  if (item.href) {
+    return item.href;
+  }
   return item.hash ? `${section.href}#${item.hash}` : section.href;
 }
 
@@ -68,6 +72,35 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
     setOpenMenu(null);
   }, [router.asPath]);
 
+  // Section anchors live inside cards that only render after their page's data
+  // has loaded, so arriving from another page with a #hash scrolled to nothing.
+  // Retry briefly until the target exists.
+  useEffect(() => {
+    const hash = router.asPath.split('#')[1];
+    if (!hash) {
+      return;
+    }
+
+    let attempts = 0;
+    const timer = window.setInterval(() => {
+      const target = document.getElementById(hash);
+      attempts += 1;
+
+      if (target) {
+        target.scrollIntoView();
+        window.clearInterval(timer);
+        return;
+      }
+
+      // ~3s of retries, then give up rather than spin forever.
+      if (attempts > 30) {
+        window.clearInterval(timer);
+      }
+    }, 100);
+
+    return () => window.clearInterval(timer);
+  }, [router.asPath]);
+
   // Click/tap outside closes the open section menu.
   useEffect(() => {
     if (!openMenu) {
@@ -91,11 +124,51 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   }, [openMenu]);
 
   const handleMenuKeyDown = (menuKey: string) => (event: React.KeyboardEvent) => {
-    if (event.key === 'Escape' && openMenu === menuKey) {
+    if (openMenu !== menuKey) {
+      return;
+    }
+
+    if (event.key === 'Escape') {
       event.stopPropagation();
       setOpenMenu(null);
       menuTriggerRefs.current[menuKey]?.focus();
+      return;
     }
+
+    // Arrow keys move within the menu, per the WAI-ARIA menu button pattern.
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') {
+      return;
+    }
+
+    const container = (event.currentTarget as HTMLElement).querySelector('[data-nav-dropdown]');
+    const items = container ? Array.from(container.querySelectorAll<HTMLAnchorElement>('a')) : [];
+    if (items.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    const current = items.findIndex((item) => item === document.activeElement);
+
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : event.key === 'ArrowDown'
+            ? (current + 1 + items.length) % items.length
+            : (current - 1 + items.length) % items.length;
+
+    items[nextIndex]?.focus();
+  };
+
+  // Opening with the keyboard should land focus on the first item; opening with
+  // a pointer should not steal it.
+  const openMenuWithKeyboard = (menuKey: string) => {
+    setOpenMenu(menuKey);
+    window.requestAnimationFrame(() => {
+      const container = document.querySelector(`[data-menu-key="${menuKey}"] [data-nav-dropdown]`);
+      container?.querySelector<HTMLAnchorElement>('a')?.focus();
+    });
   };
 
   const renderMenuItems = (section: NavSection) =>
@@ -104,6 +177,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
         key={item.label}
         href={sectionHref(section, item)}
         className="nav-dropdown-item"
+        role="menuitem"
         onClick={() => setOpenMenu(null)}
       >
         {item.label}
@@ -131,6 +205,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               <span className="brand-tagline">A home, documented.</span>
             </Link>
             <div className="flex items-center gap-2 flex-wrap text-sm">
+              <PropertySwitcher />
               <span className="header-meta">
                 {userEmail ? "Everything's saved to your account." : 'Demo data is stored only in this browser.'}
               </span>
@@ -176,6 +251,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                   key={section.href}
                   className="nav-menu-wrap"
                   data-nav-menu
+                  data-menu-key={menuKey}
                   onKeyDown={handleMenuKeyDown(menuKey)}
                 >
                   <Link href={section.href} className={navLinkClass(section)}>
@@ -186,16 +262,29 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                     className="desktop-nav-link nav-menu-trigger"
                     aria-expanded={isOpen}
                     aria-controls={menuId}
+                    aria-haspopup="menu"
                     aria-label={`${section.label} sections`}
                     ref={(element) => {
                       menuTriggerRefs.current[menuKey] = element;
                     }}
                     onClick={() => setOpenMenu(isOpen ? null : menuKey)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowDown' && !isOpen) {
+                        event.preventDefault();
+                        openMenuWithKeyboard(menuKey);
+                      }
+                    }}
                   >
                     <span aria-hidden="true">▾</span>
                   </button>
                   {isOpen ? (
-                    <div id={menuId} className="nav-dropdown nav-dropdown-desktop">
+                    <div
+                      id={menuId}
+                      data-nav-dropdown
+                      role="menu"
+                      aria-label={`${section.label} sections`}
+                      className="nav-dropdown nav-dropdown-desktop"
+                    >
                       {renderMenuItems(section)}
                     </div>
                   ) : null}
@@ -219,6 +308,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
             <nav className="app-footer-links" aria-label="Legal">
               <Link href="/terms">Terms of Service</Link>
               <Link href="/privacy">Privacy Policy</Link>
+              <Link href="/data-promise">Our data promise</Link>
               <Link href="/settings">Account</Link>
               <a href="mailto:support@ourhomefolder.com?subject=Our%20Home%20Folder%20problem%20report">Report a problem</a>
             </nav>
@@ -252,6 +342,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               key={section.href}
               className="mobile-menu-wrap"
               data-nav-menu
+              data-menu-key={menuKey}
               onKeyDown={handleMenuKeyDown(menuKey)}
             >
               <button
@@ -259,6 +350,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 className={`mobile-bottom-link mobile-menu-trigger ${activeClass}`}
                 aria-expanded={isOpen}
                 aria-controls={menuId}
+                aria-haspopup="menu"
+                aria-label={`${section.mobileLabel || section.label} sections`}
                 ref={(element) => {
                   menuTriggerRefs.current[menuKey] = element;
                 }}
@@ -268,7 +361,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 <span>{section.mobileLabel || section.label}</span>
               </button>
               {isOpen ? (
-                <div id={menuId} className="nav-dropdown mobile-nav-sheet">
+                <div
+                  id={menuId}
+                  data-nav-dropdown
+                  role="menu"
+                  aria-label={`${section.mobileLabel || section.label} sections`}
+                  className="nav-dropdown mobile-nav-sheet"
+                >
                   {renderMenuItems(section)}
                 </div>
               ) : null}
@@ -284,6 +383,8 @@ type NavSectionLink = {
   label: string;
   /** Anchor id on the section's page; omitted = top of the page. */
   hash?: string;
+  /** Full route for entries that live on their own page rather than an anchor. */
+  href?: string;
 };
 
 type NavSection = {
@@ -295,6 +396,16 @@ type NavSection = {
   /** When present, the tab gets a jump menu listing the page's sections. */
   sections?: NavSectionLink[];
 };
+
+// The portfolio surfaces are real routes, not anchors, so these entries carry
+// full hrefs. They appear under the Portfolio tab on desktop and are folded
+// into the More tab on mobile (the bottom bar holds five tabs).
+const portfolioSectionLinks: NavSectionLink[] = [
+  { label: 'Overview', href: '/portfolio' },
+  { label: 'Compliance', href: '/compliance' },
+  { label: 'Tenancies', href: '/tenancies' },
+  { label: 'Condition reports', href: '/condition-reports' }
+];
 
 const desktopSections: NavSection[] = [
   {
@@ -324,6 +435,13 @@ const desktopSections: NavSection[] = [
     label: 'Home',
     icon: 'H',
     activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms', '/utilities', '/automation']
+  },
+  {
+    href: '/portfolio',
+    label: 'Portfolio',
+    icon: 'P',
+    activeRoutes: ['/portfolio', '/compliance', '/tenancies', '/condition-reports'],
+    sections: portfolioSectionLinks
   },
   {
     href: '/assets',
@@ -359,4 +477,21 @@ const desktopSections: NavSection[] = [
   }
 ];
 
-const mobileSections = desktopSections.filter((section) => section.href !== '/documents');
+const mobileSections = desktopSections
+  .filter((section) => section.href !== '/documents' && section.href !== '/portfolio')
+  .map((section) =>
+    section.href === '/more'
+      ? {
+          ...section,
+          activeRoutes: [...section.activeRoutes, '/portfolio', '/compliance', '/tenancies', '/condition-reports'],
+          // "Overview" is already taken by the More page itself, so the
+          // portfolio overview entry is labeled by its own name here.
+          sections: [
+            ...portfolioSectionLinks.map((item) =>
+              item.href === '/portfolio' ? { ...item, label: 'Portfolio' } : item
+            ),
+            ...(section.sections ?? [])
+          ]
+        }
+      : section
+  );

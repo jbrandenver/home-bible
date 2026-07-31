@@ -338,6 +338,7 @@ export async function updateDeviceForContext(
     .update(fields)
     .eq('id', deviceId)
     .eq('property_id', property.id)
+    .is('deleted_at', null)
     .select(DEVICE_SELECT)
     .maybeSingle();
 
@@ -430,6 +431,7 @@ export async function updateHubForContext(
     .update(parsed.data)
     .eq('id', hubId)
     .eq('property_id', property.id)
+    .is('deleted_at', null)
     .select(HUB_SELECT)
     .maybeSingle();
   if (error) throw new Error(formatAutomationError('update hub', error.message));
@@ -507,6 +509,7 @@ export async function updateNetworkForContext(
     .update(parsed.data)
     .eq('id', networkId)
     .eq('property_id', property.id)
+    .is('deleted_at', null)
     .select(NETWORK_SELECT)
     .maybeSingle();
   if (error) throw new Error(formatAutomationError('update network', error.message));
@@ -579,6 +582,7 @@ export async function updateRoutineForContext(
     .update(parsed.data)
     .eq('id', routineId)
     .eq('property_id', property.id)
+    .is('deleted_at', null)
     .select(ROUTINE_SELECT)
     .maybeSingle();
   if (error) throw new Error(formatAutomationError('update automation', error.message));
@@ -711,7 +715,8 @@ export async function updateRoutineStatusForContext(
     .from('automation_routines')
     .update(patch)
     .eq('id', routineId)
-    .eq('property_id', property.id);
+    .eq('property_id', property.id)
+    .is('deleted_at', null);
   if (error) throw new Error(formatAutomationError('update automation status', error.message));
 }
 

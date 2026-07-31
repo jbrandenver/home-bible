@@ -4,6 +4,19 @@ set -u
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR" || exit 1
 
+# Fail closed. Every scanning check below depends on ripgrep, and when it is
+# absent they each degrade to a non-blocking WARNING while the script still
+# exits 0 — so a service-role key pasted into client code would sail through
+# with a green tick. A missing scanner means "unknown", not "clean".
+if ! command -v rg >/dev/null 2>&1; then
+  printf '\n== Dependencies ==\n'
+  printf 'FAIL: ripgrep (rg) is required for this audit but is not installed.\n'
+  printf '  macOS:  brew install ripgrep\n'
+  printf '  Ubuntu: sudo apt-get install -y ripgrep\n'
+  printf '\nRefusing to report a passing audit that scanned nothing.\n'
+  exit 1
+fi
+
 PASS_COUNT=0
 WARNING_COUNT=0
 FAIL_COUNT=0
@@ -231,9 +244,25 @@ else
   if [ -n "$create_table_matches" ]; then
     while IFS=: read -r file line text; do
       table_name="$(printf '%s\n' "$text" | sed -E 's/.*public\.([a-z_][a-z0-9_]*).*/\1/I')"
-      if [ -n "$table_name" ] && ! rg -q -i "alter table public\\.$table_name enable row level security" supabase/migrations; then
-        missing_rls="${missing_rls}${file}:${line} public.${table_name}"$'\n'
+      if [ -z "$table_name" ]; then
+        continue
       fi
+
+      # RLS is enabled two ways in this repo: a literal ALTER TABLE, or a DO
+      # loop that iterates a table-name array and calls format('alter table
+      # public.%I enable row level security', t) — which the 15 automation
+      # tables use. Accept either, or the check reports false failures on
+      # tables that are in fact protected.
+      if rg -q -i "alter table public\\.$table_name enable row level security" supabase/migrations; then
+        continue
+      fi
+
+      if rg -q "enable row level security" supabase/migrations \
+        && rg -q "'$table_name'" supabase/migrations; then
+        continue
+      fi
+
+      missing_rls="${missing_rls}${file}:${line} public.${table_name}"$'\n'
     done <<EOF
 $create_table_matches
 EOF

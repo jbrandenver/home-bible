@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
-import { PageHeader, Card, Button, Input, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   getCurrentUser,
@@ -17,6 +17,35 @@ import {
   type PropertySummary
 } from '../lib/properties';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
+import {
+  DIGEST_FREQUENCIES,
+  DIGEST_FREQUENCY_LABELS,
+  getDigestPreferences,
+  saveDigestPreferences,
+  type DigestFrequency
+} from '../lib/digestPreferences';
+import {
+  buildAccountExport,
+  buildArchiveZip,
+  buildCsvSheets,
+  buildReadme,
+  downloadBinaryFile,
+  downloadTextFile,
+  exceedsExportSizeWarning,
+  listExportableFiles,
+  totalFileSizeBytes
+} from '../lib/accountExport';
+import { formatFileSize } from '../lib/documents';
+import { getAssetDataContext } from '../lib/assets';
+import { getAutomationContext } from '../lib/automation';
+import { getDocumentDataContext } from '../lib/documents';
+import { getIssueDataContext } from '../lib/issues';
+import { getReceiptDataContext } from '../lib/receipts';
+import { getReminderDataContext } from '../lib/reminders';
+import { getRepairDataContext } from '../lib/repairs';
+import { getServiceRecordDataContext } from '../lib/serviceRecords';
+import { getTrendFlagDataContext } from '../lib/trendFlags';
+import { getUtilityDataContext } from '../lib/utilities';
 
 export default function SettingsPage() {
   const [isReady, setIsReady] = useState(false);
@@ -35,6 +64,19 @@ export default function SettingsPage() {
   const [addressSaving, setAddressSaving] = useState(false);
   const [addressError, setAddressError] = useState('');
   const [addressSaved, setAddressSaved] = useState(false);
+  const [addressLoadFailed, setAddressLoadFailed] = useState(false);
+  const [addressDirty, setAddressDirty] = useState(false);
+
+  const [exporting, setExporting] = useState<'archive' | 'csv' | null>(null);
+  const [exportError, setExportError] = useState('');
+  const [exportNote, setExportNote] = useState('');
+  const [exportProgress, setExportProgress] = useState('');
+
+  const [digestFrequency, setDigestFrequency] = useState<DigestFrequency>('monthly');
+  const [visitReminders, setVisitReminders] = useState(true);
+  const [digestSaving, setDigestSaving] = useState(false);
+  const [digestSaved, setDigestSaved] = useState(false);
+  const [digestError, setDigestError] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -74,6 +116,7 @@ export default function SettingsPage() {
 
       setAddressLoading(true);
       setAddressError('');
+      setAddressLoadFailed(false);
 
       try {
         const nextProperty = await getPrimaryPropertyForUser(user.id);
@@ -90,8 +133,10 @@ export default function SettingsPage() {
         setAddressState(details?.state || '');
         setAddressPostal(details?.postal_code || '');
         setAddressEnabled(details?.address_is_enabled || false);
+        setAddressDirty(false);
       } catch (loadError) {
         if (isMounted) {
+          setAddressLoadFailed(true);
           setAddressError(loadError instanceof Error ? loadError.message : 'Failed to load the property address.');
         }
       } finally {
@@ -107,6 +152,13 @@ export default function SettingsPage() {
       isMounted = false;
     };
   }, [user]);
+
+  // Any edit invalidates the previous confirmation, so the user can't be shown
+  // "Address saved." while looking at unsaved changes.
+  function noteAddressEdited() {
+    setAddressSaved(false);
+    setAddressDirty(true);
+  }
 
   async function handleSaveAddress(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,10 +180,159 @@ export default function SettingsPage() {
         address_is_enabled: addressEnabled
       });
       setAddressSaved(true);
+      setAddressDirty(false);
     } catch (saveError) {
       setAddressError(saveError instanceof Error ? saveError.message : 'Failed to save the property address.');
     } finally {
       setAddressSaving(false);
+    }
+  }
+
+  // Typing a correction and navigating away used to lose it silently.
+  useEffect(() => {
+    if (!addressDirty) {
+      return;
+    }
+
+    const warnOnUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', warnOnUnload);
+    return () => window.removeEventListener('beforeunload', warnOnUnload);
+  }, [addressDirty]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!user) return;
+
+    getDigestPreferences()
+      .then((prefs) => {
+        if (!isMounted) return;
+        setDigestFrequency(prefs.frequency);
+        setVisitReminders(prefs.visit_reminders);
+      })
+      .catch(() => {
+        /* falls back to the defaults already in state */
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  async function handleSaveDigest(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setDigestSaving(true);
+    setDigestError('');
+    setDigestSaved(false);
+
+    try {
+      await saveDigestPreferences({ frequency: digestFrequency, visit_reminders: visitReminders });
+      setDigestSaved(true);
+    } catch (saveError) {
+      setDigestError(saveError instanceof Error ? saveError.message : 'Could not save.');
+    } finally {
+      setDigestSaving(false);
+    }
+  }
+
+  async function handleExport(format: 'archive' | 'csv') {
+    setExporting(format);
+    setExportError('');
+    setExportNote('');
+    setExportProgress('');
+
+    try {
+      const [utility, asset, reminder, repair, serviceRecord, issue, trendFlag, documentCtx, receipt, automation] =
+        await Promise.all([
+          getUtilityDataContext(),
+          getAssetDataContext(),
+          getReminderDataContext(),
+          getRepairDataContext(),
+          getServiceRecordDataContext(),
+          getIssueDataContext(),
+          getTrendFlagDataContext(),
+          getDocumentDataContext(),
+          getReceiptDataContext(),
+          getAutomationContext()
+        ]);
+
+      const data = await buildAccountExport(property, {
+        utility,
+        asset,
+        reminder,
+        repair,
+        serviceRecord,
+        issue,
+        trendFlag,
+        document: documentCtx,
+        receipt,
+        automation
+      });
+
+      const stamp = data.generatedAt.slice(0, 10);
+
+      if (format === 'archive') {
+        // The archive carries every uploaded file the account can read, across
+        // all properties. Files come down one at a time, so surface progress.
+        setExportProgress('Listing your uploaded files…');
+        const files = user ? await listExportableFiles(user.id) : [];
+
+        const totalBytes = totalFileSizeBytes(files);
+        if (exceedsExportSizeWarning(totalBytes)) {
+          const proceed = window.confirm(
+            `Your uploaded files total about ${formatFileSize(totalBytes)}. The archive is assembled in this browser tab, so a download this size can take a while and use significant memory. Continue?`
+          );
+          if (!proceed) {
+            setExportProgress('');
+            setExportNote('Export cancelled — nothing was downloaded.');
+            return;
+          }
+        }
+
+        const { zip, includedCount, missing } = await buildArchiveZip(data, files, (current, total) => {
+          setExportProgress(`Fetching file ${current} of ${total}…`);
+        });
+        setExportProgress('Packaging the archive…');
+        downloadBinaryFile(`home-folder-archive-${stamp}.zip`, zip);
+        setExportProgress('');
+        setExportNote(
+          missing.length > 0
+            ? `Downloaded your archive with ${includedCount} of ${files.length} files. ${missing.length} could not be fetched — see files/MISSING.txt inside the zip, then try again or download them from Documents.`
+            : files.length > 0
+              ? `Downloaded your full archive — every record, plus all ${includedCount} uploaded file${includedCount === 1 ? '' : 's'}.`
+              : 'Downloaded your full archive. No uploaded files yet, so it holds your records and a README.'
+        );
+      } else {
+        const sheets = buildCsvSheets(data);
+        if (sheets.length === 0) {
+          setExportNote('There is nothing recorded to export yet.');
+          return;
+        }
+
+        for (const sheetFile of sheets) {
+          downloadTextFile(
+            `home-folder-${sheetFile.name}-${stamp}.csv`,
+            sheetFile.contents,
+            'text/csv'
+          );
+        }
+        downloadTextFile(`home-folder-export-${stamp}-README.txt`, buildReadme(data));
+        setExportNote(
+          `Downloaded ${sheets.length} spreadsheet${sheets.length === 1 ? '' : 's'}, plus a README.`
+        );
+      }
+    } catch (error) {
+      setExportError(
+        error instanceof Error
+          ? `Could not build your export: ${error.message}`
+          : 'Could not build your export. Please try again.'
+      );
+    } finally {
+      setExporting(null);
+      setExportProgress('');
     }
   }
 
@@ -161,7 +362,24 @@ export default function SettingsPage() {
     setDeletingAccount(false);
 
     if (error) {
-      setAccountError(error.message || 'Failed to delete account.');
+      // functions.invoke reports a generic "non-2xx status" message; the useful
+      // text (for example the re-authentication prompt) is in the response body.
+      let message = 'Failed to delete account.';
+      const context: unknown = (error as { context?: unknown }).context;
+      if (context instanceof Response) {
+        try {
+          const body = await context.json();
+          if (body && typeof body.error === 'string') {
+            message = body.error;
+          }
+        } catch {
+          /* body was not JSON — fall back to the generic message */
+        }
+      } else if (error.message) {
+        message = error.message;
+      }
+
+      setAccountError(message);
       return;
     }
 
@@ -241,6 +459,21 @@ export default function SettingsPage() {
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>
                 Sign in to save your property address.
               </p>
+            ) : addressLoadFailed ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">
+                  We could not load your property address.
+                </p>
+                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                  {addressError} Nothing has been changed — this is a loading problem, not a
+                  missing property, so please retry rather than creating a new one.
+                </p>
+                <div>
+                  <Button type="button" variant="secondary" onClick={() => setUser((current) => (current ? { ...current } : current))}>
+                    Retry
+                  </Button>
+                </div>
+              </div>
             ) : !property && !addressLoading ? (
               <div style={{ display: 'grid', gap: 12 }}>
                 <p style={{ color: 'var(--text-muted)', margin: 0 }}>Create a property first — the address belongs to it.</p>
@@ -255,7 +488,7 @@ export default function SettingsPage() {
                     <span>Street address</span>
                     <Input
                       value={addressLine1}
-                      onChange={(event) => setAddressLine1(event.target.value)}
+                      onChange={(event) => { setAddressLine1(event.target.value); noteAddressEdited(); }}
                       placeholder="123 Main St"
                       autoComplete="address-line1"
                       disabled={addressLoading}
@@ -266,7 +499,7 @@ export default function SettingsPage() {
                     <span>Apt, unit, etc. (optional)</span>
                     <Input
                       value={addressLine2}
-                      onChange={(event) => setAddressLine2(event.target.value)}
+                      onChange={(event) => { setAddressLine2(event.target.value); noteAddressEdited(); }}
                       placeholder="Unit B"
                       autoComplete="address-line2"
                       disabled={addressLoading}
@@ -279,7 +512,7 @@ export default function SettingsPage() {
                     <span>City</span>
                     <Input
                       value={addressCity}
-                      onChange={(event) => setAddressCity(event.target.value)}
+                      onChange={(event) => { setAddressCity(event.target.value); noteAddressEdited(); }}
                       autoComplete="address-level2"
                       disabled={addressLoading}
                       style={{ marginTop: 6 }}
@@ -289,7 +522,7 @@ export default function SettingsPage() {
                     <span>State</span>
                     <Input
                       value={addressState}
-                      onChange={(event) => setAddressState(event.target.value)}
+                      onChange={(event) => { setAddressState(event.target.value); noteAddressEdited(); }}
                       autoComplete="address-level1"
                       disabled={addressLoading}
                       style={{ marginTop: 6 }}
@@ -299,7 +532,7 @@ export default function SettingsPage() {
                     <span>ZIP</span>
                     <Input
                       value={addressPostal}
-                      onChange={(event) => setAddressPostal(event.target.value)}
+                      onChange={(event) => { setAddressPostal(event.target.value); noteAddressEdited(); }}
                       autoComplete="postal-code"
                       disabled={addressLoading}
                       style={{ marginTop: 6 }}
@@ -310,7 +543,7 @@ export default function SettingsPage() {
                   <input
                     type="checkbox"
                     checked={addressEnabled}
-                    onChange={(event) => setAddressEnabled(event.target.checked)}
+                    onChange={(event) => { setAddressEnabled(event.target.checked); noteAddressEdited(); }}
                     disabled={addressLoading}
                     style={{ marginTop: 4 }}
                   />
@@ -318,6 +551,18 @@ export default function SettingsPage() {
                     Include this address on service call sheets and handover reports.
                   </span>
                 </label>
+                {!addressEnabled &&
+                formatAddressLine({
+                  address_line_1: addressLine1,
+                  address_line_2: addressLine2,
+                  city: addressCity,
+                  state: addressState,
+                  postal_code: addressPostal
+                }) ? (
+                  <p style={{ color: 'var(--status-attention)', fontWeight: 600, margin: 0 }}>
+                    Saved, but it will not appear anywhere until you tick the box above.
+                  </p>
+                ) : null}
                 {formatAddressLine({
                   address_line_1: addressLine1,
                   address_line_2: addressLine2,
@@ -344,10 +589,15 @@ export default function SettingsPage() {
                 {addressSaved ? (
                   <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Address saved.</p>
                 ) : null}
-                <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <Button type="submit" disabled={addressLoading || addressSaving}>
                     {addressSaving ? 'Saving...' : 'Save address'}
                   </Button>
+                  {addressDirty ? (
+                    <span style={{ color: 'var(--status-attention)', fontWeight: 600, fontSize: 14 }}>
+                      Unsaved changes
+                    </span>
+                  ) : null}
                 </div>
               </form>
             )}
@@ -378,17 +628,127 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Planned settings</h2>
-            <ul style={{ color: 'var(--text-muted)', lineHeight: 1.8 }}>
-              <li>Account</li>
-              <li>Properties</li>
-              <li>Sharing controls</li>
-              <li>Privacy</li>
-              <li>Data export</li>
-              <li>Support</li>
-            </ul>
+            <h2 style={{ marginTop: 0 }}>Reminder emails</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              A short note about what is coming up, so nothing quietly becomes
+              urgent. It lists titles and dates only — never your address, what
+              you own, or anything you wrote down.
+            </p>
+            {!supabaseReady || !user ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Sign in to set up reminder emails.
+              </p>
+            ) : (
+              <form onSubmit={handleSaveDigest} style={{ display: 'grid', gap: 14, maxWidth: 520 }}>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span>How often</span>
+                  <Select
+                    value={digestFrequency}
+                    onChange={(event) => {
+                      setDigestFrequency(event.target.value as DigestFrequency);
+                      setDigestSaved(false);
+                    }}
+                  >
+                    {DIGEST_FREQUENCIES.map((value) => (
+                      <option key={value} value={value}>
+                        {DIGEST_FREQUENCY_LABELS[value]}
+                      </option>
+                    ))}
+                  </Select>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={visitReminders}
+                    onChange={(event) => {
+                      setVisitReminders(event.target.checked);
+                      setDigestSaved(false);
+                    }}
+                    style={{ marginTop: 4 }}
+                  />
+                  <span style={{ textTransform: 'none', letterSpacing: 'normal', fontFamily: 'var(--font-body)', fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Also remind me the day before a technician is due. Worth keeping on
+                    even with monthly emails — a visit booked mid-month would otherwise
+                    arrive without warning.
+                  </span>
+                </label>
+
+                {digestError ? (
+                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{digestError}</p>
+                ) : null}
+                {digestSaved ? (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Saved.</p>
+                ) : null}
+
+                <div>
+                  <Button type="submit" disabled={digestSaving}>
+                    {digestSaving ? 'Saving...' : 'Save reminder settings'}
+                  </Button>
+                </div>
+                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14 }}>
+                  Sending is not switched on yet — these settings are saved and will
+                  apply as soon as it is.
+                </p>
+              </form>
+            )}
           </Card>
 
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Download your data</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              Take a complete copy of your home record whenever you want it. The full
+              archive is one zip holding every record and every file you uploaded —
+              photos, manuals, receipts, documents. Your record should outlive any
+              single app, including this one.
+            </p>
+            {!supabaseReady || !user ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Sign in to download your data.
+              </p>
+            ) : (
+              <>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <Button type="button" onClick={() => handleExport('archive')} disabled={exporting !== null}>
+                    {exporting === 'archive' ? 'Preparing...' : 'Download full archive (ZIP, files included)'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => handleExport('csv')}
+                    disabled={exporting !== null}
+                  >
+                    {exporting === 'csv' ? 'Preparing...' : 'Download spreadsheets (CSV)'}
+                  </Button>
+                </div>
+                {exportProgress ? (
+                  <p style={{ color: 'var(--text-muted)', fontWeight: 600, marginBottom: 0 }} role="status">
+                    {exportProgress}
+                  </p>
+                ) : null}
+                {exportError ? (
+                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, marginBottom: 0 }} role="alert">
+                    {exportError}
+                  </p>
+                ) : null}
+                {exportNote ? (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, marginBottom: 0 }} role="status">
+                    {exportNote}
+                  </p>
+                ) : null}
+                <p style={{ color: 'var(--text-muted)', marginBottom: 0, fontSize: 14 }}>
+                  The archive is a complete, unredacted copy — unlike a service call
+                  sheet or handover report, which deliberately leave sensitive details
+                  out because someone else reads them. If any file cannot be fetched
+                  while the archive is built, it is listed in files/MISSING.txt inside
+                  the zip rather than silently left out. The CSV download carries
+                  records only.
+                </p>
+              </>
+            )}
+          </Card>
+
+          {process.env.NODE_ENV !== 'production' ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Development tools</h2>
             <p style={{ color: 'var(--text-muted)' }}>
@@ -396,6 +756,7 @@ export default function SettingsPage() {
             </p>
             <ActionLink href="/mvp-test" variant="secondary">Open private MVP test checklist</ActionLink>
           </Card>
+          ) : null}
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
