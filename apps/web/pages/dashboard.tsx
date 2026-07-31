@@ -581,11 +581,15 @@ export default function DashboardPage() {
                 >
                   <div
                     style={{
-                      width: `${completeness.score}%`,
+                      width: '100%',
                       height: '100%',
                       background:
                         'linear-gradient(90deg, var(--color-brass-deep), var(--color-brass-pale))',
-                      transition: 'width 600ms cubic-bezier(0.22,0.9,0.3,1)'
+                      // Compositor-only fill: scaleX instead of animating width,
+                      // so the meter never triggers layout.
+                      transform: `scaleX(${completeness.score / 100})`,
+                      transformOrigin: 'left',
+                      transition: 'transform 600ms cubic-bezier(0.22,0.9,0.3,1)'
                     }}
                   />
                 </div>
