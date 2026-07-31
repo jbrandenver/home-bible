@@ -10,20 +10,24 @@ Last updated: 2026-07-30
 
 ## Blocking a public launch
 
-### 1. Point the domain at a host
-You own `ourhomefolder.com`, but it has **no A, AAAA, or CNAME record** — mail
-routes through Cloudflare, nothing serves the web, and `www` does not resolve.
+### 1. ~~Point the domain at a host~~ — DONE 2026-07-31
+Live on Cloudflare Workers (OpenNext, PR #7). All routes verified 200 on
+`ourhomefolder.com` and `www`, sitemap/canonicals emit the production URL,
+MX untouched. Config: Workers Builds from `main`, root `apps/web`.
 
-Pick a host (Vercel and Cloudflare Pages both have free tiers that suit a
-Next.js Pages Router app), point the DNS, and set `NEXT_PUBLIC_SITE_URL` there —
-otherwise staging emits production canonical URLs, `og:url` and sitemap entries.
+### 2. Run the signed-in flow by hand, once — IN PROGRESS
+**Status: Jesse is running this pass on the live site (started 2026-07-31).
+Open until Jesse explicitly says it is completed.**
 
-### 2. Run the signed-in flow by hand, once
-Every launch blocker found in the audit lived in a signed-in flow, and
-`docs/MVP_READINESS_PHASE_6M.md` has been deferring exactly this check. The
+Every launch blocker found in the audit lived in a signed-in flow. The
 embedded browser I test in stalls inside Supabase's auth client, so I cannot
-click these through for you. Worth 20 minutes in a real browser:
+click these through for you. Now on the real site — https://ourhomefolder.com:
 
+**Before starting:** Supabase → Authentication → URL Configuration → Site URL
+`https://ourhomefolder.com`, redirect `https://ourhomefolder.com/**` (or auth
+emails point at localhost).
+
+Original checklist:
 - [ ] Sign up fresh, with demo data already in the browser → the import offer
       appears on the dashboard and actually moves the rooms/utilities across.
 - [ ] Sign in with no property yet → "Create a property first", **not** a raw
@@ -33,6 +37,23 @@ click these through for you. Worth 20 minutes in a real browser:
 - [ ] Delete account → confirm it succeeds, and that a >30-minute-old session
       is asked to re-authenticate first.
 - [ ] Build a service call sheet and text/email it to yourself.
+
+New flows shipped since the audit (2026-07-30):
+- [ ] Portfolio: add a building on /portfolio, bulk-add 2–3 units, switch
+      between them with the header switcher, check the roll-up counts.
+- [ ] Tenancy + condition report: create a tenancy, run a move-in condition
+      report with a photo, mark completed, print the deposit packet.
+- [ ] Compliance: add an obligation from a template, mark it completed →
+      next due date advances.
+- [ ] Transfer: mint a code on /sharing (keep yourself as viewer), claim it
+      on /claim with a second account → ownership moves, shares cleared,
+      you retain viewer. **The single most important new check.**
+- [ ] Pro: register a partner profile on /pro, re-issue a transfer → the
+      claim page shows "Prepared by {business}".
+- [ ] Export: Settings → Download full archive → zip contains files/ folder.
+- [ ] Plate scan: add-asset → "Scan the data plate" → confirms the friendly
+      "not enabled yet" message (key not set — expected).
+- [ ] Seasonal plan: maintenance page → add a task as a reminder.
 
 ---
 
