@@ -10,6 +10,12 @@ export default function Document() {
           shipped markup. */}
       <Head>
         <meta name="x-design-direction" content="The Register of Record — security-print/deed; deep archive green + gilt; Cinzel/Spectral/Overpass Mono; struck seals, folio, MRZ. See styles/globals.css." />
+        {/* Brand mark favicons — SVG first (crisp everywhere it's supported),
+            PNG + ICO fallbacks for Safari and legacy UAs. */}
+        <link rel="icon" href="/favicon.ico" sizes="32x32" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="theme-color" content="#16302A" />
       </Head>
       <body>
         <Main />

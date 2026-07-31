@@ -11,6 +11,10 @@ export const DEFAULT_DESCRIPTION =
 /** Absolute URL for a path, from SITE_URL. */
 export const abs = (path = '/') => new URL(path, SITE_URL).toString();
 
+/** Default social share card (1200×630) — the brand mark on the register's
+ *  green ground. Pages can override via <Seo ogImage>. */
+export const DEFAULT_OG_IMAGE = '/og.png';
+
 export const organizationSchema = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
@@ -39,7 +43,7 @@ export const softwareApplicationSchema = {
 };
 
 /** Public routes for the sitemap (authenticated app routes are excluded). */
-export const PUBLIC_ROUTES = ['/', '/privacy', '/terms', '/sign-in', '/sign-up'];
+export const PUBLIC_ROUTES = ['/', '/pricing', '/privacy', '/terms', '/sign-in', '/sign-up'];
 
 /** App/private path prefixes to keep out of crawlers. */
 export const DISALLOWED_PATHS = [

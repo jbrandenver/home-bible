@@ -204,8 +204,11 @@ p a{text-decoration:underline}
   html{scroll-behavior:auto}
 }
 
-/* Skip layout/paint for below-the-fold sections until near the viewport. */
-.cv-section{content-visibility:auto;contain-intrinsic-size:auto 500px}
+/* Skip layout/paint for below-the-fold sections until near the viewport.
+   Height-only placeholder: an intrinsic WIDTH (or a remembered desktop width
+   after a resize) would inflate the page's auto grid track and force
+   horizontal overflow on phones. */
+.cv-section{content-visibility:auto;contain-intrinsic-width:0;contain-intrinsic-height:auto 500px}
 
 /* ---------- legacy utility classes (kept for existing pages) ---------- */
 .bg-gray-50{background-color:var(--surface-page)}
@@ -293,7 +296,10 @@ p a{text-decoration:underline}
   background:rgba(227,194,136,0.2);
 }
 
-.brand-lockup{display:grid;gap:0;text-decoration:none}
+.brand-lockup{display:flex;align-items:center;gap:0.75rem;text-decoration:none}
+/* the engraved mark — gilt line art beside the struck wordmark */
+.brand-mark{display:flex;color:var(--color-brass-pale);flex-shrink:0}
+.brand-lockup-text{display:grid;gap:0}
 .brand-wordmark{
   display:flex;align-items:baseline;gap:0.5rem;flex-wrap:wrap;
   font-family:var(--font-title);
@@ -405,6 +411,9 @@ main [id]{scroll-margin-top:1.25rem}
 /* ---------- cards & the gilt margin rule ---------- */
 .hb-card{
   position:relative;
+  /* As a flex/grid item a card must always be allowed to shrink — nowrap
+     content inside (the MRZ) scrolls rather than propping the card open. */
+  min-width:0;
   transition:box-shadow 200ms ease, transform 200ms ease, border-color 200ms ease;
 }
 /* the signature: a registrar's gilt margin rule down every card */
@@ -597,6 +606,8 @@ main [id]{scroll-margin-top:1.25rem}
 .app-footer-links a:hover{color:var(--color-ink);text-decoration:underline}
 @media (max-width: 640px){
   .app-footer{margin-bottom:5.5rem}
+  /* No bottom tab bar on the public marketing surface — no reserved space. */
+  .app-shell-public .app-footer{margin-bottom:0}
 }
 
 /* ---------- print (inventory & handover records) ---------- */
@@ -625,6 +636,12 @@ main [id]{scroll-margin-top:1.25rem}
 .mobile-bottom-link-active{background:rgba(227,194,136,0.3);color:var(--color-ink);border:1px solid rgba(133,90,24,0.4)}
 
 @media (max-width: 640px){
+  /* Schedule-of-contents rows: leaders don't fit a phone column — wrap the
+     detail onto its own line under the title instead of overflowing. */
+  .hb-toc-row{flex-wrap:wrap;row-gap:0.1rem}
+  .hb-toc-row .hb-toc-dots{display:none}
+  .hb-toc-row .hb-toc-title{flex:1}
+  .hb-toc-row .hb-toc-detail{flex-basis:100%;order:4;padding-left:2.8rem}
   .p-6{padding:1rem}
   .px-6{padding-left:1rem;padding-right:1rem}
   .grid-cols-2{grid-template-columns:1fr}

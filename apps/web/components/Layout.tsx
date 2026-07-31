@@ -4,6 +4,8 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useRef, useState } from 'react';
 import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
+import { PUBLIC_ROUTES } from '../lib/seo';
+import { BrandMark } from './BrandMark';
 import { PropertySwitcher } from './PropertySwitcher';
 
 interface LayoutProps {
@@ -31,6 +33,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const menuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  // On the public marketing/legal surface a signed-out visitor gets a clean
+  // masthead — no app navigation, property switcher, or demo-storage note.
+  // The app chrome returns the moment they enter the app (or sign in).
+  const isPublicSurface =
+    (PUBLIC_ROUTES.includes(router.pathname) || router.pathname === '/data-promise') && !userEmail;
 
   const isActiveRoute = (path: string) => {
     if (path === '/') return router.pathname === '/';
@@ -185,7 +193,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
     ));
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isPublicSurface ? ' app-shell-public' : ''}`}>
       <Head>
         <title>{`${title ?? deriveTitle(router.pathname)} · Our Home Folder`}</title>
       </Head>
@@ -198,17 +206,24 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
         <div className="max-w-6xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
             <Link href="/" className="brand-lockup">
-              <span className="brand-wordmark">
-                <span>Our Home</span>
-                <span className="brand-wordmark-accent">Folder</span>
+              <span className="brand-mark" aria-hidden="true">
+                <BrandMark size={44} />
               </span>
-              <span className="brand-tagline">A home, documented.</span>
+              <span className="brand-lockup-text">
+                <span className="brand-wordmark">
+                  <span>Our Home</span>
+                  <span className="brand-wordmark-accent">Folder</span>
+                </span>
+                <span className="brand-tagline">home documentation</span>
+              </span>
             </Link>
             <div className="flex items-center gap-2 flex-wrap text-sm">
-              <PropertySwitcher />
-              <span className="header-meta">
-                {userEmail ? "Everything's saved to your account." : 'Demo data is stored only in this browser.'}
-              </span>
+              {!isPublicSurface && <PropertySwitcher />}
+              {!isPublicSurface && (
+                <span className="header-meta">
+                  {userEmail ? "Everything's saved to your account." : 'Demo data is stored only in this browser.'}
+                </span>
+              )}
               {userEmail ? (
                 <button
                   type="button"
@@ -222,6 +237,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 </button>
               ) : (
                 <>
+                  <Link href="/pricing" className="header-action px-3 py-2 rounded">
+                    Pricing
+                  </Link>
                   <Link href="/sign-in" className="header-action px-3 py-2 rounded">
                     Sign in
                   </Link>
@@ -232,6 +250,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               )}
             </div>
           </div>
+          {!isPublicSurface && (
           <div className="desktop-primary-nav flex gap-2 text-sm flex-wrap">
             {desktopSections.map((section) => {
               if (!section.sections) {
@@ -292,6 +311,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
               );
             })}
           </div>
+          )}
         </div>
       </nav>
 
@@ -316,6 +336,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
         </div>
       </footer>
 
+      {!isPublicSurface && (
       <nav className="mobile-bottom-nav bg-white shadow-sm border-t border-gray-200">
         {mobileSections.map((section) => {
           const activeClass = sectionMatches(section) ? 'mobile-bottom-link-active' : '';
@@ -375,6 +396,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
           );
         })}
       </nav>
+      )}
     </div>
   );
 };

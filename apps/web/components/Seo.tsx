@@ -1,5 +1,5 @@
 import Head from 'next/head';
-import { abs, DEFAULT_DESCRIPTION, SITE_NAME } from '../lib/seo';
+import { abs, DEFAULT_DESCRIPTION, DEFAULT_OG_IMAGE, SITE_NAME } from '../lib/seo';
 import { toJsonLd } from '../lib/json-ld';
 
 interface SeoProps {
@@ -21,7 +21,7 @@ interface SeoProps {
 export function Seo({ title, description, path, ogImage, noindex, structuredData }: SeoProps) {
   const desc = description ?? DEFAULT_DESCRIPTION;
   const canonical = abs(path);
-  const image = ogImage ? abs(ogImage) : undefined;
+  const image = abs(ogImage ?? DEFAULT_OG_IMAGE);
   return (
     <Head>
       <title>{title}</title>
