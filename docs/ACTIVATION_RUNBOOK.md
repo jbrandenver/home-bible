@@ -269,3 +269,61 @@ Refund on request, immediately, and never fight a dispute on principle. Stripe
 keeps the original processing fee on a refund, and a dispute costs $15 to
 receive plus $15 to contest — so a disputed $29 sale is a net loss of around $44
 **even when you win**. The economics are not close.
+
+---
+
+## C. Recall monitoring
+
+**Free to run.** The CPSC Recall API (saferproducts.gov) is public, keyless and
+free; the function makes at most ~30 outbound requests per daily run. No
+account to open, no card, no per-call cost — the only prerequisite is applying
+migration `024_recall_monitoring.sql`.
+
+Like the others, the function is inert until configured: with no
+`RECALL_CRON_SECRET` set it refuses every request with a 503.
+
+**1. Secret and deploy.**
+
+```bash
+supabase secrets set RECALL_CRON_SECRET="$(openssl rand -hex 32)"
+supabase functions deploy check-recalls
+```
+
+**2. Schedule it.** Daily is enough — recalls are published on a weekly-ish
+cadence, and the function caps itself at ~30 brand queries per run.
+
+```sql
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+select vault.create_secret('<RECALL_CRON_SECRET>', 'recall_cron_secret');
+
+select cron.schedule('home-folder-check-recalls', '0 6 * * *', $$
+  select net.http_post(
+    url := 'https://gdntnlhnjyyzxcjuypuy.supabase.co/functions/v1/check-recalls',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || (select decrypted_secret from vault.decrypted_secrets where name = 'recall_cron_secret')
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+$$);
+```
+
+Daily at 06:00 UTC (unlike the digest there is no per-user local-time logic, so
+one fixed tick is fine). The `purge-cron-history` job from §A already covers
+this schedule's run history.
+
+**3. Verify.** Invoke it once by hand and read the counts:
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer $RECALL_CRON_SECRET" \
+  https://gdntnlhnjyyzxcjuypuy.supabase.co/functions/v1/check-recalls
+```
+
+Expect `{"ok":true, ...}` with `assetsConsidered` / `brandsQueried` /
+`matchesInserted`. Matches surface on the Warranties page as a "Safety
+recalls" section; a dismissed match never returns to "open" (the insert is
+`ON CONFLICT DO NOTHING`).

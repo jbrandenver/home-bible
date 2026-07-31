@@ -10,6 +10,7 @@ import {
   HANDOVER_SECTION_LABELS,
   HANDOVER_SECTIONS,
   loadHandoverReport,
+  type ClaimInventory,
   type HandoverContext,
   type HandoverReportData,
   type HandoverReportType,
@@ -389,6 +390,30 @@ export default function HandoverPage() {
             </Button>
           </div>
         </Card>
+
+        {reportType === 'insurance' ? (
+          <Card>
+            <h2 style={{ marginTop: 0, marginBottom: 10 }}>Why a claim-ready inventory matters</h2>
+            <p style={{ ...subtleText, marginTop: 0 }}>
+              After a loss, adjusters ask for an itemized list of what was damaged or destroyed — make,
+              model, serial number, when it was bought, and what it cost — backed by receipts or photos.
+              This report assembles that list from what you have already saved.
+            </p>
+            <p style={{ ...subtleText, marginTop: 0 }}>
+              In the year-one survey after the Los Angeles fires, 55% of households received no
+              personal-property benefits until they submitted an inventory, and 66% had to itemize every
+              destroyed item. A list built before a loss is far easier than one reconstructed from memory
+              afterward.
+            </p>
+            <p style={{ ...subtleText, marginTop: 0, fontSize: '0.8rem' }}>
+              Source: United Policyholders LA wildfire survey, 2026.
+            </p>
+            <p style={{ ...subtleText, marginTop: 0, marginBottom: 0, fontSize: '0.85rem' }}>
+              This report is the basis of the Claim-Ready Pack, which will be available as a paid export
+              when payments launch. Previewing and printing it here stays free.
+            </p>
+          </Card>
+        ) : null}
       </div>
 
       {reportData ? <HandoverPreview data={reportData} /> : null}
@@ -449,6 +474,30 @@ export default function HandoverPage() {
           }
 
           .handover-summary-grid {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+
+          /* The claim inventory table may span pages: let the section break,
+             repeat the header row on each page, and keep rows whole. */
+          .handover-claim-section {
+            break-inside: auto;
+            page-break-inside: auto;
+          }
+
+          .claim-inventory-scroll {
+            overflow: visible !important;
+          }
+
+          .claim-inventory-table {
+            width: 100% !important;
+          }
+
+          .claim-inventory-table thead {
+            display: table-header-group;
+          }
+
+          .claim-inventory-table tr {
             break-inside: avoid;
             page-break-inside: avoid;
           }
@@ -567,6 +616,10 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
             <SummaryTile label="Utilities loaded" value={data.utilities.length} />
           </SummaryGrid>
         </SectionShell>
+      ) : null}
+
+      {data.reportType === 'insurance' && data.claimInventory ? (
+        <ClaimInventorySection inventory={data.claimInventory} />
       ) : null}
 
       {selectedSections.has('emergency_overview') ? (
@@ -838,6 +891,119 @@ function HandoverPreview({ data }: { data: HandoverReportData }) {
         </SectionShell>
       ) : null}
     </article>
+  );
+}
+
+const claimHeaderCellStyle = {
+  textAlign: 'left' as const,
+  padding: '8px 10px',
+  borderBottom: '2px solid var(--color-espresso)',
+  fontSize: '0.78rem',
+  fontWeight: 800,
+  letterSpacing: '0.05em',
+  textTransform: 'uppercase' as const
+};
+
+const claimBodyCellStyle = {
+  padding: '8px 10px',
+  borderBottom: '1px solid var(--border-subtle)',
+  verticalAlign: 'top' as const,
+  fontSize: '0.93rem',
+  lineHeight: 1.45
+};
+
+function evidenceSummary(receiptCount: number, documentCount: number) {
+  const receipts = `${receiptCount} receipt${receiptCount === 1 ? '' : 's'}`;
+  const documents = `${documentCount} document${documentCount === 1 ? '' : 's'}`;
+  return `${receipts} · ${documents}`;
+}
+
+function ClaimInventorySection({ inventory }: { inventory: ClaimInventory }) {
+  const { items, totals, maintenance } = inventory;
+
+  return (
+    <section
+      className="handover-major-section handover-claim-section"
+      style={{ paddingTop: 20, borderTop: '1px solid var(--border-subtle)' }}
+    >
+      <h2 style={{ marginBottom: 12 }}>Claim-ready inventory</h2>
+
+      <SummaryGrid>
+        <SummaryTile label="Items" value={totals.itemCount} />
+        <SummaryTile label="Documented value" value={formatAmount(totals.documentedValueTotal, 'USD')} />
+        <SummaryTile label="Items with documented value" value={totals.itemsWithValue} />
+        <SummaryTile label="Items without documented value" value={totals.itemsWithoutValue} />
+      </SummaryGrid>
+
+      {totals.itemsWithoutValue > 0 ? (
+        <p style={{ ...subtleText, marginTop: 12 }}>
+          {totals.itemsWithoutValue === 1
+            ? '1 item has no documented value'
+            : `${totals.itemsWithoutValue} items have no documented value`}{' '}
+          — add purchase info or receipts to strengthen a claim.
+        </p>
+      ) : null}
+
+      {items.length === 0 ? (
+        <p style={{ ...subtleText, marginTop: 12 }}>No assets saved yet.</p>
+      ) : (
+        <div className="claim-inventory-scroll" style={{ overflowX: 'auto', marginTop: 14 }}>
+          <table className="claim-inventory-table" style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th scope="col" style={claimHeaderCellStyle}>Item</th>
+                <th scope="col" style={claimHeaderCellStyle}>Identifiers</th>
+                <th scope="col" style={claimHeaderCellStyle}>Purchase</th>
+                <th scope="col" style={claimHeaderCellStyle}>Documented value</th>
+                <th scope="col" style={claimHeaderCellStyle}>Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.assetId}>
+                  <td style={claimBodyCellStyle}>
+                    <strong>{safeText(item.name) || 'Asset'}</strong>
+                    <DetailLine value={`Warranty: ${formatEnumLabel(item.warrantyStatus)}`} />
+                  </td>
+                  <td style={claimBodyCellStyle}>
+                    {[safeText(item.brand), safeText(item.model)].filter(Boolean).join(' · ') || 'Not recorded'}
+                    <DetailLine
+                      value={safeText(item.serialNumber) ? `Serial: ${safeText(item.serialNumber)}` : null}
+                    />
+                  </td>
+                  <td style={claimBodyCellStyle}>
+                    {formatDate(item.purchaseDate)}
+                    <DetailLine value={safeText(item.retailer) ? `Retailer: ${safeText(item.retailer)}` : null} />
+                  </td>
+                  <td style={claimBodyCellStyle}>
+                    {item.documentedValue !== null ? formatAmount(item.documentedValue, 'USD') : 'Not documented'}
+                    <DetailLine
+                      value={
+                        item.valueSource === 'receipt'
+                          ? 'From linked receipt'
+                          : item.valueSource === 'purchase_price'
+                            ? 'From purchase price'
+                            : null
+                      }
+                    />
+                  </td>
+                  <td style={claimBodyCellStyle}>{evidenceSummary(item.receiptCount, item.documentCount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p style={{ ...subtleText, marginTop: 12, marginBottom: 0 }}>
+        Maintenance evidence: {maintenance.serviceRecordCount} service record
+        {maintenance.serviceRecordCount === 1 ? '' : 's'} on file
+        {maintenance.earliestServiceDate
+          ? `, spanning ${formatDate(maintenance.earliestServiceDate)} to ${formatDate(maintenance.latestServiceDate)}`
+          : ''}
+        . Documented upkeep supports the condition of the home at the time of loss.
+      </p>
+    </section>
   );
 }
 

@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel, getWarrantyMeta, safeHttpUrl, toLocalDateString } from '@home-folder/shared';
+import {
+  expectedLifespanYears,
+  formatEnumLabel,
+  getWarrantyMeta,
+  lifespanStatus,
+  safeHttpUrl,
+  toLocalDateString
+} from '@home-folder/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
@@ -16,6 +23,7 @@ import {
   getReminderDataContext,
   type ReminderDataContext
 } from '../lib/reminders';
+import { dismissRecallMatch, listRecallMatches, type RecallMatchRow } from '../lib/recalls';
 
 function getStatusColor(status: string): string {
   switch (status) {
@@ -55,6 +63,9 @@ export default function WarrantiesPage() {
   const [notice, setNotice] = useState('');
   const [savingAssetId, setSavingAssetId] = useState<string | null>(null);
   const [savingReminderAssetId, setSavingReminderAssetId] = useState<string | null>(null);
+  const [recallMatches, setRecallMatches] = useState<RecallMatchRow[]>([]);
+  const [recallsAvailable, setRecallsAvailable] = useState(false);
+  const [dismissingRecallId, setDismissingRecallId] = useState<string | null>(null);
   const [draft, setDraft] = useState({
     purchase_date: '',
     warranty_length_months: '',
@@ -82,6 +93,21 @@ export default function WarrantiesPage() {
           getDocumentsForContext(nextDocumentContext)
         ]);
 
+        // Recall matches are written server-side by the check-recalls cron
+        // (migration 024). When the table is unreachable — migration not yet
+        // applied, or no cron configured — the section simply stays hidden:
+        // recalls are additive, never blocking, never error spam.
+        let nextRecalls: RecallMatchRow[] = [];
+        let recallsReachable = false;
+        if (nextContext.mode === 'supabase' && nextContext.property) {
+          try {
+            nextRecalls = await listRecallMatches(nextContext.property.id);
+            recallsReachable = true;
+          } catch {
+            recallsReachable = false;
+          }
+        }
+
         if (!isMounted) {
           return;
         }
@@ -91,6 +117,8 @@ export default function WarrantiesPage() {
         setDataMode(nextContext.mode);
         setAssets(nextAssets);
         setDocuments(nextDocuments);
+        setRecallMatches(nextRecalls);
+        setRecallsAvailable(recallsReachable);
       } catch (loadError) {
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load warranties.');
@@ -136,6 +164,42 @@ export default function WarrantiesPage() {
       return acc;
     }, {});
   }, [documents]);
+
+  const assetNamesById = useMemo(() => {
+    return assets.reduce<Record<string, string>>((acc, asset) => {
+      acc[asset.id] = asset.name;
+      return acc;
+    }, {});
+  }, [assets]);
+
+  const openRecallMatches = useMemo(
+    () => recallMatches.filter((match) => match.status === 'open'),
+    [recallMatches]
+  );
+
+  const dismissRecall = async (match: RecallMatchRow) => {
+    const assetName = assetNamesById[match.asset_id] || 'this appliance';
+    const confirmed = window.confirm(
+      `Dismiss this recall notice for ${assetName}? Dismissing only hides the notice from this list — it does not fix or repair the appliance.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDismissingRecallId(match.id);
+    setError('');
+
+    try {
+      const updated = await dismissRecallMatch(match.id);
+      setRecallMatches((current) =>
+        current.map((item) => (item.id === updated.id ? updated : item))
+      );
+    } catch (dismissError) {
+      setError(dismissError instanceof Error ? dismissError.message : 'Failed to dismiss recall notice.');
+    } finally {
+      setDismissingRecallId(null);
+    }
+  };
 
   const startEditing = (asset: AssetRow) => {
     setEditingAssetId(asset.id);
@@ -238,6 +302,13 @@ export default function WarrantiesPage() {
           {statusAssets.map((asset) => {
             const { status: assetStatus, daysRemaining, expirationDate } = getWarrantyMeta(asset);
             const isEditing = editingAssetId === asset.id;
+            // Lifespan flags are computed client-side from asset data (pure,
+            // InterNACHI planning estimates), so they work in demo mode too.
+            const lifespanYears = expectedLifespanYears(asset.asset_type, asset.name);
+            const lifespan =
+              lifespanYears !== null && asset.purchase_date
+                ? lifespanStatus(asset.purchase_date, lifespanYears, toLocalDateString())
+                : null;
 
             return (
               <Card key={asset.id}>
@@ -260,6 +331,28 @@ export default function WarrantiesPage() {
                       </div>
                       {asset.brand && <UtilityBadge label={asset.brand} />}
                       <UtilityBadge label={`${warrantyDocumentCountsByAsset[asset.id] || 0} doc${warrantyDocumentCountsByAsset[asset.id] === 1 ? '' : 's'}`} />
+                      {lifespan && lifespanYears !== null && lifespan.status !== 'within' && (
+                        <div
+                          style={{
+                            padding: '4px 8px',
+                            backgroundColor:
+                              lifespan.status === 'past_expected'
+                                ? 'rgba(163,78,51,0.12)'
+                                : 'rgba(227,194,136,0.22)',
+                            color:
+                              lifespan.status === 'past_expected'
+                                ? 'var(--status-urgent)'
+                                : 'var(--color-brass-deep)',
+                            borderRadius: 4,
+                            fontSize: '0.75rem',
+                            fontWeight: 600
+                          }}
+                        >
+                          {lifespan.status === 'past_expected'
+                            ? `Past expected life (${Math.floor(lifespan.ageYears)} yrs, expected ~${lifespanYears})`
+                            : `Nearing expected life (${Math.floor(lifespan.ageYears)} yrs, expected ~${lifespanYears})`}
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ fontSize: '0.875rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
@@ -436,12 +529,89 @@ export default function WarrantiesPage() {
       />
 
       <div style={{ display: 'grid', gap: 24 }}>
+        {dataMode === 'supabase' && recallsAvailable && openRecallMatches.length > 0 && (
+          <section aria-labelledby="safety-recalls-heading">
+            <Card>
+              <h2 id="safety-recalls-heading" style={{ marginTop: 0, color: 'var(--status-urgent)' }}>
+                Safety recalls
+              </h2>
+              <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
+                These recorded appliances match official CPSC recall notices. Always read the
+                official notice — a recall can cover more or fewer units than a model-number match.
+              </p>
+              <div style={{ display: 'grid', gap: 12 }}>
+                {openRecallMatches.map((match) => (
+                  <div
+                    key={match.id}
+                    style={{
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 8,
+                      padding: 12,
+                      background: 'var(--surface-page)'
+                    }}
+                  >
+                    <h3 style={{ margin: '0 0 4px 0' }}>
+                      {assetNamesById[match.asset_id] || 'An appliance no longer in your list'}
+                    </h3>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 700 }}>
+                      Recall {match.recall_number}
+                      {match.title ? `: ${match.title}` : ''}
+                    </p>
+                    <div style={{ fontSize: '0.875rem', lineHeight: 1.6 }}>
+                      {match.hazard && (
+                        <p style={{ margin: 0 }}>
+                          <strong>Hazard:</strong> {match.hazard}
+                        </p>
+                      )}
+                      {match.remedy && (
+                        <p style={{ margin: 0 }}>
+                          <strong>Remedy:</strong> {match.remedy}
+                        </p>
+                      )}
+                      {match.matched_on && (
+                        <p style={{ margin: 0, color: 'var(--text-muted)' }}>
+                          Matched on {match.matched_on}.
+                        </p>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}>
+                      {safeHttpUrl(match.recall_url) && (
+                        <a
+                          href={safeHttpUrl(match.recall_url) || undefined}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ color: 'var(--accent-strong)', fontWeight: 600 }}
+                        >
+                          View official notice
+                        </a>
+                      )}
+                      <Button
+                        type="button"
+                        onClick={() => dismissRecall(match)}
+                        disabled={dismissingRecallId === match.id}
+                      >
+                        {dismissingRecallId === match.id ? 'Dismissing...' : 'Dismiss'}
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </section>
+        )}
+
         <Card>
           <p style={{ margin: 0, color: dataMode === 'supabase' ? 'var(--status-good)' : 'var(--text-muted)' }}>
             {dataMode === 'supabase'
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
+          {dataMode === 'supabase' && recallsAvailable && openRecallMatches.length === 0 ? (
+            <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              No recalls found for your recorded appliances. Checked automatically against the CPSC
+              database.
+            </p>
+          ) : null}
           {error ? (
             <p style={{ marginTop: 8, marginBottom: 0, color: 'var(--status-urgent)', fontWeight: 700 }}>
               {error}

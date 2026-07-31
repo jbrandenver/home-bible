@@ -1130,3 +1130,4 @@ export type CreateConditionReportEntryInput = z.infer<typeof createConditionRepo
 export type CreateComplianceObligationInput = z.infer<typeof createComplianceObligationSchema>;
 
 export * from './automation';
+export * from './lifespans';

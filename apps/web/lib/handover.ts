@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js';
+import { getWarrantyMeta, type WarrantyStatus } from '@home-folder/shared';
 import { getCurrentUser, isSupabaseConfigured } from './auth';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from './assets';
 import { getDemoActiveProperty, getDemoRooms } from './demoStorage';
@@ -68,7 +69,159 @@ export type HandoverReportData = HandoverReportInput & {
   documents: DocumentRow[];
   receipts: ReceiptRow[];
   sectionErrors: string[];
+  /** Present only for the insurance report type; null for every other type. */
+  claimInventory: ClaimInventory | null;
 };
+
+export type ClaimInventoryValueSource = 'purchase_price' | 'receipt';
+
+export type ClaimInventoryItem = {
+  assetId: string;
+  name: string;
+  brand: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  purchaseDate: string | null;
+  purchasePrice: number | null;
+  retailer: string | null;
+  warrantyStatus: WarrantyStatus;
+  /** Sum of amounts on approved receipts linked to this asset; null when none carry an amount. */
+  receiptAmount: number | null;
+  /** purchase_price when set, otherwise the linked receipt amount — never both. Null when neither exists. */
+  documentedValue: number | null;
+  valueSource: ClaimInventoryValueSource | null;
+  receiptCount: number;
+  documentCount: number;
+  evidenceCount: number;
+};
+
+export type ClaimInventoryTotals = {
+  itemCount: number;
+  /** Sum of documentedValue across items. Items without a documented value contribute nothing. */
+  documentedValueTotal: number;
+  itemsWithValue: number;
+  itemsWithoutValue: number;
+};
+
+export type ClaimMaintenanceSummary = {
+  serviceRecordCount: number;
+  earliestServiceDate: string | null;
+  latestServiceDate: string | null;
+};
+
+export type ClaimInventory = {
+  items: ClaimInventoryItem[];
+  totals: ClaimInventoryTotals;
+  maintenance: ClaimMaintenanceSummary;
+};
+
+/**
+ * Assemble the adjuster-ready claim inventory for the insurance report type.
+ *
+ * Pure function: no loading, no dates invented, no values estimated. An item's
+ * documented value is its recorded purchase price when one exists, otherwise
+ * the summed amount of approved receipts linked to it via receipt.asset_id —
+ * one source or the other, never both. Items with neither are counted
+ * separately so the report can say so honestly instead of guessing.
+ */
+export function buildClaimInventory(
+  assets: AssetRow[],
+  receipts: ReceiptRow[],
+  documents: DocumentRow[],
+  serviceRecords: ServiceRecordRow[]
+): ClaimInventory {
+  // Only approved receipts count as claim evidence — same rule the report
+  // preview already applies to the receipts summary section.
+  const receiptsByAsset = new Map<string, ReceiptRow[]>();
+  for (const receipt of receipts) {
+    if (receipt.approval_status !== 'approved' || !receipt.asset_id) {
+      continue;
+    }
+    const list = receiptsByAsset.get(receipt.asset_id);
+    if (list) {
+      list.push(receipt);
+    } else {
+      receiptsByAsset.set(receipt.asset_id, [receipt]);
+    }
+  }
+
+  const documentCountByAsset = new Map<string, number>();
+  for (const document of documents) {
+    if (!document.asset_id) {
+      continue;
+    }
+    documentCountByAsset.set(document.asset_id, (documentCountByAsset.get(document.asset_id) || 0) + 1);
+  }
+
+  let documentedValueTotal = 0;
+  let itemsWithValue = 0;
+
+  const items: ClaimInventoryItem[] = assets.map((asset) => {
+    const linkedReceipts = receiptsByAsset.get(asset.id) || [];
+    const receiptAmounts = linkedReceipts
+      .map((receipt) => receipt.total_amount)
+      .filter((amount): amount is number => amount !== null);
+    const receiptAmount =
+      receiptAmounts.length > 0 ? receiptAmounts.reduce((sum, amount) => sum + amount, 0) : null;
+
+    let documentedValue: number | null = null;
+    let valueSource: ClaimInventoryValueSource | null = null;
+
+    if (asset.purchase_price !== null) {
+      documentedValue = asset.purchase_price;
+      valueSource = 'purchase_price';
+    } else if (receiptAmount !== null) {
+      documentedValue = receiptAmount;
+      valueSource = 'receipt';
+    }
+
+    if (documentedValue !== null) {
+      documentedValueTotal += documentedValue;
+      itemsWithValue += 1;
+    }
+
+    const documentCount = documentCountByAsset.get(asset.id) || 0;
+
+    return {
+      assetId: asset.id,
+      name: asset.name,
+      brand: asset.brand,
+      model: asset.model,
+      serialNumber: asset.serial_number,
+      purchaseDate: asset.purchase_date,
+      purchasePrice: asset.purchase_price,
+      retailer: asset.retailer,
+      warrantyStatus: getWarrantyMeta(asset).status,
+      receiptAmount,
+      documentedValue,
+      valueSource,
+      receiptCount: linkedReceipts.length,
+      documentCount,
+      evidenceCount: linkedReceipts.length + documentCount
+    };
+  });
+
+  // ISO date-only strings sort correctly as plain strings.
+  const serviceDates = serviceRecords
+    .map((record) => record.service_date)
+    .filter((date) => Boolean(date))
+    .sort();
+
+  return {
+    items,
+    totals: {
+      itemCount: assets.length,
+      documentedValueTotal,
+      itemsWithValue,
+      itemsWithoutValue: assets.length - itemsWithValue
+    },
+    maintenance: {
+      serviceRecordCount: serviceRecords.length,
+      earliestServiceDate: serviceDates.length > 0 ? serviceDates[0] : null,
+      latestServiceDate: serviceDates.length > 0 ? serviceDates[serviceDates.length - 1] : null
+    }
+  };
+}
 
 export const HANDOVER_SECTION_LABELS: Record<HandoverSection, string> = {
   property_summary: 'Property summary',
@@ -90,7 +243,7 @@ export const HANDOVER_REPORT_TYPE_LABELS: Record<HandoverReportType, string> = {
   family: 'Family handoff',
   buyer: 'Buyer handoff',
   maintenance: 'Maintenance reference',
-  insurance: 'Insurance packet',
+  insurance: 'Insurance / claim-ready',
   personal_archive: 'Personal archive'
 };
 
@@ -237,6 +390,9 @@ export async function loadHandoverReport(input: HandoverReportInput): Promise<Ha
   const context = await getHandoverContext();
   const sectionSet = new Set(input.sections);
   const sectionErrors: string[] = [];
+  // The insurance report always assembles the claim inventory, so the data it
+  // depends on is loaded even when those sections are toggled off.
+  const isInsurance = input.reportType === 'insurance';
 
   const emptyReport: HandoverReportData = {
     ...input,
@@ -253,7 +409,8 @@ export async function loadHandoverReport(input: HandoverReportInput): Promise<Ha
     trendFlags: [],
     documents: [],
     receipts: [],
-    sectionErrors
+    sectionErrors,
+    claimInventory: null
   };
 
   if (!context.property) {
@@ -274,31 +431,38 @@ export async function loadHandoverReport(input: HandoverReportInput): Promise<Ha
     sectionSet.has('receipts_summary') ||
     sectionSet.has('emergency_overview');
   const needsUtilities = sectionSet.has('utilities') || sectionSet.has('emergency_overview');
-  const needsAssets = sectionSet.has('assets') || sectionSet.has('warranties');
+  const needsAssets = sectionSet.has('assets') || sectionSet.has('warranties') || isInsurance;
   const needsReminders = sectionSet.has('reminders');
   const needsRepairs = sectionSet.has('repairs') || sectionSet.has('emergency_overview');
-  const needsServiceRecords = sectionSet.has('service_records');
+  const needsServiceRecords = sectionSet.has('service_records') || isInsurance;
   const needsIssues = sectionSet.has('issues') || sectionSet.has('emergency_overview');
   const needsTrendFlags = sectionSet.has('trend_flags');
-  const needsDocuments = sectionSet.has('documents_summary');
-  const needsReceipts = sectionSet.has('receipts_summary');
+  const needsDocuments = sectionSet.has('documents_summary') || isInsurance;
+  const needsReceipts = sectionSet.has('receipts_summary') || isInsurance;
 
   if (context.mode === 'demo') {
     const rooms = needsRooms ? getDemoRoomsWithFloors() : [];
+    const demoAssets = needsAssets ? getDemoAssets() : [];
+    const demoServiceRecords = needsServiceRecords ? getDemoServiceRecords() : [];
+    const demoDocuments = needsDocuments ? getDemoDocuments() : [];
+    const demoReceipts = needsReceipts ? getDemoReceipts() : [];
 
     return {
       ...emptyReport,
       floors: needsRooms ? buildDemoFloors(context.property.id, rooms) : [],
       rooms,
       utilities: needsUtilities ? getDemoUtilities() : [],
-      assets: needsAssets ? getDemoAssets() : [],
+      assets: demoAssets,
       reminders: needsReminders ? getDemoReminders() : [],
       repairs: needsRepairs ? getDemoRepairs() : [],
-      serviceRecords: needsServiceRecords ? getDemoServiceRecords() : [],
+      serviceRecords: demoServiceRecords,
       issues: needsIssues ? getDemoIssues() : [],
       trendFlags: needsTrendFlags ? getDemoTrendFlags() : [],
-      documents: needsDocuments ? getDemoDocuments() : [],
-      receipts: needsReceipts ? getDemoReceipts() : []
+      documents: demoDocuments,
+      receipts: demoReceipts,
+      claimInventory: isInsurance
+        ? buildClaimInventory(demoAssets, demoReceipts, demoDocuments, demoServiceRecords)
+        : null
     };
   }
 
@@ -334,6 +498,7 @@ export async function loadHandoverReport(input: HandoverReportInput): Promise<Ha
     issues,
     trendFlags,
     documents,
-    receipts
+    receipts,
+    claimInventory: isInsurance ? buildClaimInventory(assets, receipts, documents, serviceRecords) : null
   };
 }

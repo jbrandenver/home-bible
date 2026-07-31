@@ -26,10 +26,16 @@ import {
 } from '../lib/digestPreferences';
 import {
   buildAccountExport,
+  buildArchiveZip,
   buildCsvSheets,
   buildReadme,
-  downloadTextFile
+  downloadBinaryFile,
+  downloadTextFile,
+  exceedsExportSizeWarning,
+  listExportableFiles,
+  totalFileSizeBytes
 } from '../lib/accountExport';
+import { formatFileSize } from '../lib/documents';
 import { getAssetDataContext } from '../lib/assets';
 import { getAutomationContext } from '../lib/automation';
 import { getDocumentDataContext } from '../lib/documents';
@@ -61,9 +67,10 @@ export default function SettingsPage() {
   const [addressLoadFailed, setAddressLoadFailed] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
 
-  const [exporting, setExporting] = useState<'json' | 'csv' | null>(null);
+  const [exporting, setExporting] = useState<'archive' | 'csv' | null>(null);
   const [exportError, setExportError] = useState('');
   const [exportNote, setExportNote] = useState('');
+  const [exportProgress, setExportProgress] = useState('');
 
   const [digestFrequency, setDigestFrequency] = useState<DigestFrequency>('monthly');
   const [visitReminders, setVisitReminders] = useState(true);
@@ -231,10 +238,11 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleExport(format: 'json' | 'csv') {
+  async function handleExport(format: 'archive' | 'csv') {
     setExporting(format);
     setExportError('');
     setExportNote('');
+    setExportProgress('');
 
     try {
       const [utility, asset, reminder, repair, serviceRecord, issue, trendFlag, documentCtx, receipt, automation] =
@@ -266,14 +274,37 @@ export default function SettingsPage() {
 
       const stamp = data.generatedAt.slice(0, 10);
 
-      if (format === 'json') {
-        downloadTextFile(
-          `home-folder-export-${stamp}.json`,
-          JSON.stringify(data, null, 2),
-          'application/json'
+      if (format === 'archive') {
+        // The archive carries every uploaded file the account can read, across
+        // all properties. Files come down one at a time, so surface progress.
+        setExportProgress('Listing your uploaded files…');
+        const files = user ? await listExportableFiles(user.id) : [];
+
+        const totalBytes = totalFileSizeBytes(files);
+        if (exceedsExportSizeWarning(totalBytes)) {
+          const proceed = window.confirm(
+            `Your uploaded files total about ${formatFileSize(totalBytes)}. The archive is assembled in this browser tab, so a download this size can take a while and use significant memory. Continue?`
+          );
+          if (!proceed) {
+            setExportProgress('');
+            setExportNote('Export cancelled — nothing was downloaded.');
+            return;
+          }
+        }
+
+        const { zip, includedCount, missing } = await buildArchiveZip(data, files, (current, total) => {
+          setExportProgress(`Fetching file ${current} of ${total}…`);
+        });
+        setExportProgress('Packaging the archive…');
+        downloadBinaryFile(`home-folder-archive-${stamp}.zip`, zip);
+        setExportProgress('');
+        setExportNote(
+          missing.length > 0
+            ? `Downloaded your archive with ${includedCount} of ${files.length} files. ${missing.length} could not be fetched — see files/MISSING.txt inside the zip, then try again or download them from Documents.`
+            : files.length > 0
+              ? `Downloaded your full archive — every record, plus all ${includedCount} uploaded file${includedCount === 1 ? '' : 's'}.`
+              : 'Downloaded your full archive. No uploaded files yet, so it holds your records and a README.'
         );
-        downloadTextFile(`home-folder-export-${stamp}-README.txt`, buildReadme(data));
-        setExportNote('Downloaded your full record, plus a README explaining what is in it.');
       } else {
         const sheets = buildCsvSheets(data);
         if (sheets.length === 0) {
@@ -301,6 +332,7 @@ export default function SettingsPage() {
       );
     } finally {
       setExporting(null);
+      setExportProgress('');
     }
   }
 
@@ -665,9 +697,10 @@ export default function SettingsPage() {
           <Card>
             <h2 style={{ marginTop: 0 }}>Download your data</h2>
             <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-              Take a complete copy of your home record whenever you want it — as one
-              JSON file, or as spreadsheets you can open anywhere. Your record should
-              outlive any single app, including this one.
+              Take a complete copy of your home record whenever you want it. The full
+              archive is one zip holding every record and every file you uploaded —
+              photos, manuals, receipts, documents. Your record should outlive any
+              single app, including this one.
             </p>
             {!supabaseReady || !user ? (
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>
@@ -676,8 +709,8 @@ export default function SettingsPage() {
             ) : (
               <>
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  <Button type="button" onClick={() => handleExport('json')} disabled={exporting !== null}>
-                    {exporting === 'json' ? 'Preparing...' : 'Download everything (JSON)'}
+                  <Button type="button" onClick={() => handleExport('archive')} disabled={exporting !== null}>
+                    {exporting === 'archive' ? 'Preparing...' : 'Download full archive (ZIP, files included)'}
                   </Button>
                   <Button
                     type="button"
@@ -688,6 +721,11 @@ export default function SettingsPage() {
                     {exporting === 'csv' ? 'Preparing...' : 'Download spreadsheets (CSV)'}
                   </Button>
                 </div>
+                {exportProgress ? (
+                  <p style={{ color: 'var(--text-muted)', fontWeight: 600, marginBottom: 0 }} role="status">
+                    {exportProgress}
+                  </p>
+                ) : null}
                 {exportError ? (
                   <p style={{ color: 'var(--status-urgent)', fontWeight: 700, marginBottom: 0 }} role="alert">
                     {exportError}
@@ -699,10 +737,12 @@ export default function SettingsPage() {
                   </p>
                 ) : null}
                 <p style={{ color: 'var(--text-muted)', marginBottom: 0, fontSize: 14 }}>
-                  The download is a complete, unredacted copy — unlike a service call
+                  The archive is a complete, unredacted copy — unlike a service call
                   sheet or handover report, which deliberately leave sensitive details
-                  out because someone else reads them. Uploaded files are listed but
-                  not included; download those from Documents.
+                  out because someone else reads them. If any file cannot be fetched
+                  while the archive is built, it is listed in files/MISSING.txt inside
+                  the zip rather than silently left out. The CSV download carries
+                  records only.
                 </p>
               </>
             )}
