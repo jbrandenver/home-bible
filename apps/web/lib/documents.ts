@@ -41,7 +41,19 @@ const MIME_BY_EXTENSION: Record<string, (typeof ALLOWED_DOCUMENT_MIME_TYPES)[num
 };
 
 export type DocumentDataMode = 'demo' | 'supabase';
-export type DocumentRow = SharedDocumentRow;
+
+/**
+ * The landlord-tier foreign keys (migration 023) are newer than the shared
+ * row type, so they are layered on here as optional fields. Optional keeps
+ * every existing `DocumentRow` producer and consumer valid while letting the
+ * documents page read and re-link them.
+ */
+export type DocumentRow = SharedDocumentRow & {
+  tenancy_id?: string | null;
+  condition_report_id?: string | null;
+  condition_report_entry_id?: string | null;
+  compliance_obligation_id?: string | null;
+};
 
 export type DocumentDataContext = {
   mode: DocumentDataMode;
@@ -60,6 +72,9 @@ export type DocumentLinkInput = {
   issue_id?: string | null;
   trend_flag_id?: string | null;
   automation_device_id?: string | null;
+  tenancy_id?: string | null;
+  condition_report_id?: string | null;
+  compliance_obligation_id?: string | null;
 };
 
 export type DocumentUploadInput = DocumentLinkInput & {
@@ -88,7 +103,26 @@ export type DocumentLinkField =
   | 'service_record_id'
   | 'issue_id'
   | 'trend_flag_id'
-  | 'automation_device_id';
+  | 'automation_device_id'
+  | 'tenancy_id'
+  | 'condition_report_id'
+  | 'compliance_obligation_id';
+
+/** Every record a document can be filed against, in the order pages offer them. */
+export const DOCUMENT_LINK_FIELDS: DocumentLinkField[] = [
+  'room_id',
+  'utility_id',
+  'asset_id',
+  'reminder_id',
+  'repair_id',
+  'service_record_id',
+  'issue_id',
+  'trend_flag_id',
+  'automation_device_id',
+  'tenancy_id',
+  'condition_report_id',
+  'compliance_obligation_id'
+];
 
 export type DocumentLinkTarget = {
   field: DocumentLinkField;
@@ -96,7 +130,69 @@ export type DocumentLinkTarget = {
 };
 
 const DOCUMENT_SELECT =
-  'id, property_id, room_id, utility_id, asset_id, reminder_id, repair_id, service_record_id, issue_id, trend_flag_id, automation_device_id, document_type, title, description, file_name, file_path, thumbnail_path, bucket_name, mime_type, file_size_bytes, visibility, visibility_contexts, source, created_by, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, utility_id, asset_id, reminder_id, repair_id, service_record_id, issue_id, trend_flag_id, automation_device_id, tenancy_id, condition_report_id, condition_report_entry_id, compliance_obligation_id, document_type, title, description, file_name, file_path, thumbnail_path, bucket_name, mime_type, file_size_bytes, visibility, visibility_contexts, source, created_by, created_at, updated_at, deleted_at';
+
+/**
+ * The `?roomId=…` style query keys the documents page reads, so a detail page's
+ * "add document" href doubles as a description of the record it belongs to.
+ * Pure: used by RelatedDocuments to attach an existing file without every
+ * caller having to pass the foreign key twice.
+ */
+const QUERY_KEY_TO_LINK_FIELD: Record<string, DocumentLinkField> = {
+  roomId: 'room_id',
+  utilityId: 'utility_id',
+  assetId: 'asset_id',
+  reminderId: 'reminder_id',
+  repairId: 'repair_id',
+  serviceRecordId: 'service_record_id',
+  issueId: 'issue_id',
+  trendFlagId: 'trend_flag_id',
+  automationDeviceId: 'automation_device_id',
+  tenancyId: 'tenancy_id',
+  conditionReportId: 'condition_report_id',
+  complianceObligationId: 'compliance_obligation_id'
+};
+
+/** Read the record a `/documents?roomId=…` href points at. Null when it names none. */
+export function parseDocumentLinkTargetFromHref(href: string): DocumentLinkTarget | null {
+  const queryStart = href.indexOf('?');
+  if (queryStart < 0) {
+    return null;
+  }
+
+  const params = new URLSearchParams(href.slice(queryStart + 1));
+
+  for (const [queryKey, field] of Object.entries(QUERY_KEY_TO_LINK_FIELD)) {
+    const value = params.get(queryKey);
+    if (value) {
+      return { field, id: value };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * A patch that files a document under exactly one record, clearing any earlier
+ * filing. A document belongs in one place in the folder — the same assumption
+ * every list and label in the app already makes — so re-filing has to remove
+ * the old link as well as write the new one. `null` files it under the
+ * property itself.
+ */
+export function buildDocumentFilingPatch(target: DocumentLinkTarget | null): DocumentMetadataInput {
+  const patch: Partial<Record<DocumentLinkField, string | null>> = {};
+
+  for (const field of DOCUMENT_LINK_FIELDS) {
+    patch[field] = target && target.field === field ? target.id : null;
+  }
+
+  return patch;
+}
+
+/** True when the document is already filed against this record. */
+export function isDocumentLinkedTo(document: DocumentRow, target: DocumentLinkTarget) {
+  return document[target.field] === target.id;
+}
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -124,6 +220,10 @@ function normalizeDocument(raw: Partial<DocumentRow>): DocumentRow {
     issue_id: nullableString(raw.issue_id),
     trend_flag_id: nullableString(raw.trend_flag_id),
     automation_device_id: nullableString(raw.automation_device_id),
+    tenancy_id: nullableString(raw.tenancy_id),
+    condition_report_id: nullableString(raw.condition_report_id),
+    condition_report_entry_id: nullableString(raw.condition_report_entry_id),
+    compliance_obligation_id: nullableString(raw.compliance_obligation_id),
     document_type: enumValue(DOCUMENT_TYPES, raw.document_type, 'other'),
     title: raw.title?.trim() || raw.file_name?.trim() || 'Untitled document',
     description: nullableString(raw.description),
@@ -243,22 +343,28 @@ function cleanLinkInput(input: DocumentLinkInput) {
     service_record_id: nullableString(input.service_record_id),
     issue_id: nullableString(input.issue_id),
     trend_flag_id: nullableString(input.trend_flag_id),
-    automation_device_id: nullableString(input.automation_device_id)
+    automation_device_id: nullableString(input.automation_device_id),
+    tenancy_id: nullableString(input.tenancy_id),
+    condition_report_id: nullableString(input.condition_report_id),
+    compliance_obligation_id: nullableString(input.compliance_obligation_id)
   };
 }
 
 function cleanLinkUpdateInput(input: Partial<DocumentLinkInput>) {
   const payload: Record<string, string | null> = {};
 
-  if (input.room_id !== undefined) payload.room_id = nullableString(input.room_id);
-  if (input.utility_id !== undefined) payload.utility_id = nullableString(input.utility_id);
-  if (input.asset_id !== undefined) payload.asset_id = nullableString(input.asset_id);
-  if (input.reminder_id !== undefined) payload.reminder_id = nullableString(input.reminder_id);
-  if (input.repair_id !== undefined) payload.repair_id = nullableString(input.repair_id);
-  if (input.service_record_id !== undefined) payload.service_record_id = nullableString(input.service_record_id);
-  if (input.issue_id !== undefined) payload.issue_id = nullableString(input.issue_id);
-  if (input.trend_flag_id !== undefined) payload.trend_flag_id = nullableString(input.trend_flag_id);
-  if (input.automation_device_id !== undefined) payload.automation_device_id = nullableString(input.automation_device_id);
+  for (const field of DOCUMENT_LINK_FIELDS) {
+    const value = input[field];
+    if (value !== undefined) {
+      payload[field] = nullableString(value);
+    }
+  }
+
+  // A photo that is no longer filed against a condition report cannot stay
+  // pinned to one of that report's entries.
+  if (payload.condition_report_id === null) {
+    payload.condition_report_entry_id = null;
+  }
 
   return payload;
 }

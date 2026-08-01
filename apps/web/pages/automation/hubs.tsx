@@ -2,24 +2,40 @@ import { useEffect, useState } from 'react';
 import { AUTOMATION_HUB_TYPES, AUTOMATION_STATUS_LABELS, formatEnumLabel, type AutomationHubType } from '@home-folder/shared';
 import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
 import {
   createHubForContext,
   deleteHubForContext,
   getAutomationContext,
   getHubsForContext,
+  getNetworksForContext,
   type AutomationDataContext,
   type AutomationDataMode,
-  type AutomationHubRow
+  type AutomationHubRow,
+  type AutomationNetworkRow
 } from '../../lib/automation';
+import {
+  isLocationPresetValue,
+  resolveLocationRoomId,
+  rollbackCreatedLocation
+} from '../../lib/locationPresets';
+import { getRoomsForProperty } from '../../lib/rooms';
+
+type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
 export default function AutomationHubsPage() {
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AutomationDataMode>('demo');
   const [hubs, setHubs] = useState<AutomationHubRow[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [networks, setNetworks] = useState<AutomationNetworkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [hubType, setHubType] = useState<AutomationHubType>('smart_home_hub');
+  const [roomChoice, setRoomChoice] = useState('');
+  const [roomCustomName, setRoomCustomName] = useState('');
+  const [networkId, setNetworkId] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -31,10 +47,24 @@ export default function AutomationHubsPage() {
       try {
         const nextContext = await getAutomationContext();
         const list = await getHubsForContext(nextContext);
+        // A hub sits in a room and hangs off a network. Both lists are needed
+        // to offer those links while the hub is being written down.
+        let roomList: Room[] = [];
+        let networkList: AutomationNetworkRow[] = [];
+        if (nextContext.mode === 'supabase' && nextContext.property) {
+          const [nextRooms, nextNetworks] = await Promise.all([
+            getRoomsForProperty(nextContext.property.id),
+            getNetworksForContext(nextContext)
+          ]);
+          roomList = nextRooms as Room[];
+          networkList = nextNetworks;
+        }
         if (!isMounted) return;
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setHubs(list);
+        setRooms(roomList);
+        setNetworks(networkList);
       } catch (loadError) {
         if (isMounted) setError(loadError instanceof Error ? loadError.message : 'Failed to load hubs.');
       } finally {
@@ -58,13 +88,55 @@ export default function AutomationHubsPage() {
       setFormError('Give the hub a name first.');
       return;
     }
+
+    const roomValue = roomSelectionValue(roomChoice, roomCustomName);
+    if (roomValue === null) {
+      setFormError('Give the new room a name, or pick one from the list.');
+      return;
+    }
+    if (isLocationPresetValue(roomValue) && (context.mode !== 'supabase' || !context.property)) {
+      setFormError('Create a property before adding a new location.');
+      return;
+    }
+
     setSaving(true);
     setFormError('');
+
+    const resolutionContext =
+      context.mode === 'supabase' && context.property
+        ? ({ mode: 'supabase', propertyId: context.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
     try {
-      const created = await createHubForContext(context, { name: name.trim(), hub_type: hubType, local_control: true, cloud_dependency: false, internet_dependency: false, criticality: 'normal', status: 'unknown' });
+      const wasPreset = isLocationPresetValue(roomValue);
+      const resolved = await resolveLocationRoomId(roomValue, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
+      const created = await createHubForContext(context, {
+        name: name.trim(),
+        hub_type: hubType,
+        room_id: resolved.roomId,
+        network_id: networkId || null,
+        local_control: true,
+        cloud_dependency: false,
+        internet_dependency: false,
+        criticality: 'normal',
+        status: 'unknown'
+      });
       setHubs((current) => [created, ...current].sort((a, b) => a.name.localeCompare(b.name)));
       setName('');
+      setRoomChoice(resolved.roomId || '');
+      setRoomCustomName('');
+      if (wasPreset && context.mode === 'supabase' && context.property) {
+        setRooms((await getRoomsForProperty(context.property.id)) as Room[]);
+      }
     } catch (saveError) {
+      // A picked preset creates the room before the hub is written. If the hub
+      // save fails, take the room back out rather than leaving an empty space
+      // on the home map.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
       setFormError(saveError instanceof Error ? saveError.message : 'Failed to add hub.');
     } finally {
       setSaving(false);
@@ -97,6 +169,22 @@ export default function AutomationHubsPage() {
               <label><span>Type</span>
                 <Select value={hubType} onChange={(e) => setHubType(e.target.value as AutomationHubType)} style={{ marginTop: 6 }}>
                   {AUTOMATION_HUB_TYPES.map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}
+                </Select>
+              </label>
+              <RoomLocationSelect
+                rooms={rooms}
+                value={roomChoice}
+                onChange={setRoomChoice}
+                customName={roomCustomName}
+                onCustomNameChange={setRoomCustomName}
+                label="Where it sits"
+                emptyLabel="No room recorded"
+                disabled={loading}
+              />
+              <label><span>On network</span>
+                <Select value={networkId} onChange={(e) => setNetworkId(e.target.value)} style={{ marginTop: 6 }} disabled={loading}>
+                  <option value="">Not recorded</option>
+                  {networks.map((network) => <option key={network.id} value={network.id}>{network.name}</option>)}
                 </Select>
               </label>
               <Button onClick={add} disabled={saving}>{saving ? 'Adding…' : 'Add hub'}</Button>

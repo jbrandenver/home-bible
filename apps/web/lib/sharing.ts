@@ -525,10 +525,6 @@ function applyRoleFilters(role: SharingRole, data: HandoverReportData): Handover
   return sanitizedData;
 }
 
-export function getSharingRoleProfile(role: SharingRole) {
-  return ROLE_PROFILES[role];
-}
-
 export async function loadSharingPreview(role: SharingRole): Promise<SharingPreview> {
   const profile = ROLE_PROFILES[role];
   const loaded = await loadHandoverReport({
@@ -688,6 +684,237 @@ export async function revokePropertyInvitation(invitationId: string) {
 
   if (error) {
     throw new Error(error.message || 'Failed to revoke invitation.');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PEOPLE WITH ACCESS
+//
+// Members are governed by two independent server-side rules, and this module
+// only ever mirrors them — it never substitutes for them:
+//   * RLS (`can_manage_property_members`) — owners and co-owners may update or
+//     remove member rows at all.
+//   * The `guard_property_member_role` trigger (migration 015) — only a true
+//     owner may grant, downgrade, or remove owner/co-owner access, and a
+//     membership's identity (property_id, user_id) can never be changed.
+// The UI reads the caller's own role first so it never offers a control that
+// the database is certain to reject.
+// ---------------------------------------------------------------------------
+
+/** Roles this screen can hand out. `owner` is deliberately absent: ownership
+ * moves through the transfer flow (properties.owner_user_id), not by editing a
+ * membership row. */
+export const ASSIGNABLE_MEMBER_ROLES = SHARING_ROLES.filter(
+  (role): role is Exclude<SharingRole, 'owner'> => role !== 'owner'
+);
+
+export type PropertyMember = {
+  id: string;
+  user_id: string;
+  role: SharingRole;
+  created_at: string;
+  /** Email from the invitation they accepted, when we have one. Profiles are
+   * self-select only under RLS, so another person's name is not readable. */
+  label: string;
+  isYou: boolean;
+  /** True for the account in properties.owner_user_id — never editable here. */
+  isPropertyOwner: boolean;
+};
+
+export type PropertyMemberAccess = {
+  mode: SharingMode;
+  propertyName: string | null;
+  /** The caller's own role on this property, straight from the database. */
+  role: SharingRole | null;
+  canManage: boolean;
+  /** True only for a real owner — the trigger's test for owner/co-owner edits. */
+  isOwner: boolean;
+  members: PropertyMember[];
+};
+
+const EMPTY_MEMBER_ACCESS: PropertyMemberAccess = {
+  mode: 'demo',
+  propertyName: null,
+  role: null,
+  canManage: false,
+  isOwner: false,
+  members: []
+};
+
+/** The caller's role as the database itself computes it (migration 015). */
+export async function getCurrentPropertyRole(propertyId: string): Promise<SharingRole | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase.rpc('current_property_role', {
+    target_property_id: propertyId
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to check your access level.');
+  }
+
+  const role = typeof data === 'string' ? data : null;
+  return role && (SHARING_ROLES as readonly string[]).includes(role) ? (role as SharingRole) : null;
+}
+
+/**
+ * Everyone who currently has access, plus what the caller is allowed to do
+ * about it. Returns an empty, permission-free result in demo mode or when the
+ * caller cannot manage members, so the page simply has nothing to show.
+ */
+export async function listPropertyMembers(): Promise<PropertyMemberAccess> {
+  const context = await getHandoverContext();
+  if (context.mode === 'demo' || !context.property || !context.user) {
+    return EMPTY_MEMBER_ACCESS;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const property = context.property;
+  const role = await getCurrentPropertyRole(property.id);
+  const canManage = role === 'owner' || role === 'co_owner';
+  const isOwner = role === 'owner';
+
+  const base: PropertyMemberAccess = {
+    mode: 'supabase',
+    propertyName: property.nickname || null,
+    role,
+    canManage,
+    isOwner,
+    members: []
+  };
+
+  if (!canManage) {
+    return base;
+  }
+
+  const { data, error } = await supabase
+    .from('property_members')
+    .select('id, user_id, role, created_at')
+    .eq('property_id', property.id)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to load the people with access.');
+  }
+
+  // Names live in `profiles`, which every account can read only for itself, so
+  // the honest label for someone else is the address they were invited at.
+  let emailByUserId = new Map<string, string>();
+  try {
+    const invitations = await listPropertyInvitations();
+    emailByUserId = new Map(
+      invitations
+        .filter((invitation) => invitation.accepted_by && invitation.invited_email)
+        .map((invitation) => [invitation.accepted_by as string, invitation.invited_email as string])
+    );
+  } catch {
+    // Labels are a nicety; never block the list on them.
+  }
+
+  const rows = (data ?? []) as Array<{ id: string; user_id: string; role: string; created_at: string }>;
+  const members: PropertyMember[] = rows.map((row) => ({
+    id: row.id,
+    user_id: row.user_id,
+    role: ((SHARING_ROLES as readonly string[]).includes(row.role) ? row.role : 'viewer') as SharingRole,
+    created_at: row.created_at,
+    label:
+      row.user_id === context.user?.id
+        ? context.user?.email || 'You'
+        : emailByUserId.get(row.user_id) || 'Someone you invited',
+    isYou: row.user_id === context.user?.id,
+    isPropertyOwner: row.user_id === property.owner_user_id
+  }));
+
+  // The account in properties.owner_user_id may hold no membership row at all.
+  // Show it anyway, so "people with access" is never quietly missing the owner.
+  if (!members.some((member) => member.user_id === property.owner_user_id)) {
+    members.unshift({
+      id: `owner:${property.owner_user_id}`,
+      user_id: property.owner_user_id,
+      role: 'owner',
+      created_at: property.created_at,
+      label: property.owner_user_id === context.user.id ? context.user.email || 'You' : 'The owner',
+      isYou: property.owner_user_id === context.user.id,
+      isPropertyOwner: true
+    });
+  }
+
+  return { ...base, members };
+}
+
+/** True when the caller may change this member's role at all. Mirrors the
+ * trigger: owner/co-owner rows are owner-only, and the property owner's own
+ * access is never edited from here. */
+export function canEditMember(access: PropertyMemberAccess, member: PropertyMember) {
+  if (!access.canManage || member.isPropertyOwner) {
+    return false;
+  }
+
+  if (member.role === 'owner' || member.role === 'co_owner') {
+    return access.isOwner;
+  }
+
+  return true;
+}
+
+/** Roles the caller can actually assign — a co-owner cannot create another
+ * owner or co-owner, so those options are not offered. */
+export function assignableRolesFor(access: PropertyMemberAccess) {
+  return ASSIGNABLE_MEMBER_ROLES.filter((role) => (role === 'co_owner' ? access.isOwner : true));
+}
+
+export async function updatePropertyMemberRole(memberId: string, role: SharingRole) {
+  const context = await getHandoverContext();
+  if (context.mode === 'demo' || !context.property) {
+    throw new Error('Sign in and create a property before changing access.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  // Only the role moves. property_id and user_id are immutable by trigger, and
+  // sending them would be rejected rather than ignored.
+  const { error } = await supabase
+    .from('property_members')
+    .update({ role })
+    .eq('id', memberId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(error.message || 'Failed to change this person’s access.');
+  }
+}
+
+export async function removePropertyMember(memberId: string) {
+  const context = await getHandoverContext();
+  if (context.mode === 'demo' || !context.property) {
+    throw new Error('Sign in and create a property before changing access.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { error } = await supabase
+    .from('property_members')
+    .delete()
+    .eq('id', memberId)
+    .eq('property_id', context.property.id);
+
+  if (error) {
+    throw new Error(error.message || 'Failed to remove this person.');
   }
 }
 

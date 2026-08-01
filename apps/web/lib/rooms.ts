@@ -7,9 +7,24 @@ export type RoomDraft = {
   floor_name: string;
 };
 
-export type RoomUpdateInput = RoomDraft & {
-  notes?: string | null;
+/**
+ * The detail columns a room has always had in the schema. They are optional
+ * here on purpose: callers that only rename a room (the onboarding list, for
+ * example) must not blank out counts someone recorded on the room's own page.
+ */
+export type RoomDetailInput = {
+  outlet_count?: number | null;
+  switch_count?: number | null;
+  vent_count?: number | null;
+  vent_type?: string | null;
+  breaker_label?: string | null;
+  has_plumbing?: boolean;
 };
+
+export type RoomUpdateInput = RoomDraft &
+  RoomDetailInput & {
+    notes?: string | null;
+  };
 
 export type FloorRow = {
   id: string;
@@ -37,6 +52,14 @@ export type RoomWithFloor = {
   floor_name: string;
   floor_id: string | null;
   notes?: string | null;
+  /** Only loaded by getRoomById, which reads a single room in full. */
+  property_id?: string;
+  outlet_count?: number | null;
+  switch_count?: number | null;
+  vent_count?: number | null;
+  vent_type?: string | null;
+  breaker_label?: string | null;
+  has_plumbing?: boolean;
 };
 
 export async function getFloorsForProperty(propertyId: string) {
@@ -92,7 +115,9 @@ export async function getRoomById(roomId: string): Promise<RoomWithFloor | null>
 
   const { data: room } = await supabase
     .from('rooms')
-    .select('id, property_id, floor_id, name, room_type, notes')
+    .select(
+      'id, property_id, floor_id, name, room_type, notes, outlet_count, switch_count, vent_count, vent_type, breaker_label, has_plumbing'
+    )
     .eq('id', roomId)
     .is('deleted_at', null)
     .maybeSingle();
@@ -118,7 +143,14 @@ export async function getRoomById(roomId: string): Promise<RoomWithFloor | null>
     room_type: room.room_type,
     floor_name: floorName,
     floor_id: room.floor_id,
-    notes: room.notes || null
+    notes: room.notes || null,
+    property_id: room.property_id,
+    outlet_count: room.outlet_count ?? null,
+    switch_count: room.switch_count ?? null,
+    vent_count: room.vent_count ?? null,
+    vent_type: room.vent_type || null,
+    breaker_label: room.breaker_label || null,
+    has_plumbing: Boolean(room.has_plumbing)
   };
 }
 
@@ -292,14 +324,37 @@ export async function updateRoomForProperty(propertyId: string, roomId: string, 
 
   const floor = await getOrCreateFloorForProperty(propertyId, input.floor_name);
 
+  const update: Record<string, unknown> = {
+    name,
+    room_type: input.room_type,
+    floor_id: floor.id,
+    notes: input.notes?.trim() || null
+  };
+
+  // Detail columns are written only when the caller offers them, so a form that
+  // does not show outlet or vent counts cannot quietly erase them.
+  if (input.outlet_count !== undefined) {
+    update.outlet_count = input.outlet_count;
+  }
+  if (input.switch_count !== undefined) {
+    update.switch_count = input.switch_count;
+  }
+  if (input.vent_count !== undefined) {
+    update.vent_count = input.vent_count;
+  }
+  if (input.vent_type !== undefined) {
+    update.vent_type = input.vent_type?.trim() || null;
+  }
+  if (input.breaker_label !== undefined) {
+    update.breaker_label = input.breaker_label?.trim() || null;
+  }
+  if (input.has_plumbing !== undefined) {
+    update.has_plumbing = input.has_plumbing;
+  }
+
   const { error } = await supabase
     .from('rooms')
-    .update({
-      name,
-      room_type: input.room_type,
-      floor_id: floor.id,
-      notes: input.notes?.trim() || null
-    })
+    .update(update)
     .eq('id', roomId)
     .eq('property_id', propertyId)
     .is('deleted_at', null);

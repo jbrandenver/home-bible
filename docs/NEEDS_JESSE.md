@@ -37,7 +37,11 @@ Live on Cloudflare Workers (OpenNext, PR #7). All routes verified 200 on
 `ourhomefolder.com` and `www`, sitemap/canonicals emit the production URL,
 MX untouched. Config: Workers Builds from `main`, root `apps/web`.
 
-### 2. Run the signed-in flow by hand, once — IN PROGRESS
+### 2. ~~Run the signed-in flow by hand, once~~ — COMPLETED 2026-07-31
+Jesse ran the full pass on the live site and confirmed it works.
+(Checklist retained below for future regression passes.)
+
+Original heading: Run the signed-in flow by hand, once
 **Status: Jesse is running this pass on the live site (started 2026-07-31).
 Open until Jesse explicitly says it is completed.**
 

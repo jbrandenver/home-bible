@@ -144,6 +144,124 @@ export async function updatePropertyAddress(propertyId: string, input: PropertyA
   }
 }
 
+export type PropertyType = (typeof PROPERTY_TYPES)[number];
+
+// What the property is, beyond its address. The nickname and type were set once
+// at creation and could never be corrected; the profile flags below have always
+// existed in the schema but no form ever wrote them, even though the seasonal
+// plan reads has_yard and has_basement.
+export type PropertyDetails = {
+  nickname: string;
+  property_type: PropertyType;
+  unit_label: string | null;
+  square_feet: number | null;
+  year_built: number | null;
+  floor_count: number | null;
+  has_garage: boolean;
+  has_basement: boolean;
+  has_attic: boolean;
+  has_crawl_space: boolean;
+  has_yard: boolean;
+  has_shed: boolean;
+};
+
+const PROPERTY_DETAIL_COLUMNS =
+  'nickname, property_type, unit_label, square_feet, year_built, floor_count, has_garage, has_basement, has_attic, has_crawl_space, has_yard, has_shed';
+
+function toPropertyType(value: unknown): PropertyType {
+  return typeof value === 'string' && (PROPERTY_TYPES as readonly string[]).includes(value)
+    ? (value as PropertyType)
+    : 'single_family_home';
+}
+
+function toWholeNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? Math.round(parsed) : null;
+}
+
+export async function getPropertyDetails(propertyId: string): Promise<PropertyDetails | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('properties')
+    .select(PROPERTY_DETAIL_COLUMNS)
+    .eq('id', propertyId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return {
+    nickname: data.nickname || '',
+    property_type: toPropertyType(data.property_type),
+    unit_label: data.unit_label ?? null,
+    square_feet: toWholeNumber(data.square_feet),
+    year_built: toWholeNumber(data.year_built),
+    floor_count: toWholeNumber(data.floor_count),
+    has_garage: Boolean(data.has_garage),
+    has_basement: Boolean(data.has_basement),
+    has_attic: Boolean(data.has_attic),
+    has_crawl_space: Boolean(data.has_crawl_space),
+    has_yard: Boolean(data.has_yard),
+    has_shed: Boolean(data.has_shed)
+  };
+}
+
+/**
+ * Correct what a property is. Deliberately excludes parent_property_id — a
+ * property cannot be re-parented (migration 025 guards it) — and owner_user_id,
+ * which has a guard trigger of its own. Address fields keep their own writer.
+ */
+export async function updatePropertyDetails(propertyId: string, input: PropertyDetails): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const nickname = input.nickname.trim();
+  if (!nickname) {
+    throw new Error('A property needs a name — it is how you tell your homes apart.');
+  }
+
+  const unitLabel = typeof input.unit_label === 'string' ? input.unit_label.trim() : '';
+
+  const { error } = await supabase
+    .from('properties')
+    .update({
+      nickname,
+      property_type: input.property_type,
+      unit_label: unitLabel.length > 0 ? unitLabel : null,
+      square_feet: toWholeNumber(input.square_feet),
+      year_built: toWholeNumber(input.year_built),
+      floor_count: toWholeNumber(input.floor_count),
+      has_garage: input.has_garage,
+      has_basement: input.has_basement,
+      has_attic: input.has_attic,
+      has_crawl_space: input.has_crawl_space,
+      has_yard: input.has_yard,
+      has_shed: input.has_shed
+    })
+    .eq('id', propertyId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(formatPropertySetupError('save property details', error.message));
+  }
+
+  // The nickname is shown by the switcher and page headers, which read the
+  // cached summary.
+  clearCachedProperty();
+}
+
 // Same problem as the auth user: every data context resolves the primary
 // property independently, so one page load ran this 1-3 query lookup up to
 // eight times. Concurrent callers share one in-flight lookup, and the result is

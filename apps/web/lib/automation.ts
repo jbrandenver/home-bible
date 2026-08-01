@@ -115,6 +115,22 @@ export type AutomationNetworkRow = {
   is_guest: boolean;
   is_iot: boolean;
   physical_location: string | null;
+  // Equipment and addressing: defined in migration 012, never surfaced by any
+  // form until the launch review (2026-07-31). Optional so demo-mode rows and
+  // any caller building a network object by hand stay valid.
+  router_model?: string | null;
+  gateway?: string | null;
+  mesh_system?: string | null;
+  access_points?: string | null;
+  vlan?: string | null;
+  subnet?: string | null;
+  dns_notes?: string | null;
+  dhcp_range?: string | null;
+  modem?: string | null;
+  backup_internet?: string | null;
+  security_notes?: string | null;
+  ups_backup?: string | null;
+  setup_instructions?: string | null;
   recovery_instructions: string | null;
   credential_reference: string | null;
   notes: string | null;
@@ -180,7 +196,7 @@ const HUB_SELECT =
   'id, property_id, room_id, network_id, name, manufacturer, model, hub_type, local_control, cloud_dependency, internet_dependency, criticality, status, firmware_version, recovery_steps, reset_instructions, credential_reference, notes, created_at, updated_at, deleted_at';
 
 const NETWORK_SELECT =
-  'id, property_id, name, network_type, ssid, internet_provider, is_guest, is_iot, physical_location, recovery_instructions, credential_reference, notes, created_at, updated_at, deleted_at';
+  'id, property_id, name, network_type, ssid, internet_provider, is_guest, is_iot, physical_location, router_model, gateway, mesh_system, access_points, vlan, subnet, dns_notes, dhcp_range, modem, backup_internet, security_notes, ups_backup, setup_instructions, recovery_instructions, credential_reference, notes, created_at, updated_at, deleted_at';
 
 const ROUTINE_SELECT =
   'id, property_id, name, routine_type, description, platform, status, criticality, trigger_text, conditions_text, actions_text, internet_dependency, local_control_available, failure_behavior, manual_override, last_tested, notes, created_at, updated_at, deleted_at';
@@ -320,22 +336,46 @@ export async function createDeviceForContext(
   return device;
 }
 
+/**
+ * automation_devices.firmware_version exists in migration 012 and is shown on
+ * the device page, but it is absent from createAutomationDeviceSchema — so a
+ * firmware number typed into the edit form was parsed away and never written.
+ * It is validated here to the same shape as the schema's short-text fields.
+ */
+export type UpdateAutomationDeviceInput = Partial<CreateAutomationDeviceInput> & {
+  firmware_version?: string | null;
+};
+
+function shortTextOrNull(value: string | null | undefined, label: string) {
+  if (value === null || value === undefined) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (trimmed.length > 200) throw new Error(`${label} is too long.`);
+  return trimmed;
+}
+
 export async function updateDeviceForContext(
   context: AutomationDataContext,
   deviceId: string,
-  input: Partial<CreateAutomationDeviceInput>
+  input: UpdateAutomationDeviceInput
 ): Promise<AutomationDeviceRow | null> {
   const { supabase, property } = requireEditable(context);
 
-  const parsed = createAutomationDeviceSchema.partial().safeParse(input);
+  const { firmware_version: firmwareVersion, ...schemaInput } = input;
+  const parsed = createAutomationDeviceSchema.partial().safeParse(schemaInput);
   if (!parsed.success) throw new Error(firstZodMessage(parsed.error, 'Device details are invalid.'));
   const { protocols, ecosystems, ...fields } = parsed.data;
   void protocols;
   void ecosystems;
 
+  const patch: Record<string, unknown> = { ...fields };
+  if ('firmware_version' in input) {
+    patch.firmware_version = shortTextOrNull(firmwareVersion, 'Firmware version');
+  }
+
   const { data, error } = await supabase
     .from('automation_devices')
-    .update(fields)
+    .update(patch)
     .eq('id', deviceId)
     .eq('property_id', property.id)
     .is('deleted_at', null)

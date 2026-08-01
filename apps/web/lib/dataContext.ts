@@ -41,33 +41,3 @@ export async function resolveDataContext(): Promise<ResolvedDataContext> {
   };
 }
 
-export type ListOptions = {
-  limit?: number;
-  offset?: number;
-};
-
-export function applyRange<T extends { range(from: number, to: number): T }>(
-  query: T,
-  options: ListOptions = {}
-) {
-  const limit = options.limit;
-  const offset = options.offset ?? 0;
-
-  if (!limit || limit <= 0) {
-    return query;
-  }
-
-  return query.range(offset, offset + limit - 1);
-}
-
-export function requireSupabaseProperty(context: ResolvedDataContext, action: string) {
-  if (context.mode === 'demo') {
-    throw new Error(`Sign in to ${action}. Demo mode only persists data in this browser.`);
-  }
-
-  if (!context.property) {
-    throw new Error(`Create or select a property before you ${action}.`);
-  }
-
-  return context.property;
-}

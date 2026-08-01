@@ -44,7 +44,7 @@ const maintenanceLinks = [
   {
     title: 'Trends',
     description: 'Review patterns that may need attention before they become bigger problems.',
-    href: '/issues',
+    href: '/issues#trends',
     action: 'View trends'
   }
 ];
@@ -55,7 +55,7 @@ const maintenanceShortcuts = [
   { label: 'Reminders', href: '/reminders' },
   { label: 'Repairs & Service History', href: '/repairs' },
   { label: 'Issues', href: '/issues' },
-  { label: 'Trends', href: '/issues' }
+  { label: 'Trends', href: '/issues#trends' }
 ];
 
 const YARD_ROOM_TYPES = new Set(['yard', 'exterior', 'patio', 'deck', 'shed']);

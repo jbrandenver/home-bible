@@ -9,9 +9,11 @@ import {
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import {
+  canModifyConditionReport,
   createConditionReport,
   listConditionReportCounts,
   listConditionReports,
+  softDeleteConditionReport,
   type ConditionReportRow
 } from '../../lib/conditionReports';
 import { resolveDataContext, type ResolvedDataContext } from '../../lib/dataContext';
@@ -46,6 +48,7 @@ export default function ConditionReportsPage() {
   const [loadError, setLoadError] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
 
   const [reportType, setReportType] = useState<ConditionReportType>('move_in');
   const [reportDate, setReportDate] = useState(toLocalDateString());
@@ -141,6 +144,26 @@ export default function ConditionReportsPage() {
       setFormError(saveError instanceof Error ? saveError.message : 'Failed to create condition report.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const removeReport = async (report: ConditionReportRow) => {
+    setFormError('');
+
+    const confirmed = window.confirm(
+      'Remove this draft report? Its entries go with it, and any photos already taken stay in Documents. A completed report cannot be removed — once it is completed, its entries, photos, and timestamps are the deposit evidence.'
+    );
+    if (!confirmed) return;
+
+    setDeletingReportId(report.id);
+
+    try {
+      await softDeleteConditionReport(report.id);
+      setReports((current) => current.filter((row) => row.id !== report.id));
+    } catch (deleteError) {
+      setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to remove condition report.');
+    } finally {
+      setDeletingReportId(null);
     }
   };
 
@@ -314,6 +337,25 @@ export default function ConditionReportsPage() {
 
                       <div style={{ display: 'grid', gap: 8, minWidth: 140 }}>
                         <ActionLink href={`/condition-reports/${report.id}`} variant="secondary">Open</ActionLink>
+                        {canModifyConditionReport(report.status) ? (
+                          <button
+                            type="button"
+                            onClick={() => removeReport(report)}
+                            disabled={deletingReportId === report.id}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: 6,
+                              border: '1px solid rgba(163,78,51,0.30)',
+                              background: 'rgba(163,78,51,0.08)',
+                              color: 'var(--status-urgent)',
+                              cursor: deletingReportId === report.id ? 'not-allowed' : 'pointer',
+                              fontWeight: 700,
+                              opacity: deletingReportId === report.id ? 0.7 : 1
+                            }}
+                          >
+                            {deletingReportId === report.id ? 'Removing...' : 'Remove draft'}
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   </div>

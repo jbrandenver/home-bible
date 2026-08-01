@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
+import { safeRelativePath } from '@home-folder/shared';
 import { useState } from 'react';
 import { Button, Card, PageHeader } from '@home-folder/ui';
 import { Seo } from '../components/Seo';
@@ -38,7 +39,9 @@ export default function SignUpPage() {
       return;
     }
 
-    router.push('/welcome');
+    // Honour a ?next= destination (e.g. a transfer recipient sent here from
+    // /claim keeps their claim code); same open-redirect guard as sign-in.
+    router.push(safeRelativePath(router.query.next, '/welcome'));
   };
 
   return (

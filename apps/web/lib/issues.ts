@@ -164,7 +164,13 @@ function formatIssueError(action: string, message?: string) {
   );
 }
 
-function buildIssuePayload(input: IssueInput, propertyId: string) {
+/**
+ * Every user-meaningful column on an issue, shaped for a write. Shared by
+ * create and update. The legacy `date_found` / `resolution_date` /
+ * `private_notes` columns are kept in step with the canonical ones so a row
+ * written before the 006 migration never drifts from what the page shows.
+ */
+function buildIssueFields(input: IssueInput) {
   const title = input.title.trim();
   if (!title) {
     throw new Error('Issue title is required.');
@@ -175,7 +181,6 @@ function buildIssuePayload(input: IssueInput, propertyId: string) {
   const notes = nullableString(input.notes);
 
   return {
-    property_id: propertyId,
     room_id: nullableString(input.room_id),
     asset_id: nullableString(input.asset_id),
     utility_id: nullableString(input.utility_id),
@@ -191,7 +196,14 @@ function buildIssuePayload(input: IssueInput, propertyId: string) {
     notes,
     date_found: firstSeenDate,
     resolution_date: resolvedDate,
-    private_notes: notes,
+    private_notes: notes
+  };
+}
+
+function buildIssuePayload(input: IssueInput, propertyId: string) {
+  return {
+    property_id: propertyId,
+    ...buildIssueFields(input),
     shareable_notes: null,
     visibility: 'private'
   };
@@ -328,16 +340,6 @@ async function getIssuesByColumn(
   return sortIssues(((data ?? []) as RawIssue[]).map(normalizeIssue));
 }
 
-export async function getIssuesForRoom(context: IssueDataContext, roomId: string) {
-  return getIssuesByColumn(
-    context,
-    'room_id',
-    roomId,
-    (issue) => issue.room_id === roomId,
-    'load room issues'
-  );
-}
-
 export async function getIssuesForAsset(context: IssueDataContext, assetId: string) {
   return getIssuesByColumn(
     context,
@@ -408,6 +410,53 @@ export async function createIssueForContext(context: IssueDataContext, input: Is
   return normalizeIssue(data as RawIssue);
 }
 
+export async function updateIssueForContext(
+  context: IssueDataContext,
+  issueId: string,
+  input: IssueInput
+) {
+  const fields = buildIssueFields(input);
+
+  if (context.mode === 'demo') {
+    const updated = getDemoIssues().map((issue) =>
+      issue.id === issueId
+        ? normalizeIssue({
+            ...issue,
+            ...fields,
+            updated_at: new Date().toISOString()
+          })
+        : issue
+    );
+
+    writeDemoIssues(updated);
+    return updated.find((issue) => issue.id === issueId) || null;
+  }
+
+  if (!context.property) {
+    throw new Error('Create a property before editing issues.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('issues')
+    .update(fields)
+    .eq('id', issueId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .select(ISSUE_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw new Error(formatIssueError('update issue', error?.message));
+  }
+
+  return normalizeIssue(data as RawIssue);
+}
+
 export async function updateIssueStatusForContext(
   context: IssueDataContext,
   issueId: string,
@@ -450,54 +499,6 @@ export async function updateIssueStatusForContext(
   const { data, error } = await supabase
     .from('issues')
     .update(payload)
-    .eq('id', issueId)
-    .eq('property_id', context.property.id)
-    .is('deleted_at', null)
-    .select(ISSUE_SELECT)
-    .single();
-
-  if (error || !data) {
-    throw new Error(formatIssueError('update issue', error?.message));
-  }
-
-  return normalizeIssue(data as RawIssue);
-}
-
-export async function updateIssueForContext(
-  context: IssueDataContext,
-  issueId: string,
-  input: IssueInput
-) {
-  if (context.mode === 'demo') {
-    const demoProperty = getDemoActiveProperty();
-    const updated = getDemoIssues().map((issue) =>
-      issue.id === issueId
-        ? normalizeIssue({
-            ...issue,
-            ...buildIssuePayload(input, demoProperty?.id || issue.property_id || ''),
-            id: issue.id,
-            property_id: issue.property_id,
-            updated_at: new Date().toISOString()
-          })
-        : issue
-    );
-
-    writeDemoIssues(updated);
-    return updated.find((issue) => issue.id === issueId) || null;
-  }
-
-  if (!context.property) {
-    throw new Error('Create a property before editing issues.');
-  }
-
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error(getSupabaseSetupMessage());
-  }
-
-  const { data, error } = await supabase
-    .from('issues')
-    .update(buildIssuePayload(input, context.property.id))
     .eq('id', issueId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

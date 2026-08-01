@@ -64,6 +64,19 @@ export default function NetworkDetailPage() {
       is_guest: network.is_guest,
       is_iot: network.is_iot,
       physical_location: network.physical_location || '',
+      router_model: network.router_model || '',
+      gateway: network.gateway || '',
+      mesh_system: network.mesh_system || '',
+      access_points: network.access_points || '',
+      vlan: network.vlan || '',
+      subnet: network.subnet || '',
+      dhcp_range: network.dhcp_range || '',
+      dns_notes: network.dns_notes || '',
+      modem: network.modem || '',
+      backup_internet: network.backup_internet || '',
+      ups_backup: network.ups_backup || '',
+      security_notes: network.security_notes || '',
+      setup_instructions: network.setup_instructions || '',
       recovery_instructions: network.recovery_instructions || '',
       credential_reference: network.credential_reference || '',
       notes: network.notes || ''
@@ -85,6 +98,19 @@ export default function NetworkDetailPage() {
         is_guest: Boolean(form.is_guest),
         is_iot: Boolean(form.is_iot),
         physical_location: s('physical_location'),
+        router_model: s('router_model'),
+        gateway: s('gateway'),
+        mesh_system: s('mesh_system'),
+        access_points: s('access_points'),
+        vlan: s('vlan'),
+        subnet: s('subnet'),
+        dhcp_range: s('dhcp_range'),
+        dns_notes: s('dns_notes'),
+        modem: s('modem'),
+        backup_internet: s('backup_internet'),
+        ups_backup: s('ups_backup'),
+        security_notes: s('security_notes'),
+        setup_instructions: s('setup_instructions'),
         recovery_instructions: s('recovery_instructions'),
         credential_reference: s('credential_reference'),
         notes: s('notes')
@@ -139,12 +165,34 @@ export default function NetworkDetailPage() {
                 <label><span>Provider</span><Input value={String(form.internet_provider ?? '')} onChange={(e) => set('internet_provider', e.target.value)} style={{ marginTop: 6 }} /></label>
                 <label><span>Location</span><Input value={String(form.physical_location ?? '')} onChange={(e) => set('physical_location', e.target.value)} style={{ marginTop: 6 }} /></label>
               </div>
+              {/* Migration 012 defined these columns and no form ever wrote them.
+                  They are what someone needs to rebuild the network after a
+                  router dies (launch review 2026-07-31). */}
+              <details>
+                <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Equipment and addressing</summary>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 12 }}>
+                  <label><span>Router model</span><Input value={String(form.router_model ?? '')} onChange={(e) => set('router_model', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Modem</span><Input value={String(form.modem ?? '')} onChange={(e) => set('modem', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Mesh system</span><Input value={String(form.mesh_system ?? '')} onChange={(e) => set('mesh_system', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Access points</span><Input value={String(form.access_points ?? '')} onChange={(e) => set('access_points', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Gateway address</span><Input value={String(form.gateway ?? '')} onChange={(e) => set('gateway', e.target.value)} placeholder="192.168.1.1" style={{ marginTop: 6 }} /></label>
+                  <label><span>Subnet</span><Input value={String(form.subnet ?? '')} onChange={(e) => set('subnet', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>VLAN</span><Input value={String(form.vlan ?? '')} onChange={(e) => set('vlan', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>DHCP range</span><Input value={String(form.dhcp_range ?? '')} onChange={(e) => set('dhcp_range', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Backup internet</span><Input value={String(form.backup_internet ?? '')} onChange={(e) => set('backup_internet', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Battery backup (UPS)</span><Input value={String(form.ups_backup ?? '')} onChange={(e) => set('ups_backup', e.target.value)} style={{ marginTop: 6 }} /></label>
+                </div>
+                <label style={{ display: 'block', marginTop: 12 }}><span>DNS notes</span><textarea value={String(form.dns_notes ?? '')} onChange={(e) => set('dns_notes', e.target.value)} style={{ width: '100%', minHeight: 54, marginTop: 6, padding: 10 }} /></label>
+                <label style={{ display: 'block', marginTop: 12 }}><span>Security notes (reference only — never a password)</span><textarea value={String(form.security_notes ?? '')} onChange={(e) => set('security_notes', e.target.value)} style={{ width: '100%', minHeight: 54, marginTop: 6, padding: 10 }} /></label>
+                <label style={{ display: 'block', marginTop: 12 }}><span>Setup instructions</span><textarea value={String(form.setup_instructions ?? '')} onChange={(e) => set('setup_instructions', e.target.value)} style={{ width: '100%', minHeight: 54, marginTop: 6, padding: 10 }} /></label>
+              </details>
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={Boolean(form.is_iot)} onChange={(e) => set('is_iot', e.target.checked)} /><span>IoT network</span></label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={Boolean(form.is_guest)} onChange={(e) => set('is_guest', e.target.checked)} /><span>Guest network</span></label>
               </div>
               <label><span>Recovery instructions (shown in the emergency guide)</span><textarea value={String(form.recovery_instructions ?? '')} onChange={(e) => set('recovery_instructions', e.target.value)} style={{ width: '100%', minHeight: 54, marginTop: 6, padding: 10 }} placeholder="Power-cycle the modem, then the router; wait 3 min." /></label>
               <label><span>Where credentials are stored (reference only — never the Wi-Fi password)</span><Input value={String(form.credential_reference ?? '')} onChange={(e) => set('credential_reference', e.target.value)} placeholder="1Password › Home Wi-Fi" style={{ marginTop: 6 }} /></label>
+              <label><span>Notes</span><textarea value={String(form.notes ?? '')} onChange={(e) => set('notes', e.target.value)} style={{ width: '100%', minHeight: 54, marginTop: 6, padding: 10 }} /></label>
               <div style={{ display: 'flex', gap: 8 }}><Button onClick={save} disabled={acting}>{acting ? 'Saving…' : 'Save'}</Button><Button variant="secondary" onClick={() => setEditing(false)} disabled={acting}>Cancel</Button></div>
             </div>
           </Card>
@@ -155,6 +203,19 @@ export default function NetworkDetailPage() {
               {network.ssid ? <div><strong>SSID:</strong> {network.ssid}</div> : null}
               {network.internet_provider ? <div><strong>Provider:</strong> {network.internet_provider}</div> : null}
               {network.physical_location ? <div><strong>Location:</strong> {network.physical_location}</div> : null}
+              {network.router_model ? <div><strong>Router:</strong> {network.router_model}</div> : null}
+              {network.modem ? <div><strong>Modem:</strong> {network.modem}</div> : null}
+              {network.mesh_system ? <div><strong>Mesh system:</strong> {network.mesh_system}</div> : null}
+              {network.access_points ? <div><strong>Access points:</strong> {network.access_points}</div> : null}
+              {network.gateway ? <div><strong>Gateway:</strong> {network.gateway}</div> : null}
+              {network.subnet ? <div><strong>Subnet:</strong> {network.subnet}</div> : null}
+              {network.vlan ? <div><strong>VLAN:</strong> {network.vlan}</div> : null}
+              {network.dhcp_range ? <div><strong>DHCP range:</strong> {network.dhcp_range}</div> : null}
+              {network.dns_notes ? <div><strong>DNS:</strong> {network.dns_notes}</div> : null}
+              {network.backup_internet ? <div><strong>Backup internet:</strong> {network.backup_internet}</div> : null}
+              {network.ups_backup ? <div><strong>Battery backup:</strong> {network.ups_backup}</div> : null}
+              {network.security_notes ? <div><strong>Security notes:</strong> {network.security_notes}</div> : null}
+              {network.setup_instructions ? <div><strong>Setup:</strong> {network.setup_instructions}</div> : null}
               <div><strong>Recovery:</strong> {network.recovery_instructions || 'Not recorded'}</div>
               {network.credential_reference ? <div><strong>Credentials:</strong> {network.credential_reference} <span style={{ color: 'var(--text-muted)' }}>(reference only)</span></div> : null}
               {network.notes ? <div><strong>Notes:</strong> {network.notes}</div> : null}

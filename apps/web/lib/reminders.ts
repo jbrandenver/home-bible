@@ -218,7 +218,24 @@ function formatReminderError(action: string, message?: string) {
   );
 }
 
-function buildReminderPayload(input: ReminderInput, propertyId: string) {
+type ReminderLinkFields = Pick<
+  ReminderInput,
+  'linked_type' | 'linked_id' | 'room_id' | 'asset_id' | 'utility_id'
+>;
+
+type ReminderLinkColumns = {
+  room_id: string | null;
+  asset_id: string | null;
+  utility_id: string | null;
+  linked_type: ReminderLinkedType | null;
+  linked_id: string | null;
+};
+
+// One place decides what the five link columns become, so a reminder created
+// with a link and a reminder re-pointed later end up with identical rows.
+// Every column is returned every time: re-pointing a room reminder at an asset
+// has to clear room_id, or the old link keeps showing up in room views.
+function resolveReminderLink(input: ReminderLinkFields, propertyId: string): ReminderLinkColumns {
   let roomId = nullableString(input.room_id);
   let assetId = nullableString(input.asset_id);
   let utilityId = nullableString(input.utility_id);
@@ -227,12 +244,21 @@ function buildReminderPayload(input: ReminderInput, propertyId: string) {
 
   if (linkedType === 'room') {
     roomId = linkedId || roomId;
+    assetId = null;
+    utilityId = null;
   } else if (linkedType === 'asset') {
     assetId = linkedId || assetId;
+    roomId = null;
+    utilityId = null;
   } else if (linkedType === 'utility') {
     utilityId = linkedId || utilityId;
+    roomId = null;
+    assetId = null;
   } else if (linkedType === 'property') {
     linkedId = linkedId || propertyId;
+    roomId = null;
+    assetId = null;
+    utilityId = null;
   }
 
   if (!linkedType) {
@@ -252,14 +278,26 @@ function buildReminderPayload(input: ReminderInput, propertyId: string) {
     linkedType = null;
   }
 
+  return {
+    room_id: roomId,
+    asset_id: assetId,
+    utility_id: utilityId,
+    linked_type: linkedType,
+    linked_id: linkedId
+  };
+}
+
+function buildReminderPayload(input: ReminderInput, propertyId: string) {
+  const link = resolveReminderLink(input, propertyId);
+
   const reminderType = input.reminder_type || 'general';
   const frequency = input.frequency || 'none';
 
   return {
     property_id: propertyId,
-    room_id: roomId,
-    asset_id: assetId,
-    utility_id: utilityId,
+    room_id: link.room_id,
+    asset_id: link.asset_id,
+    utility_id: link.utility_id,
     title: input.title.trim(),
     description: input.description?.trim() || null,
     reminder_type: reminderType,
@@ -268,8 +306,8 @@ function buildReminderPayload(input: ReminderInput, propertyId: string) {
     status: input.status || 'open',
     priority: input.priority || 'normal',
     source: input.source || (reminderType === 'warranty' ? 'warranty' : 'manual'),
-    linked_type: linkedType,
-    linked_id: linkedId,
+    linked_type: link.linked_type,
+    linked_id: link.linked_id,
     repeat_rule: frequency
   };
 }
@@ -428,6 +466,150 @@ export async function createReminderForContext(context: ReminderDataContext, inp
   return normalizeReminder(data as Partial<ReminderRow>);
 }
 
+/**
+ * Everything about a reminder that can be corrected later. Only the keys you
+ * pass are written, so a caller can change one field without resetting the
+ * rest; passing any link field rewrites the whole link.
+ */
+export type ReminderUpdateInput = Partial<ReminderInput>;
+
+type ReminderUpdatePayload = Partial<{
+  title: string;
+  description: string | null;
+  reminder_type: ReminderType;
+  due_date: string | null;
+  frequency: ReminderFrequency;
+  repeat_rule: string;
+  status: ReminderStatus;
+  priority: ReminderPriority;
+  source: ReminderSource;
+  room_id: string | null;
+  asset_id: string | null;
+  utility_id: string | null;
+  linked_type: ReminderLinkedType | null;
+  linked_id: string | null;
+}>;
+
+function buildReminderUpdatePayload(patch: ReminderUpdateInput, propertyId: string): ReminderUpdatePayload {
+  const payload: ReminderUpdatePayload = {};
+
+  if (patch.title !== undefined) {
+    const title = patch.title.trim();
+    if (!title) {
+      throw new Error('A reminder needs a title.');
+    }
+    payload.title = title;
+  }
+
+  if (patch.description !== undefined) {
+    payload.description = patch.description?.trim() || null;
+  }
+
+  if (patch.reminder_type !== undefined) {
+    payload.reminder_type = patch.reminder_type;
+  }
+
+  if (patch.due_date !== undefined) {
+    payload.due_date = nullableString(patch.due_date);
+  }
+
+  if (patch.frequency !== undefined) {
+    // repeat_rule mirrors frequency on create; keep them in step on edit too,
+    // or a reminder saved once would report two different repeat schedules.
+    payload.frequency = patch.frequency;
+    payload.repeat_rule = patch.frequency;
+  }
+
+  if (patch.status !== undefined) {
+    payload.status = patch.status;
+  }
+
+  if (patch.priority !== undefined) {
+    payload.priority = patch.priority;
+  }
+
+  if (patch.source !== undefined) {
+    payload.source = patch.source;
+  }
+
+  const touchesLink =
+    patch.linked_type !== undefined ||
+    patch.linked_id !== undefined ||
+    patch.room_id !== undefined ||
+    patch.asset_id !== undefined ||
+    patch.utility_id !== undefined;
+
+  if (touchesLink) {
+    Object.assign(payload, resolveReminderLink(patch, propertyId));
+  }
+
+  return payload;
+}
+
+export async function updateReminderForContext(
+  context: ReminderDataContext,
+  reminderId: string,
+  patch: ReminderUpdateInput
+) {
+  const now = new Date().toISOString();
+
+  if (context.mode === 'demo') {
+    const demoProperty = getDemoActiveProperty();
+    const current = getDemoReminders().find((reminder) => reminder.id === reminderId);
+
+    if (!current) {
+      return null;
+    }
+
+    const payload = buildReminderUpdatePayload(patch, demoProperty?.id || current.property_id || '');
+    const updated = normalizeReminder({
+      ...current,
+      ...payload,
+      id: current.id,
+      property_id: current.property_id,
+      created_at: current.created_at,
+      updated_at: now
+    });
+
+    writeDemoReminders(
+      getDemoReminders().map((reminder) => (reminder.id === reminderId ? updated : reminder))
+    );
+
+    return updated;
+  }
+
+  if (!context.property) {
+    throw new Error('Create a property before editing reminders.');
+  }
+
+  const payload = buildReminderUpdatePayload(patch, context.property.id);
+
+  if (Object.keys(payload).length === 0) {
+    // Nothing was actually changed; don't spend a write on it.
+    return null;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('reminders')
+    .update(payload)
+    .eq('id', reminderId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .select(REMINDER_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw new Error(formatReminderError('update reminder', error?.message));
+  }
+
+  return normalizeReminder(data as Partial<ReminderRow>);
+}
+
 export async function updateReminderStatusForContext(
   context: ReminderDataContext,
   reminderId: string,
@@ -471,58 +653,6 @@ export async function updateReminderStatusForContext(
   }
 
   return normalizeReminder(data as Partial<ReminderRow>);
-}
-
-export async function updateReminderForContext(
-  context: ReminderDataContext,
-  reminderId: string,
-  input: ReminderInput
-) {
-  if (context.mode === 'demo') {
-    const demoProperty = getDemoActiveProperty();
-    const updated = getDemoReminders().map((reminder) =>
-      reminder.id === reminderId
-        ? normalizeReminder({
-            ...reminder,
-            ...buildReminderPayload(input, demoProperty?.id || reminder.property_id || ''),
-            id: reminder.id,
-            property_id: reminder.property_id,
-            updated_at: new Date().toISOString()
-          })
-        : reminder
-    );
-
-    writeDemoReminders(updated);
-    return updated.find((reminder) => reminder.id === reminderId) || null;
-  }
-
-  if (!context.property) {
-    throw new Error('Create a property before editing reminders.');
-  }
-
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error(getSupabaseSetupMessage());
-  }
-
-  const { data, error } = await supabase
-    .from('reminders')
-    .update(buildReminderPayload(input, context.property.id))
-    .eq('id', reminderId)
-    .eq('property_id', context.property.id)
-    .is('deleted_at', null)
-    .select(REMINDER_SELECT)
-    .single();
-
-  if (error || !data) {
-    throw new Error(formatReminderError('update reminder', error?.message));
-  }
-
-  return normalizeReminder(data as Partial<ReminderRow>);
-}
-
-export async function completeReminderForContext(context: ReminderDataContext, reminderId: string) {
-  return updateReminderStatusForContext(context, reminderId, 'completed');
 }
 
 export async function deleteReminderForContext(context: ReminderDataContext, reminderId: string) {

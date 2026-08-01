@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { AUTOMATION_DEVICE_STATUSES, AUTOMATION_STATUS_LABELS, formatEnumLabel, type AutomationDeviceStatus } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
+import { RoomLocationSelect, roomSelectionValue } from '../../../components/RoomLocationSelect';
 import {
   createIssueForDevice,
   createRelationshipForContext,
@@ -27,6 +28,11 @@ import {
   type DeviceLinkedRecords
 } from '../../../lib/automation';
 import { deviceSetupCompleteness } from '../../../lib/automationOverview';
+import {
+  isLocationPresetValue,
+  resolveLocationRoomId,
+  rollbackCreatedLocation
+} from '../../../lib/locationPresets';
 import { getRoomsForProperty } from '../../../lib/rooms';
 import { formatRoomLocation } from '../../../lib/roomLabels';
 
@@ -71,7 +77,7 @@ export default function AutomationDeviceDetailPage() {
 
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [device, setDevice] = useState<AutomationDeviceRow | null>(null);
-  const [rooms, setRooms] = useState<Map<string, string>>(new Map());
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [hubs, setHubs] = useState<AutomationHubRow[]>([]);
   const [networks, setNetworks] = useState<AutomationNetworkRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -109,7 +115,7 @@ export default function AutomationDeviceDetailPage() {
       try {
         const nextContext = await getAutomationContext();
         const nextDevice = await getDeviceById(nextContext, deviceId);
-        let roomMap = new Map<string, string>();
+        let roomRows: Room[] = [];
         let hubList: AutomationHubRow[] = [];
         let networkList: AutomationNetworkRow[] = [];
         if (nextContext.mode === 'supabase' && nextContext.property) {
@@ -118,7 +124,7 @@ export default function AutomationDeviceDetailPage() {
             getHubsForContext(nextContext),
             getNetworksForContext(nextContext)
           ]);
-          roomMap = new Map((roomList as Room[]).map((room) => [room.id, formatRoomLocation(room)]));
+          roomRows = roomList as Room[];
           hubList = h;
           networkList = n;
         }
@@ -145,7 +151,7 @@ export default function AutomationDeviceDetailPage() {
         if (!isMounted) return;
         setContext(nextContext);
         setDevice(nextDevice);
-        setRooms(roomMap);
+        setRooms(roomRows);
         setHubs(hubList);
         setNetworks(networkList);
         setLinked(linkedRecords);
@@ -169,6 +175,7 @@ export default function AutomationDeviceDetailPage() {
   }, [deviceId]);
 
   const completeness = useMemo(() => (device ? deviceSetupCompleteness(device) : 0), [device]);
+  const roomNames = useMemo(() => new Map(rooms.map((room) => [room.id, formatRoomLocation(room)])), [rooms]);
   const hubName = device?.primary_hub_id ? hubs.find((h) => h.id === device.primary_hub_id)?.name : null;
   const networkName = device?.primary_network_id ? networks.find((n) => n.id === device.primary_network_id)?.name : null;
 
@@ -223,6 +230,10 @@ export default function AutomationDeviceDetailPage() {
   const startEdit = () => {
     if (!device) return;
     setEditForm({
+      room_id: device.room_id || '',
+      room_custom_name: '',
+      primary_hub_id: device.primary_hub_id || '',
+      primary_network_id: device.primary_network_id || '',
       nickname: device.nickname || '',
       manufacturer: device.manufacturer || '',
       model: device.model || '',
@@ -241,16 +252,49 @@ export default function AutomationDeviceDetailPage() {
 
   const saveEdit = async () => {
     if (!context || !device) return;
+
+    const roomValue = roomSelectionValue(
+      String(editForm.room_id ?? ''),
+      String(editForm.room_custom_name ?? '')
+    );
+    if (roomValue === null) {
+      setError('Give the new room a name, or pick one from the list.');
+      return;
+    }
+
+    if (isLocationPresetValue(roomValue) && (context.mode !== 'supabase' || !context.property)) {
+      setError('Create a property before adding a new location.');
+      return;
+    }
+
     setActing(true);
     setError('');
+
+    const resolutionContext =
+      context.mode === 'supabase' && context.property
+        ? ({ mode: 'supabase', propertyId: context.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
     try {
+      const wasPreset = isLocationPresetValue(roomValue);
+      const resolved = await resolveLocationRoomId(roomValue, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
       const s = (k: string) => (typeof editForm[k] === 'string' ? (editForm[k] as string).trim() || null : null);
       const updated = await updateDeviceForContext(context, device.id, {
+        room_id: resolved.roomId,
+        primary_hub_id: s('primary_hub_id'),
+        primary_network_id: s('primary_network_id'),
         nickname: s('nickname'),
         manufacturer: s('manufacturer'),
         model: s('model'),
         serial_number: s('serial_number'),
         battery_type: s('battery_type'),
+        // Typed into the form since day one, but never sent — the value
+        // silently vanished on save. It belongs in the payload.
+        firmware_version: s('firmware_version'),
         setup_instructions: s('setup_instructions'),
         reset_instructions: s('reset_instructions'),
         troubleshooting_notes: s('troubleshooting_notes'),
@@ -258,9 +302,19 @@ export default function AutomationDeviceDetailPage() {
         notes: s('notes'),
         is_critical: Boolean(editForm.is_critical)
       });
-      if (updated) setDevice(updated);
+      if (updated) {
+        setDevice(updated);
+        setEditForm((f) => ({ ...f, room_id: updated.room_id || '', room_custom_name: '' }));
+      }
+      if (wasPreset && context.mode === 'supabase' && context.property) {
+        setRooms((await getRoomsForProperty(context.property.id)) as Room[]);
+      }
       setEditing(false);
     } catch (e) {
+      // A new location is created before the device is updated. If the update
+      // fails, take the location back out again rather than leaving an empty
+      // space behind on the home map.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
       setError(e instanceof Error ? e.message : 'Failed to save changes.');
     } finally {
       setActing(false);
@@ -354,6 +408,37 @@ export default function AutomationDeviceDetailPage() {
             <h2 style={{ marginTop: 0 }}>Edit details</h2>
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                <RoomLocationSelect
+                  rooms={rooms}
+                  value={String(editForm.room_id ?? '')}
+                  onChange={(value) => setEditForm((f) => ({ ...f, room_id: value }))}
+                  customName={String(editForm.room_custom_name ?? '')}
+                  onCustomNameChange={(value) => setEditForm((f) => ({ ...f, room_custom_name: value }))}
+                  label="Room"
+                  emptyLabel="No room assigned"
+                />
+                <label>
+                  <span>Connects through hub</span>
+                  <Select
+                    value={String(editForm.primary_hub_id ?? '')}
+                    onChange={(e) => setEditForm((f) => ({ ...f, primary_hub_id: e.target.value }))}
+                    style={{ marginTop: 6 }}
+                  >
+                    <option value="">Directly — no hub</option>
+                    {hubs.map((hub) => <option key={hub.id} value={hub.id}>{hub.name}</option>)}
+                  </Select>
+                </label>
+                <label>
+                  <span>On network</span>
+                  <Select
+                    value={String(editForm.primary_network_id ?? '')}
+                    onChange={(e) => setEditForm((f) => ({ ...f, primary_network_id: e.target.value }))}
+                    style={{ marginTop: 6 }}
+                  >
+                    <option value="">Not recorded</option>
+                    {networks.map((network) => <option key={network.id} value={network.id}>{network.name}</option>)}
+                  </Select>
+                </label>
                 <label><span>Nickname</span><Input value={String(editForm.nickname ?? '')} onChange={(e) => setEditForm((f) => ({ ...f, nickname: e.target.value }))} style={{ marginTop: 6 }} /></label>
                 <label><span>Manufacturer</span><Input value={String(editForm.manufacturer ?? '')} onChange={(e) => setEditForm((f) => ({ ...f, manufacturer: e.target.value }))} style={{ marginTop: 6 }} /></label>
                 <label><span>Model</span><Input value={String(editForm.model ?? '')} onChange={(e) => setEditForm((f) => ({ ...f, model: e.target.value }))} style={{ marginTop: 6 }} /></label>
@@ -404,7 +489,7 @@ export default function AutomationDeviceDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Details</h2>
-          <Row label="Room" value={device.room_id ? rooms.get(device.room_id) : 'No room assigned'} />
+          <Row label="Room" value={device.room_id ? roomNames.get(device.room_id) : 'No room assigned'} />
           <Row label="Serial number" value={device.serial_number ? <span style={{ fontFamily: 'var(--font-mono)' }}>{device.serial_number}</span> : null} />
           <Row label="Firmware" value={device.firmware_version} />
           <Row label="Warranty ends" value={device.warranty_expiration} />

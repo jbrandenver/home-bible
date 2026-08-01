@@ -19,6 +19,12 @@ import {
   type AutomationDeviceRow
 } from '../../lib/automation';
 import { getDemoRooms } from '../../lib/demoStorage';
+import {
+  getAvailableLocationPresets,
+  isLocationPresetValue,
+  resolveLocationRoomId,
+  rollbackCreatedLocation
+} from '../../lib/locationPresets';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { formatRoomLocation } from '../../lib/roomLabels';
 
@@ -35,7 +41,7 @@ export default function AutomationDevicesPage() {
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AutomationDataMode>('demo');
   const [devices, setDevices] = useState<AutomationDeviceRow[]>([]);
-  const [rooms, setRooms] = useState<Map<string, string>>(new Map());
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -66,7 +72,7 @@ export default function AutomationDevicesPage() {
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setDevices(nextDevices);
-        setRooms(new Map((roomList as Room[]).map((room) => [room.id, formatRoomLocation(room)])));
+        setRooms(roomList as Room[]);
       } catch (loadError) {
         if (isMounted) setError(loadError instanceof Error ? loadError.message : 'Failed to load devices.');
       } finally {
@@ -84,7 +90,8 @@ export default function AutomationDevicesPage() {
     };
   }, []);
 
-  const roomOptions = useMemo(() => Array.from(rooms.entries()).map(([id, name]) => ({ id, name })), [rooms]);
+  const roomNames = useMemo(() => new Map(rooms.map((room) => [room.id, formatRoomLocation(room)])), [rooms]);
+  const locationPresets = useMemo(() => getAvailableLocationPresets(rooms), [rooms]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -105,9 +112,25 @@ export default function AutomationDevicesPage() {
       setFormError('Give the device a name first.');
       return;
     }
+    if (isLocationPresetValue(qRoom) && (context.mode !== 'supabase' || !context.property)) {
+      setFormError('Create a property before adding a new location.');
+      return;
+    }
     setSaving(true);
     setFormError('');
+
+    const resolutionContext =
+      context.mode === 'supabase' && context.property
+        ? ({ mode: 'supabase', propertyId: context.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
     try {
+      const wasPreset = isLocationPresetValue(qRoom);
+      const resolved = await resolveLocationRoomId(qRoom, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
       const created = await createDeviceForContext(context, {
         name: qName.trim(),
         category: qCategory,
@@ -115,13 +138,21 @@ export default function AutomationDevicesPage() {
         is_critical: false,
         internet_required: false,
         local_control_available: true,
-        room_id: qRoom || null,
+        room_id: resolved.roomId,
         primary_protocol: qProtocol || null
       });
       setDevices((current) => [created, ...current].sort((a, b) => a.name.localeCompare(b.name)));
+      if (wasPreset && context.mode === 'supabase' && context.property) {
+        setRooms((await getRoomsForProperty(context.property.id)) as Room[]);
+        setQRoom(created.room_id || '');
+      }
       setQName('');
       setQProtocol('');
     } catch (saveError) {
+      // The new location is created before the device row. If the device fails
+      // to save, take the location back out instead of leaving an empty space
+      // behind on the home map.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
       setFormError(saveError instanceof Error ? saveError.message : 'Failed to add device.');
     } finally {
       setSaving(false);
@@ -159,9 +190,20 @@ export default function AutomationDevicesPage() {
                 <span>Room</span>
                 <Select value={qRoom} onChange={(e) => setQRoom(e.target.value)} style={{ marginTop: 6 }}>
                   <option value="">No room yet</option>
-                  {roomOptions.map((r) => (
-                    <option key={r.id} value={r.id}>{r.name}</option>
-                  ))}
+                  {rooms.length > 0 ? (
+                    <optgroup label="Rooms & spaces">
+                      {rooms.map((room) => (
+                        <option key={room.id} value={room.id}>{formatRoomLocation(room)}</option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  {locationPresets.length > 0 ? (
+                    <optgroup label="Outdoor & exterior">
+                      {locationPresets.map((preset) => (
+                        <option key={preset.value} value={preset.value}>{preset.label}</option>
+                      ))}
+                    </optgroup>
+                  ) : null}
                 </Select>
               </label>
               <label>
@@ -226,7 +268,7 @@ export default function AutomationDevicesPage() {
                       </Link>
                     </strong>
                     <div style={{ color: 'var(--text-muted)', fontSize: 14, marginTop: 2 }}>
-                      {[formatEnumLabel(device.category), device.manufacturer, device.room_id ? rooms.get(device.room_id) : null]
+                      {[formatEnumLabel(device.category), device.manufacturer, device.room_id ? roomNames.get(device.room_id) : null]
                         .filter(Boolean)
                         .join(' · ')}
                     </div>
