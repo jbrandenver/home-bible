@@ -666,7 +666,30 @@ export default function DashboardPage() {
                 )}
               </Card>
             </div>
-          ) : null}
+          ) : (
+            <div
+              style={{
+                display: 'grid',
+                gap: 24,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
+              }}
+            >
+              <Card id="home-record">
+                <h2 style={{ marginTop: 0 }}>Home record</h2>
+                <p style={{ color: 'var(--text-muted)' }}>
+                  No home on file yet. Once one is saved, its record score and next steps live here.
+                </p>
+                <ActionLink href="/welcome" variant="secondary">Start your home record</ActionLink>
+              </Card>
+
+              <Card id="this-week">
+                <h2 style={{ marginTop: 0 }}>This week at home</h2>
+                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                  Nothing scheduled — add your first rooms and systems to see what&apos;s coming up.
+                </p>
+              </Card>
+            </div>
+          )}
 
           {automationSummary && (automationSummary.totalDevices > 0 || automationSummary.hubs > 0 || automationSummary.networks > 0 || automationSummary.routines > 0) ? (
             <Card id="smart-home">
@@ -980,7 +1003,7 @@ export default function DashboardPage() {
           </Card>
 
           <Card id="room-list">
-            <h2 style={{ marginTop: 0 }}>Rooms & spaces</h2>
+            <h2 style={{ marginTop: 0 }}>All rooms</h2>
             {!hasProperty ? (
               <div>
                 <p style={{ color: 'var(--text-muted)' }}>Start your home record.</p>
@@ -1035,12 +1058,12 @@ export default function DashboardPage() {
           <Card id="sharing">
             <h2 style={{ marginTop: 0 }}>Sharing Review</h2>
             <p style={{ color: 'var(--text-muted)' }}>
-              Preview role-based access before future invitations, guests, or share links are enabled.
+              Invite trusted people with role-scoped access, and preview exactly what each role sees before you share.
             </p>
             <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
-              This is review-only and does not create public links, emails, guests, or background jobs.
+              When a home changes hands, you can transfer ownership of the record from here too.
             </p>
-            <ActionLink href="/sharing" variant="secondary">Open sharing review</ActionLink>
+            <ActionLink href="/sharing" variant="secondary">Open sharing</ActionLink>
           </Card>
         </div>
       </>

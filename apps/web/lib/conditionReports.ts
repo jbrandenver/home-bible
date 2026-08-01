@@ -71,7 +71,6 @@ export type ConditionReportFormInput = {
   notes?: string | null;
 };
 
-export type ConditionReportPatch = Partial<Omit<ConditionReportFormInput, 'property_id'>>;
 
 export type ConditionReportEntryFormInput = {
   report_id: string;
@@ -86,6 +85,25 @@ export type ConditionReportEntryFormInput = {
 export type ConditionReportEntryPatch = Partial<
   Omit<ConditionReportEntryFormInput, 'report_id' | 'property_id'>
 >;
+
+export type ConditionReportPatch = Partial<Omit<ConditionReportFormInput, 'property_id'>>;
+
+/**
+ * Why a completed report cannot be changed or removed: its entries, photos,
+ * and server-set timestamps are the deposit evidence. Shown wherever an edit
+ * or delete is refused so the refusal reads as a reason, not a rule.
+ */
+export const COMPLETED_REPORT_LOCK_MESSAGE =
+  'This report is completed, so it is locked. Its entries, photos, and timestamps are the deposit evidence, and that record has to stay as it was filed.';
+
+/**
+ * Draft-only guard for editing and deleting a report. Pure, and enforced again
+ * in the database calls below — the UI hides the controls, this makes the rule
+ * hold even when it does not.
+ */
+export function canModifyConditionReport(status: ConditionReportStatus | null | undefined): boolean {
+  return status === 'draft';
+}
 
 const REPORT_SELECT =
   'id, property_id, tenancy_id, report_type, status, report_date, conducted_by, summary, notes, completed_at, created_by, created_at, updated_at, deleted_at';
@@ -324,10 +342,14 @@ export async function createConditionReport(input: ConditionReportFormInput) {
   return normalizeReport(data as Partial<ConditionReportRow>);
 }
 
+/**
+ * Edits the header of a draft report. The `.eq('status', 'draft')` filter is
+ * the real gate: a completed report is deposit-dispute evidence, so it stays
+ * exactly as it was filed even if a caller asks otherwise.
+ */
 export async function updateConditionReport(id: string, patch: ConditionReportPatch) {
   const payload: Record<string, unknown> = {};
 
-  if (patch.tenancy_id !== undefined) payload.tenancy_id = nullableString(patch.tenancy_id);
   if (patch.report_type !== undefined) {
     payload.report_type = enumValue(CONDITION_REPORT_TYPES, patch.report_type, 'periodic');
   }
@@ -336,8 +358,10 @@ export async function updateConditionReport(id: string, patch: ConditionReportPa
     if (!reportDate) {
       throw new Error('A report date is required.');
     }
+
     payload.report_date = reportDate;
   }
+  if (patch.tenancy_id !== undefined) payload.tenancy_id = nullableString(patch.tenancy_id);
   if (patch.conducted_by !== undefined) payload.conducted_by = nullableString(patch.conducted_by);
   if (patch.summary !== undefined) payload.summary = nullableString(patch.summary);
   if (patch.notes !== undefined) payload.notes = nullableString(patch.notes);
@@ -352,15 +376,45 @@ export async function updateConditionReport(id: string, patch: ConditionReportPa
     .from('condition_reports')
     .update(payload)
     .eq('id', id)
+    .eq('status', 'draft')
     .is('deleted_at', null)
     .select(REPORT_SELECT)
-    .single();
+    .maybeSingle();
 
-  if (error || !data) {
-    throw new Error(formatConditionReportError('update condition report', error?.message));
+  if (error) {
+    throw new Error(formatConditionReportError('update condition report', error.message));
+  }
+
+  if (!data) {
+    throw new Error(COMPLETED_REPORT_LOCK_MESSAGE);
   }
 
   return normalizeReport(data as Partial<ConditionReportRow>);
+}
+
+/**
+ * Removes a draft report. Same draft-only gate as the edit above, and for the
+ * same reason — a completed report is evidence, not a list item.
+ */
+export async function softDeleteConditionReport(id: string) {
+  const supabase = requireSupabase();
+
+  const { data, error } = await supabase
+    .from('condition_reports')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('status', 'draft')
+    .is('deleted_at', null)
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(formatConditionReportError('remove condition report', error.message));
+  }
+
+  if (!data) {
+    throw new Error(COMPLETED_REPORT_LOCK_MESSAGE);
+  }
 }
 
 export async function createEntry(input: ConditionReportEntryFormInput) {

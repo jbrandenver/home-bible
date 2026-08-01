@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { AUTOMATION_CRITICALITIES, AUTOMATION_ROUTINE_STATUSES, formatEnumLabel, type AutomationCriticality, type AutomationRoutineStatus } from '@home-folder/shared';
+import { AUTOMATION_CRITICALITIES, AUTOMATION_ROUTINE_STATUSES, AUTOMATION_ROUTINE_TYPES, formatEnumLabel, type AutomationCriticality, type AutomationRoutineStatus, type AutomationRoutineType } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
 import {
@@ -112,6 +112,8 @@ export default function AutomationDetailPage() {
   const startEdit = () => {
     if (!routine) return;
     setForm({
+      name: routine.name,
+      routine_type: routine.routine_type,
       criticality: routine.criticality,
       trigger_text: routine.trigger_text || '',
       conditions_text: routine.conditions_text || '',
@@ -127,11 +129,17 @@ export default function AutomationDetailPage() {
 
   const saveEdit = async () => {
     if (!context || !routine) return;
+    if (!String(form.name ?? '').trim()) {
+      setError('Give the automation a name.');
+      return;
+    }
     setActing(true);
     setError('');
     try {
       const s = (k: string) => (typeof form[k] === 'string' ? (form[k] as string).trim() || null : null);
       const updated = await updateRoutineForContext(context, routine.id, {
+        name: String(form.name).trim(),
+        routine_type: form.routine_type as AutomationRoutineType,
         criticality: form.criticality as AutomationCriticality,
         trigger_text: s('trigger_text'),
         conditions_text: s('conditions_text'),
@@ -246,6 +254,8 @@ export default function AutomationDetailPage() {
             <h2 style={{ marginTop: 0 }}>Edit automation</h2>
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                <label><span>Name</span><Input value={String(form.name ?? '')} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} style={{ marginTop: 6 }} /></label>
+                <label><span>Kind</span><Select value={String(form.routine_type ?? '')} onChange={(e) => setForm((f) => ({ ...f, routine_type: e.target.value }))} style={{ marginTop: 6 }}>{AUTOMATION_ROUTINE_TYPES.map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}</Select></label>
                 <label><span>Importance</span><Select value={String(form.criticality ?? '')} onChange={(e) => setForm((f) => ({ ...f, criticality: e.target.value }))} style={{ marginTop: 6 }}>{AUTOMATION_CRITICALITIES.map((c) => <option key={c} value={c}>{formatEnumLabel(c)}</option>)}</Select></label>
                 <label><span>Platform</span><Input value={String(form.platform ?? '')} onChange={(e) => setForm((f) => ({ ...f, platform: e.target.value }))} placeholder="Apple Home / Home Assistant" style={{ marginTop: 6 }} /></label>
               </div>

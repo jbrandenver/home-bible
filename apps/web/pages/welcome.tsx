@@ -4,6 +4,7 @@ import { UTILITY_TYPES } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
+import { setDemoActiveProperty } from '../lib/demoStorage';
 import { createPropertyForUser, getPrimaryPropertyForUser, type PropertySummary } from '../lib/properties';
 import { createUtilityForContext, getUtilityDataContext } from '../lib/utilities';
 import { PROPERTY_TYPES, formatEnumLabel } from '@home-folder/shared';
@@ -91,7 +92,20 @@ export default function WelcomePage() {
     try {
       const user = await getCurrentUser();
       if (!user) {
-        throw new Error('Please sign in again before continuing.');
+        // A signed-out visitor arriving from the landing page's "try it in
+        // this browser" promise: keep that promise. Record the home in
+        // browser-local demo storage — the same fallback create-property
+        // uses — and the utility steps below follow suit automatically,
+        // because getUtilityDataContext resolves to demo mode when signed
+        // out. Signing up later offers to import everything.
+        setDemoActiveProperty({
+          id: crypto.randomUUID(),
+          nickname: nickname.trim(),
+          property_type: propertyType,
+          created_at: new Date().toISOString()
+        });
+        setStep('water');
+        return;
       }
 
       const created = await createPropertyForUser(user, {

@@ -11,6 +11,8 @@ import { ActionLink } from '../components/ActionLink';
 import { VisibilityContextPicker } from '../components/VisibilityContextPicker';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getAutomationContext, getDevicesForContext, type AutomationDeviceRow } from '../lib/automation';
+import { listComplianceObligations, type ComplianceObligationRow } from '../lib/compliance';
+import { listConditionReports, type ConditionReportRow } from '../lib/conditionReports';
 import { getDemoRooms } from '../lib/demoStorage';
 import {
   createDocumentSignedUrlForContext,
@@ -21,8 +23,11 @@ import {
   getDocumentsForContext,
   updateDocumentMetadataForContext,
   uploadDocumentForContext,
+  buildDocumentFilingPatch,
+  DOCUMENT_LINK_FIELDS,
   type DocumentDataContext,
   type DocumentLinkField,
+  type DocumentMetadataInput,
   type DocumentRow
 } from '../lib/documents';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
@@ -31,6 +36,7 @@ import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../l
 import { getRoomsForProperty } from '../lib/rooms';
 import { formatRoomLocation } from '../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
+import { listTenancies, type TenancyRow } from '../lib/tenancies';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
 import { formatVisibilityContextList } from '../lib/visibility';
@@ -66,8 +72,17 @@ const LINK_KINDS: Array<{ value: LinkKind; label: string }> = [
   { value: 'service_record_id', label: 'Service History' },
   { value: 'issue_id', label: 'Issue' },
   { value: 'trend_flag_id', label: 'Trend' },
-  { value: 'automation_device_id', label: 'Smart device' }
+  { value: 'automation_device_id', label: 'Smart device' },
+  { value: 'tenancy_id', label: 'Tenancy' },
+  { value: 'condition_report_id', label: 'Condition report' },
+  { value: 'compliance_obligation_id', label: 'Compliance obligation' }
 ];
+
+/**
+ * Landlord-tier records live in the account only, so their options are offered
+ * when there is an account to read them from — demo mode simply shows the rest.
+ */
+const LANDLORD_LINK_KINDS: LinkKind[] = ['tenancy_id', 'condition_report_id', 'compliance_obligation_id'];
 
 const QUERY_TO_LINK_KIND: Record<string, LinkKind> = {
   roomId: 'room_id',
@@ -78,7 +93,10 @@ const QUERY_TO_LINK_KIND: Record<string, LinkKind> = {
   serviceRecordId: 'service_record_id',
   issueId: 'issue_id',
   trendFlagId: 'trend_flag_id',
-  automationDeviceId: 'automation_device_id'
+  automationDeviceId: 'automation_device_id',
+  tenancyId: 'tenancy_id',
+  conditionReportId: 'condition_report_id',
+  complianceObligationId: 'compliance_obligation_id'
 };
 
 function getInitialLink(routerQuery: Record<string, string | string[] | undefined>) {
@@ -97,17 +115,26 @@ function labelFromOptions(options: LinkOption[], id: string | null) {
   return options.find((option) => option.id === id)?.label || 'Unknown';
 }
 
+/** The record a document is currently filed against, ready for the link picker. */
+function getDocumentLinkKind(document: DocumentRow): { linkKind: LinkKind; linkId: string } {
+  for (const field of DOCUMENT_LINK_FIELDS) {
+    const value = document[field];
+    if (value) {
+      return { linkKind: field, linkId: value };
+    }
+  }
+
+  return { linkKind: 'property', linkId: '' };
+}
+
 function getDocumentLinkLabel(document: DocumentRow, optionsByKind: Record<LinkKind, LinkOption[]>) {
-  if (document.room_id) return `Room: ${labelFromOptions(optionsByKind.room_id, document.room_id)}`;
-  if (document.utility_id) return `Utility: ${labelFromOptions(optionsByKind.utility_id, document.utility_id)}`;
-  if (document.asset_id) return `Asset: ${labelFromOptions(optionsByKind.asset_id, document.asset_id)}`;
-  if (document.reminder_id) return `Reminder: ${labelFromOptions(optionsByKind.reminder_id, document.reminder_id)}`;
-  if (document.repair_id) return `Repair: ${labelFromOptions(optionsByKind.repair_id, document.repair_id)}`;
-  if (document.service_record_id) return `Service History: ${labelFromOptions(optionsByKind.service_record_id, document.service_record_id)}`;
-  if (document.issue_id) return `Issue: ${labelFromOptions(optionsByKind.issue_id, document.issue_id)}`;
-  if (document.trend_flag_id) return `Trend: ${labelFromOptions(optionsByKind.trend_flag_id, document.trend_flag_id)}`;
-  if (document.automation_device_id) return `Smart device: ${labelFromOptions(optionsByKind.automation_device_id, document.automation_device_id)}`;
-  return 'Property';
+  const { linkKind, linkId } = getDocumentLinkKind(document);
+  if (linkKind === 'property') {
+    return 'Property';
+  }
+
+  const kindLabel = LINK_KINDS.find((kind) => kind.value === linkKind)?.label || 'Record';
+  return `${kindLabel}: ${labelFromOptions(optionsByKind[linkKind], linkId)}`;
 }
 
 function buildLinkPayload(linkKind: LinkKind, linkId: string) {
@@ -116,6 +143,15 @@ function buildLinkPayload(linkKind: LinkKind, linkId: string) {
   }
 
   return { [linkKind]: linkId };
+}
+
+/**
+ * Re-filing has to clear the old foreign key as well as set the new one —
+ * otherwise a document moved from a repair to a room would show up under both.
+ * Filing it under the property itself simply clears them all.
+ */
+function buildLinkUpdatePayload(linkKind: LinkKind, linkId: string): DocumentMetadataInput {
+  return buildDocumentFilingPatch(linkKind === 'property' || !linkId ? null : { field: linkKind, id: linkId });
 }
 
 export default function DocumentsPage() {
@@ -157,6 +193,9 @@ export default function DocumentsPage() {
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
+  const [tenancies, setTenancies] = useState<TenancyRow[]>([]);
+  const [conditionReports, setConditionReports] = useState<ConditionReportRow[]>([]);
+  const [complianceObligations, setComplianceObligations] = useState<ComplianceObligationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -176,6 +215,8 @@ export default function DocumentsPage() {
   const [editDescription, setEditDescription] = useState('');
   const [editType, setEditType] = useState<DocumentType>('other');
   const [editVisibilityContexts, setEditVisibilityContexts] = useState<VisibilityContext[]>(['personal_archive']);
+  const [editLinkKind, setEditLinkKind] = useState<LinkKind>('property');
+  const [editLinkId, setEditLinkId] = useState('');
 
   useEffect(() => {
     if (!router.isReady) {
@@ -243,9 +284,23 @@ export default function DocumentsPage() {
         const automationContext = await getAutomationContext();
         const automationDeviceRows = await getDevicesForContext(automationContext);
 
+        // Landlord records are account-only; demo mode simply goes without them.
+        const [tenancyRows, conditionReportRows, obligationRows] =
+          nextContext.mode === 'supabase' && nextContext.property
+            ? await Promise.all([
+                listTenancies(nextContext.property.id),
+                listConditionReports(nextContext.property.id),
+                listComplianceObligations(nextContext.property.id)
+              ])
+            : [[] as TenancyRow[], [] as ConditionReportRow[], [] as ComplianceObligationRow[]];
+
         if (!isMounted) {
           return;
         }
+
+        setTenancies(tenancyRows);
+        setConditionReports(conditionReportRows);
+        setComplianceObligations(obligationRows);
 
         setContext(nextContext);
         setDocuments(nextDocuments);
@@ -292,13 +347,48 @@ export default function DocumentsPage() {
       service_record_id: serviceRecords.map((record) => ({ id: record.id, label: record.service_title })),
       issue_id: issues.map((issue) => ({ id: issue.id, label: issue.title })),
       trend_flag_id: trendFlags.map((flag) => ({ id: flag.id, label: flag.title })),
-      automation_device_id: automationDevices.map((device) => ({ id: device.id, label: device.nickname || device.name }))
+      automation_device_id: automationDevices.map((device) => ({ id: device.id, label: device.nickname || device.name })),
+      tenancy_id: tenancies.map((tenancy) => ({ id: tenancy.id, label: tenancy.label })),
+      condition_report_id: conditionReports.map((report) => ({
+        id: report.id,
+        label: `${formatEnumLabel(report.report_type)} — ${report.report_date}`
+      })),
+      compliance_obligation_id: complianceObligations.map((obligation) => ({
+        id: obligation.id,
+        label: obligation.title
+      }))
     }),
-    [assets, automationDevices, context?.property, issues, reminders, repairs, rooms, serviceRecords, trendFlags, utilities]
+    [
+      assets,
+      automationDevices,
+      complianceObligations,
+      conditionReports,
+      context?.property,
+      issues,
+      reminders,
+      repairs,
+      rooms,
+      serviceRecords,
+      tenancies,
+      trendFlags,
+      utilities
+    ]
+  );
+
+  const canUpload = context?.mode === 'supabase' && Boolean(context.property);
+
+  // Landlord options are hidden rather than shown empty when there is no
+  // account behind them.
+  const linkKinds = useMemo(
+    () =>
+      LINK_KINDS.filter(
+        (kind) => context?.mode === 'supabase' || !LANDLORD_LINK_KINDS.includes(kind.value)
+      ),
+    [context?.mode]
   );
 
   const currentLinkOptions = optionsByKind[linkKind] || [];
-  const canUpload = context?.mode === 'supabase' && Boolean(context.property);
+  const currentEditLinkOptions = optionsByKind[editLinkKind] || [];
 
   const resetUploadForm = () => {
     setFile(null);
@@ -398,17 +488,25 @@ export default function DocumentsPage() {
   };
 
   const startEditing = (document: DocumentRow) => {
+    const documentLink = getDocumentLinkKind(document);
     setEditingDocumentId(document.id);
     setEditTitle(document.title);
     setEditDescription(document.description || '');
     setEditType(document.document_type);
     setEditVisibilityContexts(document.visibility_contexts);
+    setEditLinkKind(documentLink.linkKind);
+    setEditLinkId(documentLink.linkId);
   };
 
   const saveMetadata = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!context || !editingDocumentId) {
+      return;
+    }
+
+    if (editLinkKind !== 'property' && !editLinkId) {
+      setError(`Choose a ${LINK_KINDS.find((kind) => kind.value === editLinkKind)?.label.toLowerCase() || 'record'} to link.`);
       return;
     }
 
@@ -421,7 +519,8 @@ export default function DocumentsPage() {
         title: editTitle,
         description: editDescription,
         document_type: editType,
-        visibility_contexts: editVisibilityContexts
+        visibility_contexts: editVisibilityContexts,
+        ...buildLinkUpdatePayload(editLinkKind, editLinkId)
       });
 
       if (updated) {
@@ -511,7 +610,7 @@ export default function DocumentsPage() {
                     }}
                     style={fieldStyle}
                   >
-                    {LINK_KINDS.map((kind) => (
+                    {linkKinds.map((kind) => (
                       <option key={kind.value} value={kind.value}>{kind.label}</option>
                     ))}
                   </select>
@@ -578,6 +677,45 @@ export default function DocumentsPage() {
                             disabled={isActing}
                           />
                         </div>
+                        <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                          <label style={{ display: 'grid', gap: 6 }}>
+                            <span style={{ fontWeight: 600 }}>Filed under</span>
+                            <select
+                              value={editLinkKind}
+                              onChange={(event) => {
+                                setEditLinkKind(event.target.value as LinkKind);
+                                setEditLinkId('');
+                              }}
+                              disabled={isActing}
+                              style={fieldStyle}
+                            >
+                              {linkKinds.map((kind) => (
+                                <option key={kind.value} value={kind.value}>{kind.label}</option>
+                              ))}
+                            </select>
+                          </label>
+
+                          {editLinkKind !== 'property' ? (
+                            <label style={{ display: 'grid', gap: 6 }}>
+                              <span style={{ fontWeight: 600 }}>Record</span>
+                              <select
+                                value={editLinkId}
+                                onChange={(event) => setEditLinkId(event.target.value)}
+                                disabled={isActing}
+                                style={fieldStyle}
+                              >
+                                <option value="">Choose record</option>
+                                {currentEditLinkOptions.map((option) => (
+                                  <option key={option.id} value={option.id}>{option.label}</option>
+                                ))}
+                              </select>
+                            </label>
+                          ) : null}
+                        </div>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0 }}>
+                          Moving a document files it under the new record and removes it from the old one.
+                        </p>
+
                         <label style={{ display: 'grid', gap: 6 }}>
                           <span style={{ fontWeight: 600 }}>Description</span>
                           <textarea value={editDescription} onChange={(event) => setEditDescription(event.target.value)} style={{ ...fieldStyle, minHeight: 70 }} />

@@ -1,11 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  LOCATION_CUSTOM_VALUE,
   LOCATION_PRESETS,
+  customLocationValue,
   getAvailableLocationPresets,
+  getGroupedLocationPresets,
   isLocationPresetValue,
   resolveLocationRoomId,
   rollbackCreatedLocation
 } from '../lib/locationPresets';
+import { roomSelectionValue } from '../components/RoomLocationSelect';
+import { getDemoRooms } from '../lib/demoStorage';
 
 // demoStorage reads window.localStorage at call time, so a minimal in-memory
 // stand-in keeps the demo-mode tests hermetic (node env, no browser).
@@ -119,5 +124,50 @@ describe('location presets', () => {
     expect(resolved.roomId).toBe('existing-garage');
     expect(resolved.createdRoomId).toBeNull();
     expect(readDemoRooms()).toHaveLength(1);
+  });
+});
+
+describe('indoor presets and custom rooms', () => {
+  it('offers indoor rooms, not just outdoor spots', () => {
+    const grouped = getGroupedLocationPresets([]);
+    expect(grouped.indoor.length).toBeGreaterThan(0);
+    expect(grouped.outdoor.length).toBeGreaterThan(0);
+    expect(grouped.indoor.map((p) => p.label)).toContain('Bedroom');
+    expect(grouped.indoor.map((p) => p.label)).toContain('Basement');
+    // Every indoor preset is flagged indoor so created rooms land on the
+    // "Inside" floor rather than with the yards.
+    expect(grouped.indoor.every((p) => p.indoor === true)).toBe(true);
+    expect(grouped.outdoor.every((p) => !p.indoor)).toBe(true);
+  });
+
+  it('hides presets whose name a room already uses, in both groups', () => {
+    const grouped = getGroupedLocationPresets([{ name: 'Kitchen' }, { name: 'back yard' }]);
+    expect(grouped.indoor.map((p) => p.label)).not.toContain('Kitchen');
+    expect(grouped.outdoor.map((p) => p.label)).not.toContain('Back yard');
+  });
+
+  it('round-trips a hand-typed room name through the picker value', () => {
+    const value = roomSelectionValue(LOCATION_CUSTOM_VALUE, '  Guest bedroom  ');
+    expect(value).toBe(customLocationValue('Guest bedroom'));
+    expect(isLocationPresetValue(value as string)).toBe(true);
+  });
+
+  it('refuses to save a custom room with no name', () => {
+    expect(roomSelectionValue(LOCATION_CUSTOM_VALUE, '   ')).toBeNull();
+  });
+
+  it('passes plain room ids straight through', () => {
+    expect(roomSelectionValue('room-123', '')).toBe('room-123');
+  });
+
+  it('creates a hand-named room and reports it for rollback', async () => {
+    const value = customLocationValue('Wine cellar');
+    const resolved = await resolveLocationRoomId(value, { mode: 'demo' });
+    expect(resolved.roomId).toBeTruthy();
+    expect(resolved.createdRoomId).toBe(resolved.roomId);
+    expect(getDemoRooms().some((room: { name: string }) => room.name === 'Wine cellar')).toBe(true);
+
+    await rollbackCreatedLocation(resolved.createdRoomId, { mode: 'demo' });
+    expect(getDemoRooms().some((room: { name: string }) => room.name === 'Wine cellar')).toBe(false);
   });
 });

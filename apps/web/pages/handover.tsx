@@ -304,7 +304,7 @@ export default function HandoverPage() {
             Privacy reminder: reports omit sensitive entry details, passwords, private file links, and file access details.
           </p>
           <p style={{ color: 'rgba(255,248,234,0.78)', marginTop: 0 }}>
-            Before future sharing is enabled, review who should see each report type in Sharing Review.
+            Use the Sharing page to give someone a role-scoped view, or review each report type here before printing.
           </p>
           <ActionLink
             href="/sharing"

@@ -159,14 +159,19 @@ function formatRepairError(action: string, message?: string) {
   );
 }
 
-function buildRepairPayload(input: RepairInput, propertyId: string) {
+/**
+ * Every user-meaningful column on a repair, shaped for a write. Shared by
+ * create and update so an edit can reach the same fields the capture form
+ * could — including the room / asset / utility links, which a repair is
+ * routinely mis-filed against on first entry.
+ */
+function buildRepairFields(input: RepairInput) {
   const title = input.title.trim();
   if (!title) {
     throw new Error('Repair title is required.');
   }
 
   return {
-    property_id: propertyId,
     room_id: nullableString(input.room_id),
     asset_id: nullableString(input.asset_id),
     utility_id: nullableString(input.utility_id),
@@ -185,6 +190,13 @@ function buildRepairPayload(input: RepairInput, propertyId: string) {
     estimated_cost: input.estimated_cost ?? null,
     actual_cost: input.actual_cost ?? null,
     notes: nullableString(input.notes)
+  };
+}
+
+function buildRepairPayload(input: RepairInput, propertyId: string) {
+  return {
+    property_id: propertyId,
+    ...buildRepairFields(input)
   };
 }
 
@@ -288,31 +300,6 @@ export async function getRepairByIdForContext(context: RepairDataContext, repair
   return data ? normalizeRepair(data as Partial<RepairRow>) : null;
 }
 
-export async function getRepairsForRoom(context: RepairDataContext, roomId: string) {
-  if (context.mode === 'demo' || !context.property) {
-    return getDemoRepairs().filter((repair) => repair.room_id === roomId);
-  }
-
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error(getSupabaseSetupMessage());
-  }
-
-  const { data, error } = await supabase
-    .from('repairs')
-    .select(REPAIR_SELECT)
-    .eq('property_id', context.property.id)
-    .eq('room_id', roomId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(formatRepairError('load room repairs', error.message));
-  }
-
-  return sortRepairs(((data ?? []) as Partial<RepairRow>[]).map(normalizeRepair));
-}
-
 export async function getRepairsForAsset(context: RepairDataContext, assetId: string) {
   if (context.mode === 'demo' || !context.property) {
     return getDemoRepairs().filter((repair) => repair.asset_id === assetId);
@@ -403,6 +390,53 @@ export async function createRepairForContext(context: RepairDataContext, input: 
   return normalizeRepair(data as Partial<RepairRow>);
 }
 
+export async function updateRepairForContext(
+  context: RepairDataContext,
+  repairId: string,
+  input: RepairInput
+) {
+  const fields = buildRepairFields(input);
+
+  if (context.mode === 'demo') {
+    const updated = getDemoRepairs().map((repair) =>
+      repair.id === repairId
+        ? normalizeRepair({
+            ...repair,
+            ...fields,
+            updated_at: new Date().toISOString()
+          })
+        : repair
+    );
+
+    writeDemoRepairs(updated);
+    return updated.find((repair) => repair.id === repairId) || null;
+  }
+
+  if (!context.property) {
+    throw new Error('Create a property before editing repairs.');
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('repairs')
+    .update(fields)
+    .eq('id', repairId)
+    .eq('property_id', context.property.id)
+    .is('deleted_at', null)
+    .select(REPAIR_SELECT)
+    .single();
+
+  if (error || !data) {
+    throw new Error(formatRepairError('update repair', error?.message));
+  }
+
+  return normalizeRepair(data as Partial<RepairRow>);
+}
+
 export async function updateRepairStatusForContext(
   context: RepairDataContext,
   repairId: string,
@@ -441,54 +475,6 @@ export async function updateRepairStatusForContext(
   const { data, error } = await supabase
     .from('repairs')
     .update(payload)
-    .eq('id', repairId)
-    .eq('property_id', context.property.id)
-    .is('deleted_at', null)
-    .select(REPAIR_SELECT)
-    .single();
-
-  if (error || !data) {
-    throw new Error(formatRepairError('update repair', error?.message));
-  }
-
-  return normalizeRepair(data as Partial<RepairRow>);
-}
-
-export async function updateRepairForContext(
-  context: RepairDataContext,
-  repairId: string,
-  input: RepairInput
-) {
-  if (context.mode === 'demo') {
-    const demoProperty = getDemoActiveProperty();
-    const updated = getDemoRepairs().map((repair) =>
-      repair.id === repairId
-        ? normalizeRepair({
-            ...repair,
-            ...buildRepairPayload(input, demoProperty?.id || repair.property_id || ''),
-            id: repair.id,
-            property_id: repair.property_id,
-            updated_at: new Date().toISOString()
-          })
-        : repair
-    );
-
-    writeDemoRepairs(updated);
-    return updated.find((repair) => repair.id === repairId) || null;
-  }
-
-  if (!context.property) {
-    throw new Error('Create a property before editing repairs.');
-  }
-
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error(getSupabaseSetupMessage());
-  }
-
-  const { data, error } = await supabase
-    .from('repairs')
-    .update(buildRepairPayload(input, context.property.id))
     .eq('id', repairId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

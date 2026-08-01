@@ -431,6 +431,20 @@ const portfolioSectionLinks: NavSectionLink[] = [
   { label: 'Condition reports', href: '/condition-reports' }
 ];
 
+// The smart-home surfaces are real routes under /automation, not anchors, so
+// these entries carry full hrefs too. They appear under the Smart home tab on
+// desktop and are folded into the More tab on mobile (five tabs only).
+const smartHomeSectionLinks: NavSectionLink[] = [
+  { label: 'Overview', href: '/automation' },
+  { label: 'Devices', href: '/automation/devices' },
+  { label: 'Hubs & controllers', href: '/automation/hubs' },
+  { label: 'Networks', href: '/automation/networks' },
+  { label: 'Automations & scenes', href: '/automation/automations' },
+  { label: 'Connection map', href: '/automation/map' },
+  { label: 'Emergency & handover', href: '/automation/emergency' },
+  { label: 'Failure impact', href: '/automation/failure-impact' }
+];
+
 const desktopSections: NavSection[] = [
   {
     href: '/dashboard',
@@ -451,21 +465,21 @@ const desktopSections: NavSection[] = [
       { label: 'Trends', hash: 'trends' },
       { label: 'Warranty summary', hash: 'warranties' },
       { label: 'Reminder summary', hash: 'reminders' },
-      { label: 'All rooms & spaces', hash: 'room-list' }
+      { label: 'All rooms', hash: 'room-list' }
     ]
   },
   {
     href: '/home',
     label: 'Home',
     icon: 'H',
-    activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms', '/utilities', '/automation']
+    activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms', '/utilities']
   },
   {
-    href: '/portfolio',
-    label: 'Portfolio',
-    icon: 'P',
-    activeRoutes: ['/portfolio', '/compliance', '/tenancies', '/condition-reports'],
-    sections: portfolioSectionLinks
+    href: '/automation',
+    label: 'Smart home',
+    icon: 'S',
+    activeRoutes: ['/automation'],
+    sections: smartHomeSectionLinks
   },
   {
     href: '/assets',
@@ -486,6 +500,13 @@ const desktopSections: NavSection[] = [
     activeRoutes: ['/documents']
   },
   {
+    href: '/portfolio',
+    label: 'Portfolio',
+    icon: 'P',
+    activeRoutes: ['/portfolio', '/compliance', '/tenancies', '/condition-reports'],
+    sections: portfolioSectionLinks
+  },
+  {
     href: '/more',
     label: 'More',
     icon: '...',
@@ -501,18 +522,35 @@ const desktopSections: NavSection[] = [
   }
 ];
 
+// The bottom bar is a five-column grid, so the tabs that don't earn a slot on a
+// phone (Documents, Portfolio, Smart home) are dropped here and their section
+// links are folded into the More tab's jump menu instead.
 const mobileSections = desktopSections
-  .filter((section) => section.href !== '/documents' && section.href !== '/portfolio')
+  .filter(
+    (section) =>
+      section.href !== '/documents' && section.href !== '/portfolio' && section.href !== '/automation'
+  )
   .map((section) =>
     section.href === '/more'
       ? {
           ...section,
-          activeRoutes: [...section.activeRoutes, '/portfolio', '/compliance', '/tenancies', '/condition-reports'],
+          activeRoutes: [
+            ...section.activeRoutes,
+            '/portfolio',
+            '/compliance',
+            '/tenancies',
+            '/condition-reports',
+            '/automation'
+          ],
           // "Overview" is already taken by the More page itself, so the
-          // portfolio overview entry is labeled by its own name here.
+          // portfolio and smart-home overview entries are labeled by their
+          // own names here — every entry in this menu needs a unique label.
           sections: [
             ...portfolioSectionLinks.map((item) =>
               item.href === '/portfolio' ? { ...item, label: 'Portfolio' } : item
+            ),
+            ...smartHomeSectionLinks.map((item) =>
+              item.href === '/automation' ? { ...item, label: 'Smart home' } : item
             ),
             ...(section.sections ?? [])
           ]

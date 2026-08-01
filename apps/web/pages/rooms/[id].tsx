@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel } from '@home-folder/shared';
-import { PageHeader, Card, UtilityBadge } from '@home-folder/ui';
+import { formatEnumLabel, ROOM_TYPES } from '@home-folder/shared';
+import { PageHeader, Card, Button, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
-import { getDemoRooms } from '../../lib/demoStorage';
+import { getDemoRooms, setDemoRooms } from '../../lib/demoStorage';
 import {
   getDocumentDataContext,
   getDocumentsForLink,
@@ -18,7 +18,7 @@ import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../../l
 import { getReminderDataContext, getRemindersForRoom, type ReminderRow } from '../../lib/reminders';
 import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../../lib/repairs';
-import { getRoomById } from '../../lib/rooms';
+import { deleteRoomForProperty, getRoomById, updateRoomForProperty } from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../../lib/trendFlags';
 import { getUtilitiesForRoom, getUtilityDataContext, type UtilityRow } from '../../lib/utilities';
@@ -28,7 +28,35 @@ type Room = {
   name: string;
   room_type: string;
   floor_name: string;
+  notes?: string | null;
+  outlet_count?: number | null;
+  switch_count?: number | null;
+  vent_count?: number | null;
+  vent_type?: string | null;
+  breaker_label?: string | null;
+  has_plumbing?: boolean;
 };
+
+type RoomType = (typeof ROOM_TYPES)[number];
+
+function asRoomType(value: string | undefined): RoomType {
+  return (ROOM_TYPES as readonly string[]).includes(value ?? '') ? (value as RoomType) : 'other';
+}
+
+// Blank means "not counted". Anything else has to be a sensible whole number.
+function parseOptionalCount(value: string): number | null | 'invalid' {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 999) {
+    return 'invalid';
+  }
+
+  return parsed;
+}
 
 export default function RoomDetailPage() {
   const router = useRouter();
@@ -58,6 +86,22 @@ export default function RoomDetailPage() {
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
   const [roomError, setRoomError] = useState('');
+
+  const [propertyId, setPropertyId] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editRoomType, setEditRoomType] = useState<RoomType>('other');
+  const [editFloorName, setEditFloorName] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editOutletCount, setEditOutletCount] = useState('');
+  const [editSwitchCount, setEditSwitchCount] = useState('');
+  const [editVentCount, setEditVentCount] = useState('');
+  const [editVentType, setEditVentType] = useState('');
+  const [editBreakerLabel, setEditBreakerLabel] = useState('');
+  const [editHasPlumbing, setEditHasPlumbing] = useState(false);
+  const [roomSaving, setRoomSaving] = useState(false);
+  const [roomDeleting, setRoomDeleting] = useState(false);
+  const [roomFormError, setRoomFormError] = useState('');
+  const [roomSaved, setRoomSaved] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -198,12 +242,20 @@ export default function RoomDetailPage() {
 
         if (remoteRoom) {
           setDataMode('supabase');
+          setPropertyId(remoteRoom.property_id || '');
           setRooms([
             {
               id: remoteRoom.id,
               name: remoteRoom.name,
               room_type: remoteRoom.room_type,
-              floor_name: remoteRoom.floor_name
+              floor_name: remoteRoom.floor_name,
+              notes: remoteRoom.notes ?? null,
+              outlet_count: remoteRoom.outlet_count ?? null,
+              switch_count: remoteRoom.switch_count ?? null,
+              vent_count: remoteRoom.vent_count ?? null,
+              vent_type: remoteRoom.vent_type ?? null,
+              breaker_label: remoteRoom.breaker_label ?? null,
+              has_plumbing: remoteRoom.has_plumbing ?? false
             }
           ]);
         } else {
@@ -245,6 +297,25 @@ export default function RoomDetailPage() {
   const room = useMemo(() => {
     return rooms.find((currentRoom) => currentRoom.id === roomId);
   }, [rooms, roomId]);
+
+  // Fill the edit form from the record, so the form always opens showing what
+  // is currently saved rather than an empty slate.
+  useEffect(() => {
+    if (!room) {
+      return;
+    }
+
+    setEditName(room.name);
+    setEditRoomType(asRoomType(room.room_type));
+    setEditFloorName(room.floor_name === 'Unassigned' ? '' : room.floor_name);
+    setEditNotes(room.notes || '');
+    setEditOutletCount(room.outlet_count != null ? String(room.outlet_count) : '');
+    setEditSwitchCount(room.switch_count != null ? String(room.switch_count) : '');
+    setEditVentCount(room.vent_count != null ? String(room.vent_count) : '');
+    setEditVentType(room.vent_type || '');
+    setEditBreakerLabel(room.breaker_label || '');
+    setEditHasPlumbing(Boolean(room.has_plumbing));
+  }, [room]);
 
   const roomUtilities = useMemo(() => {
     return utilities.filter((u) => u.room_id === roomId);
@@ -300,6 +371,135 @@ export default function RoomDetailPage() {
       ),
     [trendFlags, roomId, utilityIdsInRoom]
   );
+
+  const isAccountRoom = dataMode === 'supabase';
+
+  async function handleSaveRoom(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!room) {
+      return;
+    }
+
+    setRoomFormError('');
+    setRoomSaved(false);
+
+    const name = editName.trim();
+    if (!name) {
+      setRoomFormError('A room needs a name.');
+      return;
+    }
+
+    const outletCount = parseOptionalCount(editOutletCount);
+    const switchCount = parseOptionalCount(editSwitchCount);
+    const ventCount = parseOptionalCount(editVentCount);
+
+    if (outletCount === 'invalid' || switchCount === 'invalid' || ventCount === 'invalid') {
+      setRoomFormError('Counts should be whole numbers from 0 to 999, or left blank.');
+      return;
+    }
+
+    setRoomSaving(true);
+
+    try {
+      if (isAccountRoom) {
+        if (!propertyId) {
+          setRoomFormError('This room is still loading. Please try again in a moment.');
+          return;
+        }
+
+        await updateRoomForProperty(propertyId, room.id, {
+          name,
+          room_type: editRoomType,
+          floor_name: editFloorName.trim() || 'Main Floor',
+          notes: editNotes.trim() || null,
+          outlet_count: outletCount,
+          switch_count: switchCount,
+          vent_count: ventCount,
+          vent_type: editVentType.trim() || null,
+          breaker_label: editBreakerLabel.trim() || null,
+          has_plumbing: editHasPlumbing
+        });
+
+        const refreshed = await getRoomById(room.id);
+        if (refreshed) {
+          setRooms([
+            {
+              id: refreshed.id,
+              name: refreshed.name,
+              room_type: refreshed.room_type,
+              floor_name: refreshed.floor_name,
+              notes: refreshed.notes ?? null,
+              outlet_count: refreshed.outlet_count ?? null,
+              switch_count: refreshed.switch_count ?? null,
+              vent_count: refreshed.vent_count ?? null,
+              vent_type: refreshed.vent_type ?? null,
+              breaker_label: refreshed.breaker_label ?? null,
+              has_plumbing: refreshed.has_plumbing ?? false
+            }
+          ]);
+        }
+      } else {
+        // Demo rooms live in this browser and hold only a name, type, and floor.
+        const nextRooms = getDemoRooms().map((demoRoom) =>
+          demoRoom.id === room.id
+            ? {
+                ...demoRoom,
+                name,
+                room_type: editRoomType,
+                floor_name: editFloorName.trim() || 'Main Floor'
+              }
+            : demoRoom
+        );
+        setDemoRooms(nextRooms);
+        setRooms(nextRooms);
+      }
+
+      setRoomSaved(true);
+    } catch (saveError) {
+      setRoomFormError(saveError instanceof Error ? saveError.message : 'Failed to save this room.');
+    } finally {
+      setRoomSaving(false);
+    }
+  }
+
+  async function handleDeleteRoom() {
+    if (!room) {
+      return;
+    }
+
+    // deleteRoomForProperty soft-deletes the room and then clears room_id on
+    // utilities, assets, repairs, reminders, service records, and issues — so
+    // those records survive; they simply stop naming a room.
+    const confirmation = isAccountRoom
+      ? `Remove ${room.name}? Utilities, appliances, repairs, reminders, service history, and issues recorded here are kept — they stop showing a room, and you can point them at another one. This cannot be undone.`
+      : `Remove ${room.name} from this browser's demo data? Anything recorded here will show its room as deleted.`;
+
+    if (!window.confirm(confirmation)) {
+      return;
+    }
+
+    setRoomFormError('');
+    setRoomDeleting(true);
+
+    try {
+      if (isAccountRoom) {
+        if (!propertyId) {
+          setRoomFormError('This room is still loading. Please try again in a moment.');
+          return;
+        }
+
+        await deleteRoomForProperty(propertyId, room.id);
+      } else {
+        setDemoRooms(getDemoRooms().filter((demoRoom) => demoRoom.id !== room.id));
+      }
+
+      router.push('/home-map');
+    } catch (deleteError) {
+      setRoomFormError(deleteError instanceof Error ? deleteError.message : 'Failed to remove this room.');
+    } finally {
+      setRoomDeleting(false);
+    }
+  }
 
   if (!room) {
     return (
@@ -398,6 +598,181 @@ export default function RoomDetailPage() {
               {trendFlagError}
             </p>
           ) : null}
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Edit room</h2>
+          <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+            Correct the name, move it to another floor, or record the details a
+            technician asks for — outlets, vents, and which breaker feeds the room.
+          </p>
+          <form onSubmit={handleSaveRoom} style={{ display: 'grid', gap: 14 }}>
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+              <label>
+                <span>Room name</span>
+                <Input
+                  value={editName}
+                  onChange={(event) => { setEditName(event.target.value); setRoomSaved(false); }}
+                  placeholder="Primary bedroom"
+                  style={{ marginTop: 6 }}
+                />
+              </label>
+              <label>
+                <span>Room type</span>
+                <Select
+                  value={editRoomType}
+                  onChange={(event) => { setEditRoomType(event.target.value as RoomType); setRoomSaved(false); }}
+                  style={{ marginTop: 6 }}
+                >
+                  {ROOM_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {formatEnumLabel(type)}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label>
+                <span>Floor or area</span>
+                <Input
+                  value={editFloorName}
+                  onChange={(event) => { setEditFloorName(event.target.value); setRoomSaved(false); }}
+                  placeholder="Main Floor"
+                  style={{ marginTop: 6 }}
+                />
+              </label>
+            </div>
+
+            {isAccountRoom ? (
+              <>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span>Notes</span>
+                  <textarea
+                    value={editNotes}
+                    onChange={(event) => { setEditNotes(event.target.value); setRoomSaved(false); }}
+                    rows={3}
+                    placeholder="Anything worth remembering about this room."
+                    style={{
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      padding: '12px 14px',
+                      fontSize: 16,
+                      fontFamily: 'var(--font-body)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-control)',
+                      background: 'var(--surface-card)',
+                      color: 'var(--text-primary)',
+                      resize: 'vertical'
+                    }}
+                  />
+                </label>
+
+                <fieldset style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-control)', padding: 16, margin: 0 }}>
+                  <legend style={{ padding: '0 6px', fontWeight: 600 }}>Room details</legend>
+                  <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+                    <label>
+                      <span>Outlets</span>
+                      <Input
+                        value={editOutletCount}
+                        onChange={(event) => { setEditOutletCount(event.target.value); setRoomSaved(false); }}
+                        inputMode="numeric"
+                        placeholder="6"
+                        style={{ marginTop: 6 }}
+                      />
+                    </label>
+                    <label>
+                      <span>Switches</span>
+                      <Input
+                        value={editSwitchCount}
+                        onChange={(event) => { setEditSwitchCount(event.target.value); setRoomSaved(false); }}
+                        inputMode="numeric"
+                        placeholder="2"
+                        style={{ marginTop: 6 }}
+                      />
+                    </label>
+                    <label>
+                      <span>Vents</span>
+                      <Input
+                        value={editVentCount}
+                        onChange={(event) => { setEditVentCount(event.target.value); setRoomSaved(false); }}
+                        inputMode="numeric"
+                        placeholder="1"
+                        style={{ marginTop: 6 }}
+                      />
+                    </label>
+                    <label>
+                      <span>Vent type</span>
+                      <Input
+                        value={editVentType}
+                        onChange={(event) => { setEditVentType(event.target.value); setRoomSaved(false); }}
+                        placeholder="Ceiling supply"
+                        style={{ marginTop: 6 }}
+                      />
+                    </label>
+                    <label>
+                      <span>Breaker label</span>
+                      <Input
+                        value={editBreakerLabel}
+                        onChange={(event) => { setEditBreakerLabel(event.target.value); setRoomSaved(false); }}
+                        placeholder="Panel A, breaker 12"
+                        style={{ marginTop: 6 }}
+                      />
+                    </label>
+                  </div>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={editHasPlumbing}
+                      onChange={(event) => { setEditHasPlumbing(event.target.checked); setRoomSaved(false); }}
+                    />
+                    <span style={{ textTransform: 'none', letterSpacing: 'normal', fontFamily: 'var(--font-body)', fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                      This room has plumbing
+                    </span>
+                  </label>
+                </fieldset>
+              </>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Notes, outlet and vent counts, and breaker labels are saved to your
+                account. Sign in to record them.
+              </p>
+            )}
+
+            {roomFormError ? (
+              <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{roomFormError}</p>
+            ) : null}
+            {roomSaved ? (
+              <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Room saved.</p>
+            ) : null}
+
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Button type="submit" disabled={roomSaving || roomDeleting}>
+                {roomSaving ? 'Saving...' : 'Save room'}
+              </Button>
+              <button
+                type="button"
+                onClick={handleDeleteRoom}
+                disabled={roomSaving || roomDeleting}
+                style={{
+                  padding: '11px 16px',
+                  minHeight: 44,
+                  borderRadius: 'var(--radius-control)',
+                  border: '1px solid rgba(138,46,39,0.35)',
+                  background: 'rgba(138,46,39,0.08)',
+                  color: 'var(--status-urgent)',
+                  cursor: roomSaving || roomDeleting ? 'not-allowed' : 'pointer',
+                  fontWeight: 700,
+                  opacity: roomSaving || roomDeleting ? 0.7 : 1
+                }}
+              >
+                {roomDeleting ? 'Removing...' : 'Remove room'}
+              </button>
+            </div>
+            <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14 }}>
+              {isAccountRoom
+                ? 'Removing a room keeps everything recorded in it — utilities, appliances, repairs, reminders, service history, and issues stay in your record and simply stop naming a room.'
+                : 'Removing a room here only changes this browser’s demo data. Anything recorded in it will show its room as deleted.'}
+            </p>
+          </form>
         </Card>
 
         <RelatedDocuments

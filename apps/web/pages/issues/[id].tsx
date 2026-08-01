@@ -1,10 +1,16 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useState, type ReactNode } from 'react';
-import { formatEnumLabel, ISSUE_STATUSES } from '@home-folder/shared';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import {
+  formatEnumLabel,
+  ISSUE_SEVERITIES,
+  ISSUE_STATUSES,
+  ISSUE_TYPES
+} from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
+import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
 import {
@@ -17,12 +23,21 @@ import {
   deleteIssueForContext,
   getIssueByIdForContext,
   getIssueDataContext,
+  updateIssueForContext,
   updateIssueStatusForContext,
   type IssueDataContext,
   type IssueDataMode,
   type IssueRow,
-  type IssueStatus
+  type IssueSeverity,
+  type IssueStatus,
+  type IssueType
 } from '../../lib/issues';
+import {
+  isLocationPresetValue,
+  resolveLocationRoomId,
+  rollbackCreatedLocation
+} from '../../lib/locationPresets';
+import { formatRoomLocation } from '../../lib/roomLabels';
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../../lib/reminders';
 import { getDemoRepairs, getRepairsForProperty, type RepairRow } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
@@ -34,6 +49,11 @@ type LinkOption = {
   name: string;
 };
 
+type RoomOption = LinkOption & {
+  room_type?: string | null;
+  floor_name?: string | null;
+};
+
 const fieldStyle = {
   padding: 10,
   borderRadius: 4,
@@ -41,9 +61,23 @@ const fieldStyle = {
   background: 'var(--surface-card)'
 };
 
+const labelStyle = { display: 'grid', gap: 6 } as const;
+
+const fieldRowStyle = {
+  display: 'grid',
+  gap: 12,
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'
+} as const;
+
 function nameFromId(list: LinkOption[], id?: string | null) {
   if (!id) return null;
   return list.find((item) => item.id === id)?.name || 'Unknown';
+}
+
+function roomNameFromId(list: RoomOption[], id?: string | null) {
+  if (!id) return null;
+  const room = list.find((item) => item.id === id);
+  return room ? formatRoomLocation(room) : 'Unknown';
 }
 
 function reminderRelatesToIssue(issue: IssueRow, reminder: ReminderRow) {
@@ -62,7 +96,7 @@ export default function IssueDetailPage() {
   const [context, setContext] = useState<IssueDataContext | null>(null);
   const [dataMode, setDataMode] = useState<IssueDataMode>('demo');
   const [issue, setIssue] = useState<IssueRow | null>(null);
-  const [rooms, setRooms] = useState<LinkOption[]>([]);
+  const [rooms, setRooms] = useState<RoomOption[]>([]);
   const [assets, setAssets] = useState<LinkOption[]>([]);
   const [utilities, setUtilities] = useState<LinkOption[]>([]);
   const [repairs, setRepairs] = useState<LinkOption[]>([]);
@@ -73,6 +107,43 @@ export default function IssueDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [issueType, setIssueType] = useState<IssueType>('general');
+  const [status, setStatus] = useState<IssueStatus>('open');
+  const [severity, setSeverity] = useState<IssueSeverity>('medium');
+  const [firstSeenDate, setFirstSeenDate] = useState('');
+  const [lastSeenDate, setLastSeenDate] = useState('');
+  const [resolvedDate, setResolvedDate] = useState('');
+  const [notes, setNotes] = useState('');
+  const [roomChoice, setRoomChoice] = useState('');
+  const [roomCustomName, setRoomCustomName] = useState('');
+  const [assetId, setAssetId] = useState('');
+  const [utilityId, setUtilityId] = useState('');
+  const [repairId, setRepairId] = useState('');
+
+  // One place that fills the edit form from a saved issue, so loading the page,
+  // saving, and discarding all land on the same values.
+  const applyIssueToForm = useCallback((source: IssueRow) => {
+    setTitle(source.title);
+    setDescription(source.description || '');
+    setIssueType(source.issue_type);
+    setStatus(source.status);
+    setSeverity(source.severity);
+    setFirstSeenDate(source.first_seen_date || '');
+    setLastSeenDate(source.last_seen_date || '');
+    setResolvedDate(source.resolved_date || '');
+    setNotes(source.notes || '');
+    setRoomChoice(source.room_id || '');
+    setRoomCustomName('');
+    setAssetId(source.asset_id || '');
+    setUtilityId(source.utility_id || '');
+    setRepairId(source.repair_id || '');
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -113,7 +184,14 @@ export default function IssueDetailPage() {
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setIssue(nextIssue);
-        setRooms(roomRows.map((room) => ({ id: room.id, name: room.name })));
+        setRooms(
+          roomRows.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }))
+        );
         setAssets(assetRows.map((asset: AssetRow) => ({ id: asset.id, name: asset.name })));
         setUtilities(utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name })));
         setRepairs(repairRows.map((repair: RepairRow) => ({ id: repair.id, name: repair.title })));
@@ -121,6 +199,10 @@ export default function IssueDetailPage() {
         setDocuments(issueDocuments);
         setTrendFlags(issueTrendFlags);
         setReminders(nextIssue ? allReminders.filter((reminder) => reminderRelatesToIssue(nextIssue, reminder)) : []);
+
+        if (nextIssue) {
+          applyIssueToForm(nextIssue);
+        }
       } catch (loadError) {
         if (isMounted) {
           setError(loadError instanceof Error ? loadError.message : 'Failed to load issue.');
@@ -142,21 +224,107 @@ export default function IssueDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [issueId]);
+  }, [issueId, applyIssueToForm]);
 
-  const changeStatus = async (status: IssueStatus) => {
+  const changeStatus = async (nextStatus: IssueStatus) => {
     if (!context || !issue) return;
 
     setActing(true);
     setError('');
 
     try {
-      const updatedIssue = await updateIssueStatusForContext(context, issue.id, status);
-      if (updatedIssue) setIssue(updatedIssue);
+      const updatedIssue = await updateIssueStatusForContext(context, issue.id, nextStatus);
+      if (updatedIssue) {
+        setIssue(updatedIssue);
+        // The edit form below holds the same fields; keep it in step so a later
+        // save doesn't write the status back to what it was.
+        applyIssueToForm(updatedIssue);
+      }
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : 'Failed to update issue status.');
     } finally {
       setActing(false);
+    }
+  };
+
+  const saveIssue = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!context || !issue) return;
+
+    setNotice('');
+
+    if (!title.trim()) {
+      setFormError('An issue needs a title.');
+      return;
+    }
+
+    const roomValue = roomSelectionValue(roomChoice, roomCustomName);
+
+    if (roomValue === null) {
+      setFormError('Give the new room a name, or pick one from the list.');
+      return;
+    }
+
+    setSaving(true);
+    setFormError('');
+
+    const resolutionContext =
+      context.mode === 'supabase' && context.property
+        ? ({ mode: 'supabase', propertyId: context.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
+    try {
+      const wasPreset = isLocationPresetValue(roomValue);
+      const resolved = await resolveLocationRoomId(roomValue, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
+      const updatedIssue = await updateIssueForContext(context, issue.id, {
+        title,
+        description,
+        issue_type: issueType,
+        status,
+        severity,
+        first_seen_date: firstSeenDate || null,
+        last_seen_date: lastSeenDate || null,
+        resolved_date: resolvedDate || null,
+        notes,
+        room_id: resolved.roomId,
+        asset_id: assetId || null,
+        utility_id: utilityId || null,
+        repair_id: repairId || null
+      });
+
+      if (updatedIssue) {
+        setIssue(updatedIssue);
+        applyIssueToForm(updatedIssue);
+      }
+
+      if (wasPreset) {
+        const refreshedRooms =
+          context.mode === 'supabase' && context.property
+            ? await getRoomsForProperty(context.property.id)
+            : getDemoRooms();
+        setRooms(
+          refreshedRooms.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }))
+        );
+      }
+
+      setNotice('Issue updated.');
+    } catch (saveError) {
+      // A preset location creates its room before the issue is written. If the
+      // write fails, take the room back out rather than leaving an empty space
+      // on the home map that nobody asked for.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to update issue.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -215,7 +383,9 @@ export default function IssueDetailPage() {
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
-          {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p> : null}
+          {error ? (
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }} role="alert">{error}</p>
+          ) : null}
         </Card>
 
         <Card>
@@ -223,7 +393,7 @@ export default function IssueDetailPage() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
             <UtilityBadge label={formatEnumLabel(issue.status)} />
             <UtilityBadge label={formatEnumLabel(issue.severity)} />
-            {issue.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, issue.room_id) || 'Unknown'}`} />}
+            {issue.room_id && <UtilityBadge label={`Room: ${roomNameFromId(rooms, issue.room_id) || 'Unknown'}`} />}
             {issue.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, issue.asset_id) || 'Unknown'}`} />}
             {issue.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, issue.utility_id) || 'Unknown'}`} />}
             {issue.repair_id && <UtilityBadge label={`Repair: ${nameFromId(repairs, issue.repair_id) || 'Unknown'}`} />}
@@ -264,6 +434,183 @@ export default function IssueDetailPage() {
               Delete issue
             </button>
           </div>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Edit issue</h2>
+          <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
+            Everything about this issue stays open to correction — including which room,
+            appliance, utility, or repair it belongs to.
+          </p>
+          <form onSubmit={saveIssue} style={{ display: 'grid', gap: 12 }}>
+            <label style={labelStyle}>
+              <span style={{ fontWeight: 600 }}>Title</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} style={fieldStyle} />
+            </label>
+
+            <div style={fieldRowStyle}>
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Issue type</span>
+                <select
+                  value={issueType}
+                  onChange={(event) => setIssueType(event.target.value as IssueType)}
+                  style={fieldStyle}
+                >
+                  {ISSUE_TYPES.map((type) => (
+                    <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Status</span>
+                <select
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value as IssueStatus)}
+                  style={fieldStyle}
+                >
+                  {ISSUE_STATUSES.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Severity</span>
+                <select
+                  value={severity}
+                  onChange={(event) => setSeverity(event.target.value as IssueSeverity)}
+                  style={fieldStyle}
+                >
+                  {ISSUE_SEVERITIES.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <RoomLocationSelect
+              rooms={rooms}
+              value={roomChoice}
+              onChange={setRoomChoice}
+              customName={roomCustomName}
+              onCustomNameChange={setRoomCustomName}
+              label="Room or location"
+              emptyLabel="Not linked to a room"
+              disabled={saving}
+            />
+
+            <div style={fieldRowStyle}>
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Appliance or asset</span>
+                <select value={assetId} onChange={(event) => setAssetId(event.target.value)} style={fieldStyle}>
+                  <option value="">Not linked</option>
+                  {assets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>{asset.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Utility</span>
+                <select value={utilityId} onChange={(event) => setUtilityId(event.target.value)} style={fieldStyle}>
+                  <option value="">Not linked</option>
+                  {utilities.map((utility) => (
+                    <option key={utility.id} value={utility.id}>{utility.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Repair</span>
+                <select value={repairId} onChange={(event) => setRepairId(event.target.value)} style={fieldStyle}>
+                  <option value="">Not linked</option>
+                  {repairs.map((repair) => (
+                    <option key={repair.id} value={repair.id}>{repair.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label style={labelStyle}>
+              <span style={{ fontWeight: 600 }}>Description</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                style={{ ...fieldStyle, minHeight: 80 }}
+              />
+            </label>
+
+            <div style={fieldRowStyle}>
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>First seen</span>
+                <input
+                  type="date"
+                  value={firstSeenDate}
+                  onChange={(event) => setFirstSeenDate(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Last seen</span>
+                <input
+                  type="date"
+                  value={lastSeenDate}
+                  onChange={(event) => setLastSeenDate(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Resolved</span>
+                <input
+                  type="date"
+                  value={resolvedDate}
+                  onChange={(event) => setResolvedDate(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            <label style={labelStyle}>
+              <span style={{ fontWeight: 600 }}>Notes</span>
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                style={{ ...fieldStyle, minHeight: 70 }}
+              />
+            </label>
+
+            {formError ? (
+              <p style={{ margin: 0, color: 'var(--status-urgent)', fontWeight: 700 }} role="alert">
+                {formError}
+              </p>
+            ) : null}
+            {notice ? (
+              <p style={{ margin: 0, color: 'var(--status-good)', fontWeight: 600 }} role="status">
+                {notice}
+              </p>
+            ) : null}
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving...' : 'Save changes'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={saving}
+                onClick={() => {
+                  applyIssueToForm(issue);
+                  setFormError('');
+                  setNotice('');
+                }}
+              >
+                Discard changes
+              </Button>
+            </div>
+          </form>
         </Card>
 
         {issue.repair_id ? (

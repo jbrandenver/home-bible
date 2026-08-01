@@ -2,14 +2,21 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 're
 import { formatEnumLabel } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import {
+  assignableRolesFor,
+  canEditMember,
   createPropertyInvitation,
   listPropertyInvitations,
+  listPropertyMembers,
   loadSharingPreview,
+  removePropertyMember,
   revokePropertyInvitation,
   SHARING_ROLES,
   sharingSectionLabel,
+  updatePropertyMemberRole,
   type InvitationRole,
   type PropertyInvitation,
+  type PropertyMember,
+  type PropertyMemberAccess,
   type SharingPreview,
   type SharingRole
 } from '../lib/sharing';
@@ -138,6 +145,15 @@ export default function SharingPage() {
   const [error, setError] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [inviteNotice, setInviteNotice] = useState('');
+
+  // People with access. The server decides what is permitted; this state only
+  // reflects the answer so the page never offers a control that will be refused.
+  const [memberAccess, setMemberAccess] = useState<PropertyMemberAccess | null>(null);
+  const [membersLoading, setMembersLoading] = useState(true);
+  const [memberError, setMemberError] = useState('');
+  const [memberNotice, setMemberNotice] = useState('');
+  const [savingMemberId, setSavingMemberId] = useState('');
+  const [removingMemberId, setRemovingMemberId] = useState('');
 
   // Transfer ownership (migration 025). Only the property owner sees this
   // section — same signal the RPC enforces (properties.owner_user_id), read
@@ -271,6 +287,83 @@ export default function SharingPage() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadMembers() {
+      setMembersLoading(true);
+      setMemberError('');
+
+      try {
+        const access = await listPropertyMembers();
+        if (isMounted) {
+          setMemberAccess(access);
+        }
+      } catch (loadError) {
+        if (isMounted) {
+          setMemberError(loadError instanceof Error ? loadError.message : 'Failed to load the people with access.');
+        }
+      } finally {
+        if (isMounted) {
+          setMembersLoading(false);
+        }
+      }
+    }
+
+    loadMembers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const reloadMembers = async () => {
+    setMemberAccess(await listPropertyMembers());
+  };
+
+  const changeMemberRole = async (member: PropertyMember, role: SharingRole) => {
+    if (savingMemberId || removingMemberId) return;
+
+    setSavingMemberId(member.id);
+    setMemberError('');
+    setMemberNotice('');
+
+    try {
+      await updatePropertyMemberRole(member.id, role);
+      setMemberNotice(`${member.label} is now a ${roleLabel(role).toLowerCase()}.`);
+      await reloadMembers();
+    } catch (updateError) {
+      // A refusal here is the database's role guard talking. Show what it said
+      // rather than a guess about why.
+      setMemberError(updateError instanceof Error ? updateError.message : 'Failed to change this person’s access.');
+    } finally {
+      setSavingMemberId('');
+    }
+  };
+
+  const removeMember = async (member: PropertyMember) => {
+    if (savingMemberId || removingMemberId) return;
+
+    const confirmed = window.confirm(
+      `Remove ${member.label} from this record? They lose access straight away. You can invite them again later.`
+    );
+    if (!confirmed) return;
+
+    setRemovingMemberId(member.id);
+    setMemberError('');
+    setMemberNotice('');
+
+    try {
+      await removePropertyMember(member.id);
+      setMemberNotice(`${member.label} no longer has access.`);
+      await reloadMembers();
+    } catch (removeError) {
+      setMemberError(removeError instanceof Error ? removeError.message : 'Failed to remove this person.');
+    } finally {
+      setRemovingMemberId('');
+    }
+  };
 
   const createTransfer = async (event: FormEvent) => {
     event.preventDefault();
@@ -409,6 +502,103 @@ export default function SharingPage() {
             </div>
           ) : null}
         </Card>
+
+        {/* Shown only to owners and co-owners — the same people the database
+            lets manage members. Errors surface here too, so a failed check is
+            never silent. */}
+        {membersLoading || memberError || (memberAccess?.canManage ?? false) ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>People with access</h2>
+            <p style={subtleText}>
+              Everyone who can open this record today. Change what someone can do, or take their access away.
+            </p>
+
+            {membersLoading ? <p style={subtleText}>Loading people with access...</p> : null}
+
+            {!membersLoading && memberAccess && memberAccess.members.length === 0 ? (
+              <p style={subtleText}>Nobody else has access yet. Invitations you send appear here once accepted.</p>
+            ) : null}
+
+            <div style={{ display: 'grid', gap: 12 }}>
+              {(memberAccess?.members ?? []).map((member) => {
+                const editable = memberAccess ? canEditMember(memberAccess, member) : false;
+                const roleOptions = memberAccess ? assignableRolesFor(memberAccess) : [];
+                const busy = savingMemberId === member.id || removingMemberId === member.id;
+
+                return (
+                  <div
+                    key={member.id}
+                    style={{
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 8,
+                      padding: 12,
+                      display: 'flex',
+                      gap: 12,
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <div>
+                      <strong>
+                        {member.label}
+                        {member.isYou ? ' (you)' : ''}
+                      </strong>
+                      <div style={subtleText}>
+                        {roleLabel(member.role)}
+                        {member.isPropertyOwner ? ' · owns this record' : ''}
+                        {' · Added '}
+                        {formatDate(member.created_at)}
+                      </div>
+                    </div>
+
+                    {editable ? (
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <label style={{ display: 'grid', gap: 4 }}>
+                          <span style={{ ...subtleText, fontSize: 13 }}>Access level</span>
+                          <select
+                            value={member.role}
+                            disabled={busy}
+                            aria-label={`Access level for ${member.label}`}
+                            onChange={(event) => changeMemberRole(member, event.target.value as SharingRole)}
+                            style={fieldStyle}
+                          >
+                            {/* The person's current role stays selectable even
+                                when the caller could not grant it themselves. */}
+                            {(roleOptions.includes(member.role as (typeof roleOptions)[number])
+                              ? roleOptions
+                              : [member.role, ...roleOptions]
+                            ).map((role) => (
+                              <option key={role} value={role}>{roleLabel(role)}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={busy}
+                          aria-label={`Remove ${member.label}`}
+                          onClick={() => removeMember(member)}
+                        >
+                          {removingMemberId === member.id ? 'Removing...' : 'Remove'}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span style={{ ...subtleText, fontSize: 13 }}>
+                        {member.isPropertyOwner
+                          ? 'Ownership moves through a transfer, not from here.'
+                          : 'Only the owner can change this.'}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {memberNotice ? <p style={{ margin: '12px 0 0', color: 'var(--status-good)' }}>{memberNotice}</p> : null}
+            {memberError ? <p style={{ margin: '12px 0 0', color: 'var(--status-urgent)' }}>{memberError}</p> : null}
+          </Card>
+        ) : null}
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Invite someone</h2>

@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AUTOMATION_DEVICE_CATEGORIES,
   AUTOMATION_ECOSYSTEMS,
@@ -22,6 +22,12 @@ import {
   type AutomationHubRow,
   type AutomationNetworkRow
 } from '../../lib/automation';
+import {
+  getAvailableLocationPresets,
+  isLocationPresetValue,
+  resolveLocationRoomId,
+  rollbackCreatedLocation
+} from '../../lib/locationPresets';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { formatRoomLocation } from '../../lib/roomLabels';
 
@@ -97,6 +103,8 @@ export default function GuidedAddDevicePage() {
     };
   }, []);
 
+  const locationPresets = useMemo(() => getAvailableLocationPresets(rooms), [rooms]);
+
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const toggleEcosystem = (eco: AutomationEcosystem) =>
@@ -112,9 +120,25 @@ export default function GuidedAddDevicePage() {
       setStep(0);
       return;
     }
+    if (isLocationPresetValue(form.room_id) && (context.mode !== 'supabase' || !context.property)) {
+      setError('Create a property before adding a new location.');
+      setStep(1);
+      return;
+    }
     setSaving(true);
     setError('');
+
+    const resolutionContext =
+      context.mode === 'supabase' && context.property
+        ? ({ mode: 'supabase', propertyId: context.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
     try {
+      const resolved = await resolveLocationRoomId(form.room_id, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
       const created = await createDeviceForContext(context, {
         name: form.name.trim(),
         nickname: form.nickname.trim() || null,
@@ -124,7 +148,7 @@ export default function GuidedAddDevicePage() {
         model: form.model.trim() || null,
         serial_number: form.serial_number.trim() || null,
         is_critical: form.is_critical,
-        room_id: form.room_id || null,
+        room_id: resolved.roomId,
         primary_protocol: form.primary_protocol || null,
         primary_hub_id: form.primary_hub_id || null,
         primary_network_id: form.primary_network_id || null,
@@ -141,6 +165,10 @@ export default function GuidedAddDevicePage() {
       });
       router.push(`/automation/devices/${created.id}`);
     } catch (saveError) {
+      // Picking a new location creates the space before the device is written.
+      // If that write fails, take the space back out rather than leaving an
+      // empty "Back yard" on the home map that nobody asked for.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
       setError(saveError instanceof Error ? saveError.message : 'Failed to save device.');
       setSaving(false);
     }
@@ -207,12 +235,26 @@ export default function GuidedAddDevicePage() {
 
           {step === 1 ? (
             <div style={fieldWrap}>
-              <label style={labelStyle}><span>Room</span>
-                <Select value={form.room_id} onChange={(e) => set('room_id', e.target.value)} style={{ marginTop: 6 }}>
-                  <option value="">No room yet</option>
-                  {rooms.map((r) => <option key={r.id} value={r.id}>{formatRoomLocation(r)}</option>)}
-                </Select>
-              </label>
+              <div>
+                <label style={labelStyle}><span>Room</span>
+                  <Select value={form.room_id} onChange={(e) => set('room_id', e.target.value)} style={{ marginTop: 6 }}>
+                    <option value="">No room yet</option>
+                    {rooms.length > 0 ? (
+                      <optgroup label="Rooms & spaces">
+                        {rooms.map((r) => <option key={r.id} value={r.id}>{formatRoomLocation(r)}</option>)}
+                      </optgroup>
+                    ) : null}
+                    {locationPresets.length > 0 ? (
+                      <optgroup label="Outdoor & exterior">
+                        {locationPresets.map((preset) => <option key={preset.value} value={preset.value}>{preset.label}</option>)}
+                      </optgroup>
+                    ) : null}
+                  </Select>
+                </label>
+                <p style={{ marginTop: 6, marginBottom: 0, color: 'var(--text-muted)', fontSize: 14 }}>
+                  Pick a room, or an outdoor spot like the back yard or a side of the house — new spots are added to your home when you save.
+                </p>
+              </div>
             </div>
           ) : null}
 

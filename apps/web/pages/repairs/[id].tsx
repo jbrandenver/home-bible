@@ -1,13 +1,25 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { formatEnumLabel, REPAIR_STATUSES } from '@home-folder/shared';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  formatEnumLabel,
+  REPAIR_PRIORITIES,
+  REPAIR_STATUSES,
+  REPAIR_TYPES
+} from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
+import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
 import { getDemoRooms } from '../../lib/demoStorage';
+import {
+  isLocationPresetValue,
+  resolveLocationRoomId,
+  rollbackCreatedLocation
+} from '../../lib/locationPresets';
+import { formatRoomLocation } from '../../lib/roomLabels';
 import {
   getDocumentDataContext,
   getDocumentsForLink,
@@ -21,11 +33,14 @@ import {
   deleteRepairForContext,
   getRepairByIdForContext,
   getRepairDataContext,
+  updateRepairForContext,
   updateRepairStatusForContext,
   type RepairDataContext,
   type RepairDataMode,
+  type RepairPriority,
   type RepairRow,
-  type RepairStatus
+  type RepairStatus,
+  type RepairType
 } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../../lib/serviceRecords';
@@ -37,6 +52,11 @@ type LinkOption = {
   name: string;
 };
 
+type RoomOption = LinkOption & {
+  room_type?: string | null;
+  floor_name?: string | null;
+};
+
 const fieldStyle = {
   padding: 10,
   borderRadius: 4,
@@ -44,9 +64,32 @@ const fieldStyle = {
   background: 'var(--surface-card)'
 };
 
+const labelStyle = { display: 'grid', gap: 6 } as const;
+
+const fieldRowStyle = {
+  display: 'grid',
+  gap: 12,
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'
+} as const;
+
 function nameFromId(list: LinkOption[], id?: string | null) {
   if (!id) return null;
   return list.find((item) => item.id === id)?.name || 'Unknown';
+}
+
+function roomNameFromId(list: RoomOption[], id?: string | null) {
+  if (!id) return null;
+  const room = list.find((item) => item.id === id);
+  return room ? formatRoomLocation(room) : 'Unknown';
+}
+
+function moneyValue(value: string) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function sharesRepairLink(
@@ -77,7 +120,7 @@ export default function RepairDetailPage() {
   const [context, setContext] = useState<RepairDataContext | null>(null);
   const [dataMode, setDataMode] = useState<RepairDataMode>('demo');
   const [repair, setRepair] = useState<RepairRow | null>(null);
-  const [rooms, setRooms] = useState<LinkOption[]>([]);
+  const [rooms, setRooms] = useState<RoomOption[]>([]);
   const [assets, setAssets] = useState<LinkOption[]>([]);
   const [utilities, setUtilities] = useState<LinkOption[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
@@ -91,6 +134,53 @@ export default function RepairDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [repairType, setRepairType] = useState<RepairType>('general');
+  const [status, setStatus] = useState<RepairStatus>('open');
+  const [priority, setPriority] = useState<RepairPriority>('normal');
+  const [reportedDate, setReportedDate] = useState('');
+  const [completedDate, setCompletedDate] = useState('');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledWindow, setScheduledWindow] = useState('');
+  const [contractorName, setContractorName] = useState('');
+  const [contractorPhone, setContractorPhone] = useState('');
+  const [contractorEmail, setContractorEmail] = useState('');
+  const [estimatedCost, setEstimatedCost] = useState('');
+  const [actualCost, setActualCost] = useState('');
+  const [notes, setNotes] = useState('');
+  const [roomChoice, setRoomChoice] = useState('');
+  const [roomCustomName, setRoomCustomName] = useState('');
+  const [assetId, setAssetId] = useState('');
+  const [utilityId, setUtilityId] = useState('');
+
+  // One place that fills the edit form from a saved repair, so loading the
+  // page, saving, and discarding all land on the same values.
+  const applyRepairToForm = useCallback((source: RepairRow) => {
+    setTitle(source.title);
+    setDescription(source.description || '');
+    setRepairType(source.repair_type);
+    setStatus(source.status);
+    setPriority(source.priority);
+    setReportedDate(source.reported_date || '');
+    setCompletedDate(source.completed_date || '');
+    setScheduledDate(source.scheduled_date || '');
+    setScheduledWindow(source.scheduled_window || '');
+    setContractorName(source.contractor_name || '');
+    setContractorPhone(source.contractor_phone || '');
+    setContractorEmail(source.contractor_email || '');
+    setEstimatedCost(source.estimated_cost === null ? '' : String(source.estimated_cost));
+    setActualCost(source.actual_cost === null ? '' : String(source.actual_cost));
+    setNotes(source.notes || '');
+    setRoomChoice(source.room_id || '');
+    setRoomCustomName('');
+    setAssetId(source.asset_id || '');
+    setUtilityId(source.utility_id || '');
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -136,7 +226,14 @@ export default function RepairDetailPage() {
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setRepair(nextRepair);
-        setRooms(roomRows.map((room) => ({ id: room.id, name: room.name })));
+        setRooms(
+          roomRows.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }))
+        );
         setAssets(assetRows.map((asset: AssetRow) => ({ id: asset.id, name: asset.name })));
         setUtilities(utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name })));
         setDocumentContext(documentContextForLoad);
@@ -146,6 +243,8 @@ export default function RepairDetailPage() {
         setIssues(repairIssues);
 
         if (nextRepair) {
+          applyRepairToForm(nextRepair);
+
           const issueIds = new Set(repairIssues.map((issue) => issue.id));
           setServiceRecords(allServiceRecords.filter((record) => sharesRepairLink(nextRepair, record)));
           setReminders(allReminders.filter((reminder) => reminderSharesRepairLink(nextRepair, reminder)));
@@ -178,23 +277,122 @@ export default function RepairDetailPage() {
     return () => {
       isMounted = false;
     };
-  }, [repairId]);
+  }, [repairId, applyRepairToForm]);
 
   const statusOptions = useMemo(() => REPAIR_STATUSES, []);
 
-  const changeStatus = async (status: RepairStatus) => {
+  const changeStatus = async (nextStatus: RepairStatus) => {
     if (!context || !repair) return;
 
     setActing(true);
     setError('');
 
     try {
-      const updatedRepair = await updateRepairStatusForContext(context, repair.id, status);
-      if (updatedRepair) setRepair(updatedRepair);
+      const updatedRepair = await updateRepairStatusForContext(context, repair.id, nextStatus);
+      if (updatedRepair) {
+        setRepair(updatedRepair);
+        // The edit form below holds the same fields; keep it in step so a later
+        // save doesn't write the status back to what it was.
+        applyRepairToForm(updatedRepair);
+      }
     } catch (statusError) {
       setError(statusError instanceof Error ? statusError.message : 'Failed to update repair status.');
     } finally {
       setActing(false);
+    }
+  };
+
+  const saveRepair = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!context || !repair) return;
+
+    setNotice('');
+
+    if (!title.trim()) {
+      setFormError('A repair needs a title.');
+      return;
+    }
+
+    const parsedEstimatedCost = moneyValue(estimatedCost);
+    const parsedActualCost = moneyValue(actualCost);
+
+    if ((estimatedCost && parsedEstimatedCost === null) || (actualCost && parsedActualCost === null)) {
+      setFormError('Costs need to be numbers, or left empty.');
+      return;
+    }
+
+    const roomValue = roomSelectionValue(roomChoice, roomCustomName);
+
+    if (roomValue === null) {
+      setFormError('Give the new room a name, or pick one from the list.');
+      return;
+    }
+
+    setSaving(true);
+    setFormError('');
+
+    const resolutionContext =
+      context.mode === 'supabase' && context.property
+        ? ({ mode: 'supabase', propertyId: context.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
+    try {
+      const wasPreset = isLocationPresetValue(roomValue);
+      const resolved = await resolveLocationRoomId(roomValue, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
+      const updatedRepair = await updateRepairForContext(context, repair.id, {
+        title,
+        description,
+        repair_type: repairType,
+        status,
+        priority,
+        reported_date: reportedDate || null,
+        completed_date: completedDate || null,
+        scheduled_date: scheduledDate || null,
+        scheduled_window: scheduledWindow,
+        contractor_name: contractorName,
+        contractor_phone: contractorPhone,
+        contractor_email: contractorEmail,
+        estimated_cost: parsedEstimatedCost,
+        actual_cost: parsedActualCost,
+        notes,
+        room_id: resolved.roomId,
+        asset_id: assetId || null,
+        utility_id: utilityId || null
+      });
+
+      if (updatedRepair) {
+        setRepair(updatedRepair);
+        applyRepairToForm(updatedRepair);
+      }
+
+      if (wasPreset) {
+        const refreshedRooms =
+          context.mode === 'supabase' && context.property
+            ? await getRoomsForProperty(context.property.id)
+            : getDemoRooms();
+        setRooms(
+          refreshedRooms.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }))
+        );
+      }
+
+      setNotice('Repair updated.');
+    } catch (saveError) {
+      // A preset location creates its room before the repair is written. If the
+      // write fails, take the room back out rather than leaving an empty space
+      // on the home map that nobody asked for.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to update repair.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -253,7 +451,9 @@ export default function RepairDetailPage() {
               ? 'Saved to your account.'
               : 'Demo data is stored only in this browser.'}
           </p>
-          {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }}>{error}</p> : null}
+          {error ? (
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }} role="alert">{error}</p>
+          ) : null}
         </Card>
 
         <Card>
@@ -261,7 +461,7 @@ export default function RepairDetailPage() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
             <UtilityBadge label={formatEnumLabel(repair.status)} />
             <UtilityBadge label={formatEnumLabel(repair.priority)} />
-            {repair.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, repair.room_id) || 'Unknown'}`} />}
+            {repair.room_id && <UtilityBadge label={`Room: ${roomNameFromId(rooms, repair.room_id) || 'Unknown'}`} />}
             {repair.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, repair.asset_id) || 'Unknown'}`} />}
             {repair.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, repair.utility_id) || 'Unknown'}`} />}
             <UtilityBadge label={`${documents.length} document${documents.length === 1 ? '' : 's'}`} />
@@ -319,6 +519,237 @@ export default function RepairDetailPage() {
               Delete repair
             </button>
           </div>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Edit repair</h2>
+          <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
+            Everything about this repair stays open to correction — including which room,
+            appliance, or utility it belongs to, and when the visit is booked.
+          </p>
+          <form onSubmit={saveRepair} style={{ display: 'grid', gap: 12 }}>
+            <label style={labelStyle}>
+              <span style={{ fontWeight: 600 }}>Title</span>
+              <input value={title} onChange={(event) => setTitle(event.target.value)} style={fieldStyle} />
+            </label>
+
+            <div style={fieldRowStyle}>
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Repair type</span>
+                <select
+                  value={repairType}
+                  onChange={(event) => setRepairType(event.target.value as RepairType)}
+                  style={fieldStyle}
+                >
+                  {REPAIR_TYPES.map((type) => (
+                    <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Status</span>
+                <select
+                  value={status}
+                  onChange={(event) => setStatus(event.target.value as RepairStatus)}
+                  style={fieldStyle}
+                >
+                  {REPAIR_STATUSES.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Priority</span>
+                <select
+                  value={priority}
+                  onChange={(event) => setPriority(event.target.value as RepairPriority)}
+                  style={fieldStyle}
+                >
+                  {REPAIR_PRIORITIES.map((value) => (
+                    <option key={value} value={value}>{formatEnumLabel(value)}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <RoomLocationSelect
+              rooms={rooms}
+              value={roomChoice}
+              onChange={setRoomChoice}
+              customName={roomCustomName}
+              onCustomNameChange={setRoomCustomName}
+              label="Room or location"
+              emptyLabel="Not linked to a room"
+              disabled={saving}
+            />
+
+            <div style={fieldRowStyle}>
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Appliance or asset</span>
+                <select value={assetId} onChange={(event) => setAssetId(event.target.value)} style={fieldStyle}>
+                  <option value="">Not linked</option>
+                  {assets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>{asset.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Utility</span>
+                <select value={utilityId} onChange={(event) => setUtilityId(event.target.value)} style={fieldStyle}>
+                  <option value="">Not linked</option>
+                  {utilities.map((utility) => (
+                    <option key={utility.id} value={utility.id}>{utility.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label style={labelStyle}>
+              <span style={{ fontWeight: 600 }}>Description</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                style={{ ...fieldStyle, minHeight: 80 }}
+              />
+            </label>
+
+            <div style={fieldRowStyle}>
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Reported date</span>
+                <input
+                  type="date"
+                  value={reportedDate}
+                  onChange={(event) => setReportedDate(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Completed date</span>
+                <input
+                  type="date"
+                  value={completedDate}
+                  onChange={(event) => setCompletedDate(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Estimated cost</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={estimatedCost}
+                  onChange={(event) => setEstimatedCost(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Actual cost</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={actualCost}
+                  onChange={(event) => setActualCost(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            <div style={fieldRowStyle}>
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Visit scheduled for</span>
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(event) => setScheduledDate(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Arrival window</span>
+                <input
+                  value={scheduledWindow}
+                  onChange={(event) => setScheduledWindow(event.target.value)}
+                  placeholder="8am – 12pm"
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            <div style={fieldRowStyle}>
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Contractor name</span>
+                <input
+                  value={contractorName}
+                  onChange={(event) => setContractorName(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Contractor phone</span>
+                <input
+                  value={contractorPhone}
+                  onChange={(event) => setContractorPhone(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={labelStyle}>
+                <span style={{ fontWeight: 600 }}>Contractor email</span>
+                <input
+                  type="email"
+                  value={contractorEmail}
+                  onChange={(event) => setContractorEmail(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            <label style={labelStyle}>
+              <span style={{ fontWeight: 600 }}>Notes</span>
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                style={{ ...fieldStyle, minHeight: 70 }}
+              />
+            </label>
+
+            {formError ? (
+              <p style={{ margin: 0, color: 'var(--status-urgent)', fontWeight: 700 }} role="alert">
+                {formError}
+              </p>
+            ) : null}
+            {notice ? (
+              <p style={{ margin: 0, color: 'var(--status-good)', fontWeight: 600 }} role="status">
+                {notice}
+              </p>
+            ) : null}
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <Button type="submit" disabled={saving}>
+                {saving ? 'Saving...' : 'Save changes'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={saving}
+                onClick={() => {
+                  applyRepairToForm(repair);
+                  setFormError('');
+                  setNotice('');
+                }}
+              >
+                Discard changes
+              </Button>
+            </div>
+          </form>
         </Card>
 
         <RelatedList title="Service History" empty="No related service history found.">

@@ -16,6 +16,7 @@ import {
   deleteReminderForContext,
   getReminderDataContext,
   getRemindersForContext,
+  updateReminderForContext,
   updateReminderStatusForContext,
   type ReminderDataContext,
   type ReminderDataMode,
@@ -47,6 +48,7 @@ export default function RemindersPage() {
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [reminderType, setReminderType] = useState<ReminderType>('general');
@@ -225,7 +227,40 @@ export default function RemindersPage() {
     return assets.find((asset) => asset.id === reminder.linked_id)?.name || 'Asset';
   };
 
-  const addReminder = async (event: React.FormEvent) => {
+  const resetForm = () => {
+    setEditingId(null);
+    setTitle('');
+    setDescription('');
+    setReminderType('general');
+    setDueDate('');
+    setLinkedType('');
+    setLinkedId('');
+    setFrequency('none');
+    setPriority('normal');
+    setStatus('open');
+  };
+
+  // The same form writes both records, so anything you can set when adding a
+  // reminder you can correct afterwards — including what it is linked to.
+  const startEditing = (reminder: ReminderRow) => {
+    setEditingId(reminder.id);
+    setTitle(reminder.title);
+    setDescription(reminder.description || '');
+    setReminderType(reminder.reminder_type);
+    setDueDate(reminder.due_date || '');
+    setLinkedType(reminder.linked_type || '');
+    setLinkedId(reminder.linked_id || '');
+    setFrequency(reminder.frequency);
+    setPriority(reminder.priority);
+    setStatus(reminder.status);
+    setError('');
+
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0 });
+    }
+  };
+
+  const submitReminder = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
 
@@ -246,29 +281,35 @@ export default function RemindersPage() {
 
     setSaving(true);
 
-    try {
-      const newReminder = await createReminderForContext(context, {
-        title,
-        description,
-        reminder_type: reminderType,
-        due_date: dueDate || null,
-        linked_type: linkedType || null,
-        linked_id: linkedType ? linkedId : null,
-        frequency,
-        priority,
-        status,
-        source: 'manual'
-      });
+    const input = {
+      title,
+      description,
+      reminder_type: reminderType,
+      due_date: dueDate || null,
+      linked_type: linkedType || null,
+      linked_id: linkedType ? linkedId : null,
+      frequency,
+      priority,
+      status
+    };
 
-      setReminders((currentReminders) => [newReminder, ...currentReminders]);
-      setTitle('');
-      setDescription('');
-      setReminderType('general');
-      setDueDate('');
-      setLinkedType('');
-      setFrequency('none');
-      setPriority('normal');
-      setStatus('open');
+    try {
+      if (editingId) {
+        const updatedReminder = await updateReminderForContext(context, editingId, input);
+
+        if (updatedReminder) {
+          setReminders((currentReminders) =>
+            currentReminders.map((reminder) =>
+              reminder.id === updatedReminder.id ? updatedReminder : reminder
+            )
+          );
+        }
+      } else {
+        const newReminder = await createReminderForContext(context, { ...input, source: 'manual' });
+        setReminders((currentReminders) => [newReminder, ...currentReminders]);
+      }
+
+      resetForm();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Failed to save reminder.');
     } finally {
@@ -312,6 +353,10 @@ export default function RemindersPage() {
     try {
       await deleteReminderForContext(context, id);
       setReminders((currentReminders) => currentReminders.filter((reminder) => reminder.id !== id));
+
+      if (editingId === id) {
+        resetForm();
+      }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete reminder.');
     } finally {
@@ -342,14 +387,19 @@ export default function RemindersPage() {
       </Card>
 
       <Card>
-        <h2 style={{ marginTop: 0 }}>Add reminder</h2>
+        <h2 style={{ marginTop: 0 }}>{editingId ? 'Edit reminder' : 'Add reminder'}</h2>
+        {editingId ? (
+          <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
+            Change anything here, including what this reminder is attached to.
+          </p>
+        ) : null}
         {dataMode === 'supabase' && !context?.property ? (
           <div>
             <p style={{ color: 'var(--text-muted)' }}>Create a property before adding reminders.</p>
             <ActionLink href="/create-property">Create property</ActionLink>
           </div>
         ) : (
-          <form onSubmit={addReminder} style={{ display: 'grid', gap: 12 }}>
+          <form onSubmit={submitReminder} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Title</span>
               <input
@@ -487,10 +537,15 @@ export default function RemindersPage() {
               </select>
             </label>
 
-            <div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Button type="submit" disabled={formDisabled}>
-                {saving ? 'Saving...' : 'Save reminder'}
+                {saving ? 'Saving...' : editingId ? 'Save changes' : 'Save reminder'}
               </Button>
+              {editingId ? (
+                <Button type="button" variant="secondary" onClick={resetForm} disabled={saving}>
+                  Cancel edit
+                </Button>
+              ) : null}
             </div>
           </form>
         )}
@@ -572,6 +627,7 @@ export default function RemindersPage() {
                     <UtilityBadge label={formatEnumLabel(reminder.status)} />
                     <UtilityBadge label={formatEnumLabel(reminder.priority)} />
                     {reminder.linked_type && <UtilityBadge label={formatEnumLabel(reminder.linked_type)} />}
+                    {editingId === reminder.id ? <UtilityBadge label="Editing above" /> : null}
                   </div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', lineHeight: 1.6 }}>
                     <div>
@@ -592,6 +648,21 @@ export default function RemindersPage() {
                 </div>
 
                 <div style={{ display: 'grid', gap: 6, alignContent: 'start' }}>
+                  <button
+                    type="button"
+                    onClick={() => startEditing(reminder)}
+                    aria-label={`Edit ${reminder.title}`}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      border: '1px solid var(--border-subtle)',
+                      background: '#ffffff',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Edit
+                  </button>
                   <button
                     type="button"
                     onClick={() => setReminderStatus(reminder.id, 'open')}

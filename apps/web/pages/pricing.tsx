@@ -195,7 +195,10 @@ export default function PricingPage() {
       </Card>
 
       <p style={{ ...monoLabel, margin: 0, textAlign: 'center' }}>
-        Questions about the schedule · support@ourhomefolder.com
+        Questions about the schedule ·{' '}
+        <a href="mailto:support@ourhomefolder.com?subject=Pricing%20question" style={{ color: 'inherit' }}>
+          support@ourhomefolder.com
+        </a>
       </p>
     </div>
   );

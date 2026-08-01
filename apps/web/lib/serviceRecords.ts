@@ -179,7 +179,13 @@ function formatServiceRecordError(action: string, message?: string) {
   );
 }
 
-function buildServiceRecordPayload(input: ServiceRecordInput, propertyId: string) {
+/**
+ * Every user-meaningful column on a service record, shaped for a write. Shared
+ * by create and update. The legacy `title` / `description` / `vendor_*` /
+ * `follow_up_*` columns are kept in step with the canonical ones so older rows
+ * never drift from what the page shows.
+ */
+function buildServiceRecordFields(input: ServiceRecordInput) {
   const serviceTitle = input.service_title.trim();
   if (!serviceTitle) {
     throw new Error('Service title is required.');
@@ -192,7 +198,6 @@ function buildServiceRecordPayload(input: ServiceRecordInput, propertyId: string
   const nextServiceDate = input.next_service_date || null;
 
   return {
-    property_id: propertyId,
     room_id: nullableString(input.room_id),
     asset_id: nullableString(input.asset_id),
     utility_id: nullableString(input.utility_id),
@@ -212,7 +217,14 @@ function buildServiceRecordPayload(input: ServiceRecordInput, propertyId: string
     vendor_phone: providerPhone,
     vendor_email: providerEmail,
     follow_up_needed: Boolean(nextServiceDate),
-    follow_up_date: nextServiceDate,
+    follow_up_date: nextServiceDate
+  };
+}
+
+function buildServiceRecordPayload(input: ServiceRecordInput, propertyId: string) {
+  return {
+    property_id: propertyId,
+    ...buildServiceRecordFields(input),
     visibility: 'private'
   };
 }
@@ -286,31 +298,6 @@ export async function getServiceRecordsForContext(context: ServiceRecordDataCont
   }
 
   return getServiceRecordsForProperty(context.property.id);
-}
-
-export async function getServiceRecordsForRoom(context: ServiceRecordDataContext, roomId: string) {
-  if (context.mode === 'demo' || !context.property) {
-    return getDemoServiceRecords().filter((record) => record.room_id === roomId);
-  }
-
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error(getSupabaseSetupMessage());
-  }
-
-  const { data, error } = await supabase
-    .from('service_records')
-    .select(SERVICE_RECORD_SELECT)
-    .eq('property_id', context.property.id)
-    .eq('room_id', roomId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(formatServiceRecordError('load room service records', error.message));
-  }
-
-  return sortServiceRecords(((data ?? []) as RawServiceRecord[]).map(normalizeServiceRecord));
 }
 
 export async function getServiceRecordsForAsset(context: ServiceRecordDataContext, assetId: string) {
@@ -411,15 +398,14 @@ export async function updateServiceRecordForContext(
   serviceRecordId: string,
   input: ServiceRecordInput
 ) {
+  const fields = buildServiceRecordFields(input);
+
   if (context.mode === 'demo') {
-    const demoProperty = getDemoActiveProperty();
     const updated = getDemoServiceRecords().map((record) =>
       record.id === serviceRecordId
         ? normalizeServiceRecord({
             ...record,
-            ...buildServiceRecordPayload(input, demoProperty?.id || record.property_id || ''),
-            id: record.id,
-            property_id: record.property_id,
+            ...fields,
             updated_at: new Date().toISOString()
           })
         : record
@@ -440,7 +426,7 @@ export async function updateServiceRecordForContext(
 
   const { data, error } = await supabase
     .from('service_records')
-    .update(buildServiceRecordPayload(input, context.property.id))
+    .update(fields)
     .eq('id', serviceRecordId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

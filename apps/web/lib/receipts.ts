@@ -88,6 +88,66 @@ export type ReceiptLinkTarget = {
   id: string;
 };
 
+/** Every record a receipt can be filed against. */
+export const RECEIPT_LINK_FIELDS: ReceiptLinkField[] = [
+  'room_id',
+  'utility_id',
+  'asset_id',
+  'repair_id',
+  'service_record_id'
+];
+
+/**
+ * The `?roomId=…` query keys the receipts page reads, so a detail page's
+ * "add receipt" href doubles as a description of the record it belongs to.
+ */
+const QUERY_KEY_TO_LINK_FIELD: Record<string, ReceiptLinkField> = {
+  roomId: 'room_id',
+  utilityId: 'utility_id',
+  assetId: 'asset_id',
+  repairId: 'repair_id',
+  serviceRecordId: 'service_record_id'
+};
+
+/** Read the record a `/receipts?roomId=…` href points at. Null when it names none. */
+export function parseReceiptLinkTargetFromHref(href: string): ReceiptLinkTarget | null {
+  const queryStart = href.indexOf('?');
+  if (queryStart < 0) {
+    return null;
+  }
+
+  const params = new URLSearchParams(href.slice(queryStart + 1));
+
+  for (const [queryKey, field] of Object.entries(QUERY_KEY_TO_LINK_FIELD)) {
+    const value = params.get(queryKey);
+    if (value) {
+      return { field, id: value };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * A patch that files a receipt under exactly one record, clearing any earlier
+ * filing — the receipts list shows a single "linked to", so re-filing has to
+ * remove the old link as well as write the new one.
+ */
+export function buildReceiptFilingPatch(target: ReceiptLinkTarget | null): ReceiptUpdateInput {
+  const patch: Partial<Record<ReceiptLinkField, string | null>> = {};
+
+  for (const field of RECEIPT_LINK_FIELDS) {
+    patch[field] = target && target.field === field ? target.id : null;
+  }
+
+  return patch;
+}
+
+/** True when the receipt is already filed against this record. */
+export function isReceiptLinkedTo(receipt: ReceiptRow, target: ReceiptLinkTarget) {
+  return receipt[target.field] === target.id;
+}
+
 const RECEIPT_SELECT =
   'id, property_id, document_id, room_id, utility_id, asset_id, repair_id, service_record_id, vendor_name, purchase_date, total_amount, tax_amount, currency, payment_method, category, description, notes, approval_status, source, created_by, approved_by, approved_at, created_at, updated_at, deleted_at';
 

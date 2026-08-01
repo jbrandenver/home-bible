@@ -937,7 +937,7 @@ export default function IssuesPage() {
         ) : null}
 
         {trendFlags.length > 0 ? (
-          <Card>
+          <Card id="trends">
             <h2 style={{ marginTop: 0 }}>Trends ({filteredTrendFlags.length})</h2>
             {filteredTrendFlags.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>No trends match the current filters.</p>

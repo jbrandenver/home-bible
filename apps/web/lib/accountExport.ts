@@ -20,10 +20,10 @@ import {
   getRoutinesForContext,
   type AutomationDataContext
 } from './automation';
-import { getDocumentsForContext, type DocumentDataContext, type DocumentRow } from './documents';
+import { getDocumentsForContext, type DocumentDataContext } from './documents';
 import { getIssuesForContext, type IssueDataContext } from './issues';
 import { getPropertyAddressDetails, listPropertiesForUser, type PropertySummary } from './properties';
-import { getReceiptsForContext, type ReceiptDataContext, type ReceiptRow } from './receipts';
+import { getReceiptsForContext, type ReceiptDataContext } from './receipts';
 import { getRemindersForContext, type ReminderDataContext } from './reminders';
 import { getRepairsForContext, type RepairDataContext } from './repairs';
 import { getFloorsForProperty, getRoomsForProperty } from './rooms';
@@ -342,32 +342,6 @@ export function downloadTextFile(filename: string, contents: string, mime = 'tex
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
-}
-
-/** Metadata of every uploaded file, so the owner can collect them deliberately. */
-export function listUploadedFiles(
-  documents: DocumentRow[],
-  receipts: ReceiptRow[]
-): Array<{ title: string; fileName: string | null; kind: string }> {
-  const files: Array<{ title: string; fileName: string | null; kind: string }> = documents.map(
-    (document) => ({
-      title: document.title,
-      fileName: document.file_name,
-      kind: document.document_type
-    })
-  );
-
-  for (const receipt of receipts) {
-    if (receipt.document_id) {
-      files.push({
-        title: receipt.vendor_name || receipt.description || 'Receipt',
-        fileName: null,
-        kind: 'receipt'
-      });
-    }
-  }
-
-  return files;
 }
 
 /** Assets carry the values an insurer asks for; surface the total. */

@@ -1,12 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDepositPacket,
+  canModifyConditionReport,
   formatCentsAsCurrency,
   type ConditionReportDocument,
   type ConditionReportEntryRow,
   type ConditionReportRow,
   type PacketEntry
 } from '../lib/conditionReports';
+import {
+  buildDocumentFilingPatch,
+  isDocumentLinkedTo,
+  parseDocumentLinkTargetFromHref,
+  type DocumentRow
+} from '../lib/documents';
+import {
+  buildReceiptFilingPatch,
+  parseReceiptLinkTargetFromHref
+} from '../lib/receipts';
 import type { TenancyRow } from '../lib/tenancies';
 
 function makeReport(overrides: Partial<ConditionReportRow> = {}): ConditionReportRow {
@@ -233,6 +244,87 @@ describe('buildDepositPacket', () => {
 
     expect(packet.tenancy?.depositAmountCents).toBeNull();
     expect(packet.tenancy?.depositFormatted).toBeNull();
+  });
+});
+
+describe('canModifyConditionReport', () => {
+  it('allows edits and removal only while the report is a draft', () => {
+    expect(canModifyConditionReport('draft')).toBe(true);
+    expect(canModifyConditionReport('completed')).toBe(false);
+  });
+
+  it('refuses a missing status rather than assuming a draft', () => {
+    expect(canModifyConditionReport(null)).toBe(false);
+    expect(canModifyConditionReport(undefined)).toBe(false);
+  });
+});
+
+describe('parseDocumentLinkTargetFromHref', () => {
+  it('reads the host record out of a detail page upload link', () => {
+    expect(parseDocumentLinkTargetFromHref('/documents?repairId=repair-1')).toEqual({
+      field: 'repair_id',
+      id: 'repair-1'
+    });
+    expect(parseDocumentLinkTargetFromHref('/documents?roomId=room-9')).toEqual({
+      field: 'room_id',
+      id: 'room-9'
+    });
+    expect(parseDocumentLinkTargetFromHref('/documents?conditionReportId=cr-2')).toEqual({
+      field: 'condition_report_id',
+      id: 'cr-2'
+    });
+  });
+
+  it('returns null when the link names no record', () => {
+    expect(parseDocumentLinkTargetFromHref('/documents')).toBeNull();
+    expect(parseDocumentLinkTargetFromHref('/documents?roomId=')).toBeNull();
+    expect(parseDocumentLinkTargetFromHref('/documents?somethingElse=1')).toBeNull();
+  });
+});
+
+describe('buildDocumentFilingPatch', () => {
+  it('sets the chosen foreign key and clears every other filing', () => {
+    const patch = buildDocumentFilingPatch({ field: 'asset_id', id: 'asset-1' });
+
+    expect(patch.asset_id).toBe('asset-1');
+    expect(patch.room_id).toBeNull();
+    expect(patch.repair_id).toBeNull();
+    expect(patch.compliance_obligation_id).toBeNull();
+  });
+
+  it('clears every filing when the document belongs to the property itself', () => {
+    const patch = buildDocumentFilingPatch(null);
+
+    expect(Object.values(patch).every((value) => value === null)).toBe(true);
+  });
+});
+
+describe('isDocumentLinkedTo', () => {
+  it('compares the target field only', () => {
+    const document = { room_id: 'room-1', repair_id: null } as DocumentRow;
+
+    expect(isDocumentLinkedTo(document, { field: 'room_id', id: 'room-1' })).toBe(true);
+    expect(isDocumentLinkedTo(document, { field: 'room_id', id: 'room-2' })).toBe(false);
+    expect(isDocumentLinkedTo(document, { field: 'repair_id', id: 'room-1' })).toBe(false);
+  });
+});
+
+describe('receipt link helpers', () => {
+  it('reads the host record out of a detail page receipt link', () => {
+    expect(parseReceiptLinkTargetFromHref('/receipts?utilityId=utility-3')).toEqual({
+      field: 'utility_id',
+      id: 'utility-3'
+    });
+    // Receipts have no issue foreign key, so an issue link names no record.
+    expect(parseReceiptLinkTargetFromHref('/receipts?issueId=issue-1')).toBeNull();
+  });
+
+  it('sets one filing and clears the rest', () => {
+    const patch = buildReceiptFilingPatch({ field: 'repair_id', id: 'repair-7' });
+
+    expect(patch.repair_id).toBe('repair-7');
+    expect(patch.room_id).toBeNull();
+    expect(patch.service_record_id).toBeNull();
   });
 });
 

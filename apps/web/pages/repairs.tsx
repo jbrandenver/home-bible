@@ -10,9 +10,15 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { RoomLocationSelect, roomSelectionValue } from '../components/RoomLocationSelect';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
+import {
+  isLocationPresetValue,
+  resolveLocationRoomId,
+  rollbackCreatedLocation
+} from '../lib/locationPresets';
 import {
   createRepairForContext,
   deleteRepairForContext,
@@ -28,6 +34,7 @@ import {
   deleteServiceRecordForContext,
   getServiceRecordDataContext,
   getServiceRecordsForContext,
+  updateServiceRecordForContext,
   type ServiceRecordDataContext,
   type ServiceRecordRow
 } from '../lib/serviceRecords';
@@ -41,12 +48,79 @@ type LinkOption = {
   name: string;
 };
 
+type RoomOption = LinkOption & {
+  room_type?: string | null;
+  floor_name?: string | null;
+};
+
+/** The editable shape of a service history item, as the inline form holds it. */
+type ServiceRecordDraft = {
+  service_title: string;
+  service_type: (typeof SERVICE_TYPES)[number];
+  service_date: string;
+  provider_name: string;
+  provider_phone: string;
+  provider_email: string;
+  cost: string;
+  summary: string;
+  notes: string;
+  next_service_date: string;
+  room_choice: string;
+  room_custom_name: string;
+  asset_id: string;
+  utility_id: string;
+};
+
+const EMPTY_SERVICE_RECORD_DRAFT: ServiceRecordDraft = {
+  service_title: '',
+  service_type: 'maintenance',
+  service_date: '',
+  provider_name: '',
+  provider_phone: '',
+  provider_email: '',
+  cost: '',
+  summary: '',
+  notes: '',
+  next_service_date: '',
+  room_choice: '',
+  room_custom_name: '',
+  asset_id: '',
+  utility_id: ''
+};
+
+function serviceRecordToDraft(record: ServiceRecordRow): ServiceRecordDraft {
+  return {
+    service_title: record.service_title,
+    service_type: record.service_type,
+    service_date: record.service_date || '',
+    provider_name: record.provider_name || '',
+    provider_phone: record.provider_phone || '',
+    provider_email: record.provider_email || '',
+    cost: record.cost === null ? '' : String(record.cost),
+    summary: record.summary || '',
+    notes: record.notes || '',
+    next_service_date: record.next_service_date || '',
+    room_choice: record.room_id || '',
+    room_custom_name: '',
+    asset_id: record.asset_id || '',
+    utility_id: record.utility_id || ''
+  };
+}
+
 const fieldStyle = {
   padding: 10,
   borderRadius: 4,
   border: '1px solid var(--border-subtle)',
   background: 'var(--surface-card)'
 };
+
+const labelStyle = { display: 'grid', gap: 6 } as const;
+
+const fieldRowStyle = {
+  display: 'grid',
+  gap: 12,
+  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))'
+} as const;
 
 function moneyValue(value: string) {
   if (!value) {
@@ -65,6 +139,15 @@ function nameFromId(list: LinkOption[], id?: string | null) {
   return list.find((item) => item.id === id)?.name || 'Unknown';
 }
 
+function roomNameFromId(list: RoomOption[], id?: string | null) {
+  if (!id) {
+    return null;
+  }
+
+  const room = list.find((item) => item.id === id);
+  return room ? formatRoomLocation(room) : 'Unknown';
+}
+
 export default function RepairsPage() {
   const [repairContext, setRepairContext] = useState<RepairDataContext | null>(null);
   const [serviceContext, setServiceContext] = useState<ServiceRecordDataContext | null>(null);
@@ -74,7 +157,7 @@ export default function RepairsPage() {
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
-  const [rooms, setRooms] = useState<LinkOption[]>([]);
+  const [rooms, setRooms] = useState<RoomOption[]>([]);
   const [assets, setAssets] = useState<LinkOption[]>([]);
   const [utilities, setUtilities] = useState<LinkOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +167,10 @@ export default function RepairsPage() {
   const [savingServiceRecord, setSavingServiceRecord] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
+  const [recordDraft, setRecordDraft] = useState<ServiceRecordDraft>(EMPTY_SERVICE_RECORD_DRAFT);
+  const [savingRecordEdits, setSavingRecordEdits] = useState(false);
+  const [recordNotice, setRecordNotice] = useState('');
   const [repairStatusFilter, setRepairStatusFilter] = useState('');
   const [repairPriorityFilter, setRepairPriorityFilter] = useState('');
   const [repairTypeFilter, setRepairTypeFilter] = useState('');
@@ -207,7 +294,7 @@ export default function RepairsPage() {
       let nextServiceRecords: ServiceRecordRow[] = [];
       let nextIssues: IssueRow[] = [];
       let nextTrendFlags: TrendFlagRow[] = [];
-      let nextRooms: LinkOption[] = [];
+      let nextRooms: RoomOption[] = [];
       let nextAssets: LinkOption[] = [];
       let nextUtilities: LinkOption[] = [];
 
@@ -243,11 +330,21 @@ export default function RepairsPage() {
             getUtilitiesForProperty(nextRepairContext.property.id)
           ]);
 
-          nextRooms = roomRows.map((room) => ({ id: room.id, name: formatRoomLocation(room) }));
+          nextRooms = roomRows.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }));
           nextAssets = assetRows.map((asset: AssetRow) => ({ id: asset.id, name: asset.name }));
           nextUtilities = utilityRows.map((utility: UtilityRow) => ({ id: utility.id, name: utility.name }));
         } else {
-          nextRooms = getDemoRooms().map((room) => ({ id: room.id, name: formatRoomLocation(room) }));
+          nextRooms = getDemoRooms().map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }));
           nextAssets = getDemoAssets().map((asset) => ({ id: asset.id, name: asset.name }));
           nextUtilities = getDemoUtilities().map((utility) => ({ id: utility.id, name: utility.name }));
         }
@@ -580,6 +677,112 @@ export default function RepairsPage() {
     }
   };
 
+  const startEditingRecord = (record: ServiceRecordRow) => {
+    setEditingRecordId(record.id);
+    setRecordDraft(serviceRecordToDraft(record));
+    setFormError('');
+    setRecordNotice('');
+  };
+
+  const cancelRecordEdits = () => {
+    setEditingRecordId(null);
+    setRecordDraft(EMPTY_SERVICE_RECORD_DRAFT);
+    setFormError('');
+  };
+
+  const saveRecordEdits = async (recordId: string) => {
+    if (!serviceContext) {
+      setFormError('Service record data is still loading.');
+      return;
+    }
+
+    setRecordNotice('');
+
+    if (!recordDraft.service_title.trim()) {
+      setFormError('A service history item needs a title.');
+      return;
+    }
+
+    const parsedCost = moneyValue(recordDraft.cost);
+
+    if (recordDraft.cost && parsedCost === null) {
+      setFormError('Service cost must be a valid number.');
+      return;
+    }
+
+    const roomValue = roomSelectionValue(recordDraft.room_choice, recordDraft.room_custom_name);
+
+    if (roomValue === null) {
+      setFormError('Give the new room a name, or pick one from the list.');
+      return;
+    }
+
+    setSavingRecordEdits(true);
+    setFormError('');
+
+    const resolutionContext =
+      serviceContext.mode === 'supabase' && serviceContext.property
+        ? ({ mode: 'supabase', propertyId: serviceContext.property.id } as const)
+        : ({ mode: 'demo' } as const);
+
+    let createdRoomId: string | null = null;
+
+    try {
+      const wasPreset = isLocationPresetValue(roomValue);
+      const resolved = await resolveLocationRoomId(roomValue, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
+      const updatedRecord = await updateServiceRecordForContext(serviceContext, recordId, {
+        service_title: recordDraft.service_title,
+        service_type: recordDraft.service_type,
+        service_date: recordDraft.service_date || null,
+        provider_name: recordDraft.provider_name,
+        provider_phone: recordDraft.provider_phone,
+        provider_email: recordDraft.provider_email,
+        cost: parsedCost,
+        summary: recordDraft.summary,
+        notes: recordDraft.notes,
+        next_service_date: recordDraft.next_service_date || null,
+        room_id: resolved.roomId,
+        asset_id: recordDraft.asset_id || null,
+        utility_id: recordDraft.utility_id || null
+      });
+
+      if (updatedRecord) {
+        setServiceRecords((currentRecords) =>
+          currentRecords.map((record) => (record.id === recordId ? updatedRecord : record))
+        );
+      }
+
+      if (wasPreset) {
+        const refreshedRooms =
+          serviceContext.mode === 'supabase' && serviceContext.property
+            ? await getRoomsForProperty(serviceContext.property.id)
+            : getDemoRooms();
+        setRooms(
+          refreshedRooms.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name
+          }))
+        );
+      }
+
+      setEditingRecordId(null);
+      setRecordDraft(EMPTY_SERVICE_RECORD_DRAFT);
+      setRecordNotice('Service history item updated.');
+    } catch (saveError) {
+      // A preset location creates its room before the record is written. If the
+      // write fails, take the room back out rather than leaving an empty space
+      // on the home map that nobody asked for.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
+      setFormError(saveError instanceof Error ? saveError.message : 'Failed to update service history item.');
+    } finally {
+      setSavingRecordEdits(false);
+    }
+  };
+
   const deleteServiceRecord = async (recordId: string) => {
     if (!serviceContext) {
       return;
@@ -616,7 +819,7 @@ export default function RepairsPage() {
         <select value={roomId} onChange={(event) => setRoomId(event.target.value)} style={fieldStyle}>
           <option value="">Not linked</option>
           {rooms.map((room) => (
-            <option key={room.id} value={room.id}>{room.name}</option>
+            <option key={room.id} value={room.id}>{formatRoomLocation(room)}</option>
           ))}
         </select>
       </label>
@@ -676,7 +879,10 @@ export default function RepairsPage() {
             </p>
           ) : null}
           {formError ? (
-            <div style={{ marginTop: 12, background: 'rgba(163,78,51,0.08)', color: 'var(--status-urgent)', border: '1px solid rgba(163,78,51,0.30)', borderRadius: 8, padding: 10 }}>
+            <div
+              role="alert"
+              style={{ marginTop: 12, background: 'rgba(163,78,51,0.08)', color: 'var(--status-urgent)', border: '1px solid rgba(163,78,51,0.30)', borderRadius: 8, padding: 10 }}
+            >
               {formError}
             </div>
           ) : null}
@@ -1006,7 +1212,7 @@ export default function RepairsPage() {
                         <UtilityBadge label={formatEnumLabel(repair.repair_type)} />
                         <UtilityBadge label={formatEnumLabel(repair.priority)} />
                         <UtilityBadge label={`${getIssueCountForRepair(repair.id)} linked issue${getIssueCountForRepair(repair.id) === 1 ? '' : 's'}`} />
-                        {repair.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, repair.room_id) || 'Unknown'}`} />}
+                        {repair.room_id && <UtilityBadge label={`Room: ${roomNameFromId(rooms, repair.room_id) || 'Unknown'}`} />}
                         {repair.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, repair.asset_id) || 'Unknown'}`} />}
                         {repair.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, repair.utility_id) || 'Unknown'}`} />}
                       </div>
@@ -1062,6 +1268,11 @@ export default function RepairsPage() {
         {serviceRecords.length > 0 ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Service History ({filteredServiceRecords.length})</h2>
+            {recordNotice ? (
+              <p style={{ marginTop: 0, color: 'var(--status-good)', fontWeight: 600 }} role="status">
+                {recordNotice}
+              </p>
+            ) : null}
             {filteredServiceRecords.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>No service history matches the current filters.</p>
             ) : (
@@ -1073,7 +1284,7 @@ export default function RepairsPage() {
                       <h3 style={{ margin: '0 0 8px 0' }}>{record.service_title}</h3>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
                         <UtilityBadge label={formatEnumLabel(record.service_type)} />
-                        {record.room_id && <UtilityBadge label={`Room: ${nameFromId(rooms, record.room_id) || 'Unknown'}`} />}
+                        {record.room_id && <UtilityBadge label={`Room: ${roomNameFromId(rooms, record.room_id) || 'Unknown'}`} />}
                         {record.asset_id && <UtilityBadge label={`Asset: ${nameFromId(assets, record.asset_id) || 'Unknown'}`} />}
                         {record.utility_id && <UtilityBadge label={`Utility: ${nameFromId(utilities, record.utility_id) || 'Unknown'}`} />}
                       </div>
@@ -1085,25 +1296,244 @@ export default function RepairsPage() {
                         {record.summary && <div><strong>Summary:</strong> {record.summary}</div>}
                         {record.notes && <div><strong>Notes:</strong> {record.notes}</div>}
                       </div>
+
+                      {editingRecordId === record.id ? (
+                        <div
+                          style={{
+                            marginTop: 14,
+                            padding: 14,
+                            border: '1px solid var(--border-subtle)',
+                            borderRadius: 'var(--radius-card)',
+                            background: 'var(--surface-page)',
+                            display: 'grid',
+                            gap: 12
+                          }}
+                        >
+                          <h4 style={{ margin: 0 }}>Edit service history item</h4>
+
+                          <label style={labelStyle}>
+                            <span style={{ fontWeight: 600 }}>Service title</span>
+                            <input
+                              value={recordDraft.service_title}
+                              onChange={(event) =>
+                                setRecordDraft((draft) => ({ ...draft, service_title: event.target.value }))
+                              }
+                              style={fieldStyle}
+                            />
+                          </label>
+
+                          <div style={fieldRowStyle}>
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Service type</span>
+                              <select
+                                value={recordDraft.service_type}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({
+                                    ...draft,
+                                    service_type: event.target.value as (typeof SERVICE_TYPES)[number]
+                                  }))
+                                }
+                                style={fieldStyle}
+                              >
+                                {SERVICE_TYPES.map((type) => (
+                                  <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Service date</span>
+                              <input
+                                type="date"
+                                value={recordDraft.service_date}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({ ...draft, service_date: event.target.value }))
+                                }
+                                style={fieldStyle}
+                              />
+                            </label>
+
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Cost</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={recordDraft.cost}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({ ...draft, cost: event.target.value }))
+                                }
+                                style={fieldStyle}
+                              />
+                            </label>
+
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Next service date</span>
+                              <input
+                                type="date"
+                                value={recordDraft.next_service_date}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({ ...draft, next_service_date: event.target.value }))
+                                }
+                                style={fieldStyle}
+                              />
+                            </label>
+                          </div>
+
+                          <RoomLocationSelect
+                            rooms={rooms}
+                            value={recordDraft.room_choice}
+                            onChange={(value) => setRecordDraft((draft) => ({ ...draft, room_choice: value }))}
+                            customName={recordDraft.room_custom_name}
+                            onCustomNameChange={(value) =>
+                              setRecordDraft((draft) => ({ ...draft, room_custom_name: value }))
+                            }
+                            label="Room or location"
+                            emptyLabel="Not linked to a room"
+                            disabled={savingRecordEdits}
+                          />
+
+                          <div style={fieldRowStyle}>
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Appliance or asset</span>
+                              <select
+                                value={recordDraft.asset_id}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({ ...draft, asset_id: event.target.value }))
+                                }
+                                style={fieldStyle}
+                              >
+                                <option value="">Not linked</option>
+                                {assets.map((asset) => (
+                                  <option key={asset.id} value={asset.id}>{asset.name}</option>
+                                ))}
+                              </select>
+                            </label>
+
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Utility</span>
+                              <select
+                                value={recordDraft.utility_id}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({ ...draft, utility_id: event.target.value }))
+                                }
+                                style={fieldStyle}
+                              >
+                                <option value="">Not linked</option>
+                                {utilities.map((utility) => (
+                                  <option key={utility.id} value={utility.id}>{utility.name}</option>
+                                ))}
+                              </select>
+                            </label>
+                          </div>
+
+                          <label style={labelStyle}>
+                            <span style={{ fontWeight: 600 }}>Summary</span>
+                            <textarea
+                              value={recordDraft.summary}
+                              onChange={(event) =>
+                                setRecordDraft((draft) => ({ ...draft, summary: event.target.value }))
+                              }
+                              style={{ ...fieldStyle, minHeight: 80 }}
+                            />
+                          </label>
+
+                          <div style={fieldRowStyle}>
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Provider name</span>
+                              <input
+                                value={recordDraft.provider_name}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({ ...draft, provider_name: event.target.value }))
+                                }
+                                style={fieldStyle}
+                              />
+                            </label>
+
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Provider phone</span>
+                              <input
+                                value={recordDraft.provider_phone}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({ ...draft, provider_phone: event.target.value }))
+                                }
+                                style={fieldStyle}
+                              />
+                            </label>
+
+                            <label style={labelStyle}>
+                              <span style={{ fontWeight: 600 }}>Provider email</span>
+                              <input
+                                type="email"
+                                value={recordDraft.provider_email}
+                                onChange={(event) =>
+                                  setRecordDraft((draft) => ({ ...draft, provider_email: event.target.value }))
+                                }
+                                style={fieldStyle}
+                              />
+                            </label>
+                          </div>
+
+                          <label style={labelStyle}>
+                            <span style={{ fontWeight: 600 }}>Notes</span>
+                            <textarea
+                              value={recordDraft.notes}
+                              onChange={(event) =>
+                                setRecordDraft((draft) => ({ ...draft, notes: event.target.value }))
+                              }
+                              style={{ ...fieldStyle, minHeight: 70 }}
+                            />
+                          </label>
+
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <Button
+                              type="button"
+                              onClick={() => saveRecordEdits(record.id)}
+                              disabled={savingRecordEdits}
+                            >
+                              {savingRecordEdits ? 'Saving...' : 'Save changes'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={cancelRecordEdits}
+                              disabled={savingRecordEdits}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => deleteServiceRecord(record.id)}
-                      disabled={deletingId === record.id}
-                      style={{
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        border: '1px solid rgba(163,78,51,0.30)',
-                        background: 'rgba(163,78,51,0.08)',
-                        color: 'var(--status-urgent)',
-                        cursor: deletingId === record.id ? 'not-allowed' : 'pointer',
-                        height: 'fit-content',
-                        opacity: deletingId === record.id ? 0.7 : 1
-                      }}
-                    >
-                      {deletingId === record.id ? 'Deleting...' : 'Delete'}
-                    </button>
+                    {editingRecordId === record.id ? null : (
+                      <div style={{ display: 'grid', gap: 8, minWidth: 120, height: 'fit-content' }}>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => startEditingRecord(record)}
+                          disabled={deletingId === record.id}
+                        >
+                          Edit
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => deleteServiceRecord(record.id)}
+                          disabled={deletingId === record.id}
+                          style={{
+                            padding: '8px 12px',
+                            borderRadius: 6,
+                            border: '1px solid rgba(163,78,51,0.30)',
+                            background: 'rgba(163,78,51,0.08)',
+                            color: 'var(--status-urgent)',
+                            cursor: deletingId === record.id ? 'not-allowed' : 'pointer',
+                            height: 'fit-content',
+                            opacity: deletingId === record.id ? 0.7 : 1
+                          }}
+                        >
+                          {deletingId === record.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

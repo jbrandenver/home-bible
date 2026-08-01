@@ -1,8 +1,9 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { ASSET_TYPES, formatEnumLabel, getWarrantyMeta, safeHttpUrl, toLocalDateString } from '@home-folder/shared';
+import { ASSET_TYPES, formatEnumLabel, getWarrantyMeta, safeHttpUrl, toLocalDateString, type VisibilityContext } from '@home-folder/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { VisibilityContextPicker } from '../../components/VisibilityContextPicker';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import {
@@ -83,9 +84,15 @@ export default function AssetDetailPage() {
   const [editRoomId, setEditRoomId] = useState('');
   const [editBrand, setEditBrand] = useState('');
   const [editModel, setEditModel] = useState('');
+  const [editSerialNumber, setEditSerialNumber] = useState('');
   const [editRetailer, setEditRetailer] = useState('');
   const [editPurchaseDate, setEditPurchaseDate] = useState('');
+  const [editPurchasePrice, setEditPurchasePrice] = useState('');
+  const [editWarrantyLengthMonths, setEditWarrantyLengthMonths] = useState('');
   const [editWarrantyExpires, setEditWarrantyExpires] = useState('');
+  const [editManualUrl, setEditManualUrl] = useState('');
+  const [editSupportUrl, setEditSupportUrl] = useState('');
+  const [editVisibilityContexts, setEditVisibilityContexts] = useState<VisibilityContext[]>(['personal_archive']);
   const [editNotes, setEditNotes] = useState('');
 
 
@@ -218,9 +225,17 @@ export default function AssetDetailPage() {
           setEditRoomId(nextAsset.room_id || '');
           setEditBrand(nextAsset.brand || '');
           setEditModel(nextAsset.model || '');
+          setEditSerialNumber(nextAsset.serial_number || '');
           setEditRetailer(nextAsset.retailer || '');
           setEditPurchaseDate(nextAsset.purchase_date || '');
+          setEditPurchasePrice(nextAsset.purchase_price === null ? '' : String(nextAsset.purchase_price));
+          setEditWarrantyLengthMonths(
+            nextAsset.warranty_length_months === null ? '' : String(nextAsset.warranty_length_months)
+          );
           setEditWarrantyExpires(nextAsset.warranty_expires_at || '');
+          setEditManualUrl(nextAsset.manual_url || '');
+          setEditSupportUrl(nextAsset.support_url || '');
+          setEditVisibilityContexts(nextAsset.visibility_contexts);
           setEditNotes(nextAsset.notes || '');
         }
       } catch (loadError) {
@@ -305,6 +320,18 @@ export default function AssetDetailPage() {
       return;
     }
 
+    // Same rule the add form applies: links are stored only when they are real
+    // http(s) addresses, so say so here rather than dropping the value on save.
+    if (editManualUrl.trim() && !safeHttpUrl(editManualUrl)) {
+      setFormError('The manual link needs to be a full http:// or https:// address.');
+      return;
+    }
+
+    if (editSupportUrl.trim() && !safeHttpUrl(editSupportUrl)) {
+      setFormError('The support link needs to be a full http:// or https:// address.');
+      return;
+    }
+
     setSaving(true);
     setFormError('');
 
@@ -315,14 +342,26 @@ export default function AssetDetailPage() {
         room_id: editRoomId || null,
         brand: editBrand,
         model: editModel,
+        // The recall matcher keys on the serial number, so a wrong one quietly
+        // costs the household its safety alerts. It has to be correctable here.
+        serial_number: editSerialNumber,
         retailer: editRetailer,
         purchase_date: editPurchaseDate || null,
+        purchase_price: editPurchasePrice.trim() ? Number(editPurchasePrice) : null,
+        warranty_length_months: editWarrantyLengthMonths.trim() ? Number(editWarrantyLengthMonths) : null,
         warranty_expires_at: editWarrantyExpires || null,
+        manual_url: editManualUrl.trim() || null,
+        support_url: editSupportUrl.trim() || null,
+        visibility_contexts: editVisibilityContexts,
         notes: editNotes
       });
 
       if (updatedAsset) {
         setAsset(updatedAsset);
+        // Links and numbers come back normalised — show what was actually kept.
+        setEditManualUrl(updatedAsset.manual_url || '');
+        setEditSupportUrl(updatedAsset.support_url || '');
+        setEditVisibilityContexts(updatedAsset.visibility_contexts);
         setRoomName(
           updatedAsset.room_id
             ? formatRoomLocation(rooms.find((room) => room.id === updatedAsset.room_id) || { name: 'Unknown room' })
@@ -639,10 +678,19 @@ export default function AssetDetailPage() {
               </label>
 
               <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Serial number</span>
+                <input value={editSerialNumber} onChange={(event) => setEditSerialNumber(event.target.value)} style={fieldStyle} />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontWeight: 600 }}>Retailer</span>
                 <input value={editRetailer} onChange={(event) => setEditRetailer(event.target.value)} style={fieldStyle} />
               </label>
             </div>
+
+            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+              Recall notices are matched on the serial number — worth checking it against the data plate.
+            </p>
 
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
               <label style={{ display: 'grid', gap: 6 }}>
@@ -651,10 +699,66 @@ export default function AssetDetailPage() {
               </label>
 
               <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Purchase price</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editPurchasePrice}
+                  onChange={(event) => setEditPurchasePrice(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Warranty length (months)</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={editWarrantyLengthMonths}
+                  onChange={(event) => setEditWarrantyLengthMonths(event.target.value)}
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontWeight: 600 }}>Warranty expires</span>
                 <input type="date" value={editWarrantyExpires} onChange={(event) => setEditWarrantyExpires(event.target.value)} style={fieldStyle} />
               </label>
             </div>
+
+            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Manual link</span>
+                <input
+                  type="url"
+                  value={editManualUrl}
+                  onChange={(event) => setEditManualUrl(event.target.value)}
+                  placeholder="https://..."
+                  style={fieldStyle}
+                />
+              </label>
+
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Support link</span>
+                <input
+                  type="url"
+                  value={editSupportUrl}
+                  onChange={(event) => setEditSupportUrl(event.target.value)}
+                  placeholder="https://..."
+                  style={fieldStyle}
+                />
+              </label>
+            </div>
+
+            <VisibilityContextPicker
+              idPrefix="asset-edit-visibility-contexts"
+              value={editVisibilityContexts}
+              onChange={setEditVisibilityContexts}
+              disabled={saving}
+            />
 
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Notes</span>

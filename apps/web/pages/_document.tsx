@@ -9,7 +9,6 @@ export default function Document() {
           styles/globals.css; this emitted marker keeps it discoverable in the
           shipped markup. */}
       <Head>
-        <meta name="x-design-direction" content="The Register of Record — security-print/deed; deep archive green + gilt; Cinzel/Spectral/Overpass Mono; struck seals, folio, MRZ. See styles/globals.css." />
         {/* Brand mark favicons — SVG first (crisp everywhere it's supported),
             PNG + ICO fallbacks for Safari and legacy UAs. */}
         <link rel="icon" href="/favicon.ico" sizes="32x32" />

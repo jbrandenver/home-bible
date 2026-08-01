@@ -2,12 +2,15 @@ import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   CONDITION_RATINGS,
+  CONDITION_REPORT_TYPES,
   formatCalendarDate,
   formatEnumLabel,
-  type ConditionRating
+  type ConditionRating,
+  type ConditionReportType
 } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
 import {
   attachConditionPhoto,
   buildDepositPacket,
@@ -15,13 +18,14 @@ import {
   createEntry,
   deleteEntry,
   getConditionReport,
+  updateConditionReport,
   updateEntry,
   type ConditionReportDocument,
   type ConditionReportEntryRow,
   type ConditionReportRow
 } from '../../lib/conditionReports';
 import { resolveDataContext, type ResolvedDataContext } from '../../lib/dataContext';
-import { formatRoomLocation } from '../../lib/roomLabels';
+import { resolveLocationRoomId, rollbackCreatedLocation } from '../../lib/locationPresets';
 import { getRoomsForProperty, type RoomWithFloor } from '../../lib/rooms';
 import { listTenancies, type TenancyRow } from '../../lib/tenancies';
 
@@ -106,6 +110,7 @@ export default function ConditionReportDetailPage() {
   const [entries, setEntries] = useState<ConditionReportEntryRow[]>([]);
   const [documents, setDocuments] = useState<ConditionReportDocument[]>([]);
   const [rooms, setRooms] = useState<RoomWithFloor[]>([]);
+  const [tenancies, setTenancies] = useState<TenancyRow[]>([]);
   const [tenancy, setTenancy] = useState<TenancyRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -115,11 +120,24 @@ export default function ConditionReportDetailPage() {
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
 
   const [entryRoomId, setEntryRoomId] = useState('');
+  const [entryRoomName, setEntryRoomName] = useState('');
   const [entryAreaLabel, setEntryAreaLabel] = useState('');
   const [entryRating, setEntryRating] = useState('');
   const [entryNotes, setEntryNotes] = useState('');
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
+  const [roomDraft, setRoomDraft] = useState('');
+  const [roomNameDraft, setRoomNameDraft] = useState('');
+  const [areaLabelDraft, setAreaLabelDraft] = useState('');
+
+  const [editingReport, setEditingReport] = useState(false);
+  const [savingReport, setSavingReport] = useState(false);
+  const [reportTypeDraft, setReportTypeDraft] = useState<ConditionReportType>('move_in');
+  const [reportDateDraft, setReportDateDraft] = useState('');
+  const [reportTenancyDraft, setReportTenancyDraft] = useState('');
+  const [conductedByDraft, setConductedByDraft] = useState('');
+  const [summaryDraft, setSummaryDraft] = useState('');
+  const [reportNotesDraft, setReportNotesDraft] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -150,6 +168,7 @@ export default function ConditionReportDetailPage() {
 
         setContext(nextContext);
         setRooms(roomRows);
+        setTenancies(tenancyRows);
 
         // Only show reports that belong to the active property.
         if (detail && detail.report.property_id === nextContext.property.id) {
@@ -207,24 +226,47 @@ export default function ConditionReportDetailPage() {
 
   const isCompleted = report?.status === 'completed';
 
+  /** Rooms named mid-walkthrough have to join the list the pickers read from. */
+  const refreshRooms = async () => {
+    if (!context?.property) return;
+
+    try {
+      setRooms(await getRoomsForProperty(context.property.id));
+    } catch {
+      // The room exists either way; the picker catches up on the next load.
+    }
+  };
+
   const submitEntry = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
 
     if (!report || !context?.property) return;
 
-    if (!entryRoomId && !entryAreaLabel.trim()) {
+    const roomValue = roomSelectionValue(entryRoomId, entryRoomName);
+    if (roomValue === null) {
+      setError('Name the new room, or choose one already on file.');
+      return;
+    }
+
+    if (!roomValue && !entryAreaLabel.trim()) {
       setError('Choose a room or enter an area label for this entry.');
       return;
     }
 
     setSavingEntry(true);
 
+    const resolutionContext = { mode: 'supabase', propertyId: context.property.id } as const;
+    let createdRoomId: string | null = null;
+
     try {
+      const resolved = await resolveLocationRoomId(roomValue, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
       const created = await createEntry({
         report_id: report.id,
         property_id: context.property.id,
-        room_id: entryRoomId || null,
+        room_id: resolved.roomId,
         area_label: entryAreaLabel || null,
         condition_rating: (entryRating || null) as ConditionRating | null,
         notes: entryNotes || null,
@@ -233,13 +275,68 @@ export default function ConditionReportDetailPage() {
 
       setEntries((current) => [...current, created]);
       setEntryRoomId('');
+      setEntryRoomName('');
       setEntryAreaLabel('');
       setEntryRating('');
       setEntryNotes('');
+
+      if (createdRoomId) {
+        await refreshRooms();
+      }
     } catch (saveError) {
+      // A room named for this entry should not outlive a failed entry.
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
       setError(saveError instanceof Error ? saveError.message : 'Failed to add entry.');
     } finally {
       setSavingEntry(false);
+    }
+  };
+
+  const startEditingReport = () => {
+    if (!report) return;
+
+    setEditingReport(true);
+    setReportTypeDraft(report.report_type);
+    setReportDateDraft(report.report_date);
+    setReportTenancyDraft(report.tenancy_id || '');
+    setConductedByDraft(report.conducted_by || '');
+    setSummaryDraft(report.summary || '');
+    setReportNotesDraft(report.notes || '');
+    setError('');
+  };
+
+  const saveReport = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+
+    if (!report) return;
+
+    if (!reportDateDraft) {
+      setError('A report date is required.');
+      return;
+    }
+
+    setSavingReport(true);
+
+    try {
+      const updated = await updateConditionReport(report.id, {
+        report_type: reportTypeDraft,
+        report_date: reportDateDraft,
+        tenancy_id: reportTenancyDraft || null,
+        conducted_by: conductedByDraft || null,
+        summary: summaryDraft || null,
+        notes: reportNotesDraft || null
+      });
+
+      setReport(updated);
+      setTenancy(
+        updated.tenancy_id ? tenancies.find((row) => row.id === updated.tenancy_id) || null : null
+      );
+      setEditingReport(false);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : 'Failed to update report.');
+    } finally {
+      setSavingReport(false);
     }
   };
 
@@ -259,17 +356,67 @@ export default function ConditionReportDetailPage() {
     }
   };
 
-  const saveEntryNotes = async (entryId: string) => {
+  const startEditingEntry = (entry: ConditionReportEntryRow) => {
+    setEditingEntryId(entry.id);
+    setNoteDraft(entry.notes || '');
+    setRoomDraft(entry.room_id || '');
+    setRoomNameDraft('');
+    setAreaLabelDraft(entry.area_label || '');
+    setError('');
+  };
+
+  const cancelEditingEntry = () => {
+    setEditingEntryId(null);
+    setNoteDraft('');
+    setRoomDraft('');
+    setRoomNameDraft('');
+    setAreaLabelDraft('');
+  };
+
+  /**
+   * An entry filed against the wrong room used to mean deleting it and walking
+   * the unit again, so the room and the area label are editable alongside the
+   * notes for as long as the report is a draft.
+   */
+  const saveEntryDetails = async (entryId: string) => {
+    if (!context?.property) return;
+
+    const roomValue = roomSelectionValue(roomDraft, roomNameDraft);
+    if (roomValue === null) {
+      setError('Name the new room, or choose one already on file.');
+      return;
+    }
+
+    if (!roomValue && !areaLabelDraft.trim()) {
+      setError('Choose a room or enter an area label for this entry.');
+      return;
+    }
+
     setActingEntryId(entryId);
     setError('');
 
+    const resolutionContext = { mode: 'supabase', propertyId: context.property.id } as const;
+    let createdRoomId: string | null = null;
+
     try {
-      const updated = await updateEntry(entryId, { notes: noteDraft || null });
+      const resolved = await resolveLocationRoomId(roomValue, resolutionContext);
+      createdRoomId = resolved.createdRoomId;
+
+      const updated = await updateEntry(entryId, {
+        room_id: resolved.roomId,
+        area_label: areaLabelDraft || null,
+        notes: noteDraft || null
+      });
+
       setEntries((current) => current.map((entry) => (entry.id === entryId ? updated : entry)));
-      setEditingEntryId(null);
-      setNoteDraft('');
+      cancelEditingEntry();
+
+      if (createdRoomId) {
+        await refreshRooms();
+      }
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'Failed to update entry notes.');
+      await rollbackCreatedLocation(createdRoomId, resolutionContext);
+      setError(updateError instanceof Error ? updateError.message : 'Failed to update entry.');
     } finally {
       setActingEntryId(null);
     }
@@ -415,6 +562,104 @@ export default function ConditionReportDetailPage() {
 
         {!isCompleted ? (
           <Card>
+            <h2 style={{ marginTop: 0 }}>Edit report</h2>
+            {editingReport ? (
+              <form onSubmit={saveReport} style={{ display: 'grid', gap: 12 }}>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Report type</span>
+                    <select
+                      value={reportTypeDraft}
+                      onChange={(event) => setReportTypeDraft(event.target.value as ConditionReportType)}
+                      style={fieldStyle}
+                    >
+                      {CONDITION_REPORT_TYPES.map((type) => (
+                        <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Report date</span>
+                    <input
+                      type="date"
+                      value={reportDateDraft}
+                      onChange={(event) => setReportDateDraft(event.target.value)}
+                      style={fieldStyle}
+                    />
+                  </label>
+
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Tenancy</span>
+                    <select
+                      value={reportTenancyDraft}
+                      onChange={(event) => setReportTenancyDraft(event.target.value)}
+                      style={fieldStyle}
+                    >
+                      <option value="">Not linked</option>
+                      {tenancies.map((row) => (
+                        <option key={row.id} value={row.id}>{row.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Conducted by</span>
+                    <input
+                      value={conductedByDraft}
+                      onChange={(event) => setConductedByDraft(event.target.value)}
+                      placeholder="Who walked the unit"
+                      style={fieldStyle}
+                    />
+                  </label>
+                </div>
+
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Summary</span>
+                  <textarea
+                    value={summaryDraft}
+                    onChange={(event) => setSummaryDraft(event.target.value)}
+                    style={{ ...fieldStyle, minHeight: 70 }}
+                  />
+                </label>
+
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Notes</span>
+                  <textarea
+                    value={reportNotesDraft}
+                    onChange={(event) => setReportNotesDraft(event.target.value)}
+                    style={{ ...fieldStyle, minHeight: 70 }}
+                  />
+                </label>
+
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <Button type="submit" disabled={savingReport}>
+                    {savingReport ? 'Saving...' : 'Save changes'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={savingReport}
+                    onClick={() => setEditingReport(false)}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
+                  Correct the report type, date, tenancy, or notes while this report is still a draft.
+                  Once it is completed the record is fixed.
+                </p>
+                <Button type="button" onClick={startEditingReport}>Edit report details</Button>
+              </>
+            )}
+          </Card>
+        ) : null}
+
+        {!isCompleted ? (
+          <Card>
             <h2 style={{ marginTop: 0 }}>Add entry</h2>
             <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
               One entry per room or area. Attach photos to each entry — every capture is timestamped
@@ -422,15 +667,16 @@ export default function ConditionReportDetailPage() {
             </p>
             <form onSubmit={submitEntry} style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
-                <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontWeight: 600 }}>Room</span>
-                  <select value={entryRoomId} onChange={(event) => setEntryRoomId(event.target.value)} style={fieldStyle}>
-                    <option value="">Not a saved room</option>
-                    {rooms.map((room) => (
-                      <option key={room.id} value={room.id}>{formatRoomLocation(room)}</option>
-                    ))}
-                  </select>
-                </label>
+                <RoomLocationSelect
+                  rooms={rooms}
+                  value={entryRoomId}
+                  onChange={setEntryRoomId}
+                  customName={entryRoomName}
+                  onCustomNameChange={setEntryRoomName}
+                  label="Room"
+                  emptyLabel="Not a saved room"
+                  disabled={savingEntry}
+                />
 
                 <label style={{ display: 'grid', gap: 6 }}>
                   <span style={{ fontWeight: 600 }}>Or area label</span>
@@ -508,7 +754,26 @@ export default function ConditionReportDetailPage() {
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem', display: 'grid', gap: 4 }}>
                           <div><strong>Recorded:</strong> {formatDateTime(entry.created_at)}</div>
                           {editingEntryId === entry.id ? (
-                            <div style={{ display: 'grid', gap: 8 }}>
+                            <div style={{ display: 'grid', gap: 10 }}>
+                              <RoomLocationSelect
+                                rooms={rooms}
+                                value={roomDraft}
+                                onChange={setRoomDraft}
+                                customName={roomNameDraft}
+                                onCustomNameChange={setRoomNameDraft}
+                                label="Room"
+                                emptyLabel="Not a saved room"
+                                disabled={isActing}
+                              />
+                              <label style={{ display: 'grid', gap: 6 }}>
+                                <span style={{ fontWeight: 600 }}>Area label</span>
+                                <input
+                                  value={areaLabelDraft}
+                                  onChange={(event) => setAreaLabelDraft(event.target.value)}
+                                  placeholder="Hallway, balcony, exterior door…"
+                                  style={fieldStyle}
+                                />
+                              </label>
                               <label style={{ display: 'grid', gap: 6 }}>
                                 <span style={{ fontWeight: 600 }}>Notes</span>
                                 <textarea
@@ -518,16 +783,13 @@ export default function ConditionReportDetailPage() {
                                 />
                               </label>
                               <div style={{ display: 'flex', gap: 8 }}>
-                                <Button type="button" onClick={() => saveEntryNotes(entry.id)} disabled={isActing}>
-                                  {isActing ? 'Saving...' : 'Save notes'}
+                                <Button type="button" onClick={() => saveEntryDetails(entry.id)} disabled={isActing}>
+                                  {isActing ? 'Saving...' : 'Save entry'}
                                 </Button>
                                 <Button
                                   type="button"
                                   variant="secondary"
-                                  onClick={() => {
-                                    setEditingEntryId(null);
-                                    setNoteDraft('');
-                                  }}
+                                  onClick={cancelEditingEntry}
                                   disabled={isActing}
                                 >
                                   Cancel
@@ -566,12 +828,9 @@ export default function ConditionReportDetailPage() {
                             type="button"
                             variant="secondary"
                             disabled={isActing}
-                            onClick={() => {
-                              setEditingEntryId(entry.id);
-                              setNoteDraft(entry.notes || '');
-                            }}
+                            onClick={() => startEditingEntry(entry)}
                           >
-                            Edit notes
+                            Edit entry
                           </Button>
                           <button
                             type="button"

@@ -264,16 +264,6 @@ async function getTrendFlagsByColumn(
   return sortTrendFlags(((data ?? []) as RawTrendFlag[]).map(normalizeTrendFlag));
 }
 
-export async function getTrendFlagsForRoom(context: TrendFlagDataContext, roomId: string) {
-  return getTrendFlagsByColumn(
-    context,
-    'room_id',
-    roomId,
-    (flag) => flag.room_id === roomId,
-    'load room trend flags'
-  );
-}
-
 export async function getTrendFlagsForAsset(context: TrendFlagDataContext, assetId: string) {
   return getTrendFlagsByColumn(
     context,
@@ -385,54 +375,6 @@ export async function updateTrendFlagStatusForContext(
   const { data, error } = await supabase
     .from('trend_flags')
     .update(payload)
-    .eq('id', flagId)
-    .eq('property_id', context.property.id)
-    .is('deleted_at', null)
-    .select(TREND_FLAG_SELECT)
-    .single();
-
-  if (error || !data) {
-    throw new Error(formatTrendFlagError('update trend flag', error?.message));
-  }
-
-  return normalizeTrendFlag(data as RawTrendFlag);
-}
-
-export async function updateTrendFlagForContext(
-  context: TrendFlagDataContext,
-  flagId: string,
-  input: TrendFlagInput
-) {
-  if (context.mode === 'demo') {
-    const demoProperty = getDemoActiveProperty();
-    const updated = getDemoTrendFlags().map((flag) =>
-      flag.id === flagId
-        ? normalizeTrendFlag({
-            ...flag,
-            ...buildTrendFlagPayload(input, demoProperty?.id || flag.property_id || ''),
-            id: flag.id,
-            property_id: flag.property_id,
-            updated_at: new Date().toISOString()
-          })
-        : flag
-    );
-
-    writeDemoTrendFlags(updated);
-    return updated.find((flag) => flag.id === flagId) || null;
-  }
-
-  if (!context.property) {
-    throw new Error('Create a property before editing trend flags.');
-  }
-
-  const supabase = getSupabaseBrowserClient();
-  if (!supabase) {
-    throw new Error(getSupabaseSetupMessage());
-  }
-
-  const { data, error } = await supabase
-    .from('trend_flags')
-    .update(buildTrendFlagPayload(input, context.property.id))
     .eq('id', flagId)
     .eq('property_id', context.property.id)
     .is('deleted_at', null)

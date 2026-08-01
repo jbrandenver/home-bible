@@ -113,6 +113,10 @@ export const createAutomationDeviceSchema = z.object({
   manufacturer: optionalShort,
   model: optionalShort,
   serial_number: optionalShort,
+  // The hub schema has always had this; the device schema did not, so the
+  // device edit form's firmware input was silently stripped on save
+  // (launch review 2026-07-31).
+  firmware_version: optionalShort,
   is_critical: z.boolean().default(false),
   indoor_outdoor: z.enum(['indoor', 'outdoor', 'both']).optional().nullable(),
   room_id: z.string().uuid().optional().nullable(),
@@ -177,6 +181,21 @@ export const createAutomationNetworkSchema = z.object({
   is_guest: z.boolean().default(false),
   is_iot: z.boolean().default(false),
   physical_location: optionalShort,
+  // Operational detail the schema defined in migration 012 but no form ever
+  // wrote or read (launch review 2026-07-31). These are what someone needs to
+  // rebuild the network after a router dies.
+  router_model: optionalShort,
+  gateway: optionalShort,
+  mesh_system: optionalShort,
+  access_points: optionalShort,
+  vlan: optionalShort,
+  subnet: optionalShort,
+  dns_notes: optionalText,
+  dhcp_range: optionalShort,
+  modem: optionalShort,
+  backup_internet: optionalShort,
+  security_notes: optionalText,
+  ups_backup: optionalShort,
   setup_instructions: optionalText,
   recovery_instructions: optionalText,
   credential_reference: optionalShort,

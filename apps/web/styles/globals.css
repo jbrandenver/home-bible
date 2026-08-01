@@ -48,12 +48,10 @@
   /* --- The Register of Record palette (all pairs verified >=4.5:1) --- */
   --color-espresso:#16302A;   /* was brown; now the deep archive-green ground for chrome/hero */
   --color-green-deep:#16302A;
-  --color-green-soft:#1D3B32;
   --color-ink:#211C15;
   --color-cocoa:#3A4A3E;
   --color-sand:#D8CEB6;
   --color-paper:#EAE1CC;      /* warm laid document stock — ecru, not stark white */
-  --color-ivory:#E4DCC8;
   --color-brass-deep:#855A18; /* gilt for text/links/labels on paper — 4.9:1 (hex replaceable, ratio is not) */
   --color-brass:#C8923F;      /* gilt engraving accent */
   --color-brass-pale:#E3C288; /* gilt highlight on the green ground */
@@ -211,13 +209,9 @@ p a{text-decoration:underline}
 .cv-section{content-visibility:auto;contain-intrinsic-width:0;contain-intrinsic-height:auto 500px}
 
 /* ---------- legacy utility classes (kept for existing pages) ---------- */
-.bg-gray-50{background-color:var(--surface-page)}
 .bg-white{background-color:var(--surface-card)}
-.bg-amber-100{background:rgba(227,194,136,0.26)}
 .text-gray-600{color:var(--text-muted)}
 .text-gray-900{color:var(--text-primary)}
-.text-amber-700{color:var(--color-brass-deep)}
-.text-amber-900{color:var(--color-ink)}
 .rounded{border-radius:var(--radius-control)}
 .rounded-lg{border-radius:var(--radius-card)}
 .shadow-sm{box-shadow:var(--shadow-card)}
@@ -233,11 +227,6 @@ p a{text-decoration:underline}
 .mb-2{margin-bottom:0.5rem}
 .mb-4{margin-bottom:1rem}
 .mb-6{margin-bottom:1.5rem}
-.mt-4{margin-top:1rem}
-.pt-4{padding-top:1rem}
-.min-h-screen{min-height:100vh}
-.max-w-3xl{max-width:48rem;margin-left:auto;margin-right:auto}
-.max-w-4xl{max-width:64rem;margin-left:auto;margin-right:auto}
 .max-w-6xl{max-width:72rem;margin-left:auto;margin-right:auto}
 .mx-auto{margin-left:auto;margin-right:auto}
 .font-medium{font-weight:500}
@@ -247,10 +236,8 @@ p a{text-decoration:underline}
 .text-lg{font-size:1.125rem}
 .text-sm{font-size:0.875rem}
 .grid{display:grid}
-.grid-cols-2{grid-template-columns:repeat(2, minmax(0, 1fr))}
 .gap-2{gap:0.5rem}
 .space-y-2>*+*{margin-top:0.5rem}
-.space-y-4>*+*{margin-top:1rem}
 .flex{display:flex}
 .flex-wrap{flex-wrap:wrap}
 .items-center{align-items:center}
@@ -439,9 +426,7 @@ main [id]{scroll-margin-top:1.25rem}
     var(--color-green-deep);
   color:var(--text-inverse);
   border:1px solid rgba(227,194,136,0.3);
-  --utility-badge-bg:rgba(227,194,136,0.1);
   --utility-badge-color:rgba(244,238,221,0.9);
-  --utility-badge-border:rgba(227,194,136,0.32);
   /* On the green ground a secondary button is a gilt ghost, not a light fill. */
   --btn-secondary-bg:transparent;
   --btn-secondary-color:var(--text-inverse);
@@ -644,7 +629,6 @@ main [id]{scroll-margin-top:1.25rem}
   .hb-toc-row .hb-toc-detail{flex-basis:100%;order:4;padding-left:2.8rem}
   .p-6{padding:1rem}
   .px-6{padding-left:1rem;padding-right:1rem}
-  .grid-cols-2{grid-template-columns:1fr}
   .desktop-primary-nav{display:none}
   .app-main{padding-bottom:5.5rem;padding-top:1.4rem}
   .brand-wordmark{font-size:1.4rem}

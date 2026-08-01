@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { formatEnumLabel, PROPERTY_TYPES } from '@home-folder/shared';
 import { PageHeader, Card, Button, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
@@ -13,8 +14,11 @@ import {
   formatAddressLine,
   getPrimaryPropertyForUser,
   getPropertyAddressDetails,
+  getPropertyDetails,
   updatePropertyAddress,
-  type PropertySummary
+  updatePropertyDetails,
+  type PropertySummary,
+  type PropertyType
 } from '../lib/properties';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 import {
@@ -47,6 +51,30 @@ import { getServiceRecordDataContext } from '../lib/serviceRecords';
 import { getTrendFlagDataContext } from '../lib/trendFlags';
 import { getUtilityDataContext } from '../lib/utilities';
 
+function asPropertyType(value: string | undefined): PropertyType {
+  return (PROPERTY_TYPES as readonly string[]).includes(value ?? '')
+    ? (value as PropertyType)
+    : 'single_family_home';
+}
+
+// Blank means "not recorded"; anything else must be a whole number in range.
+function parseOptionalWholeNumber(
+  value: string,
+  { min, max }: { min: number; max: number }
+): number | null | 'invalid' {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return 'invalid';
+  }
+
+  return parsed;
+}
+
 export default function SettingsPage() {
   const [isReady, setIsReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -66,6 +94,23 @@ export default function SettingsPage() {
   const [addressSaved, setAddressSaved] = useState(false);
   const [addressLoadFailed, setAddressLoadFailed] = useState(false);
   const [addressDirty, setAddressDirty] = useState(false);
+
+  const [detailsNickname, setDetailsNickname] = useState('');
+  const [detailsType, setDetailsType] = useState<PropertyType>('single_family_home');
+  const [detailsUnitLabel, setDetailsUnitLabel] = useState('');
+  const [detailsSquareFeet, setDetailsSquareFeet] = useState('');
+  const [detailsYearBuilt, setDetailsYearBuilt] = useState('');
+  const [detailsFloorCount, setDetailsFloorCount] = useState('');
+  const [detailsHasGarage, setDetailsHasGarage] = useState(false);
+  const [detailsHasBasement, setDetailsHasBasement] = useState(false);
+  const [detailsHasAttic, setDetailsHasAttic] = useState(false);
+  const [detailsHasCrawlSpace, setDetailsHasCrawlSpace] = useState(false);
+  const [detailsHasYard, setDetailsHasYard] = useState(false);
+  const [detailsHasShed, setDetailsHasShed] = useState(false);
+  const [detailsSaving, setDetailsSaving] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
+  const [detailsSaved, setDetailsSaved] = useState(false);
+  const [detailsDirty, setDetailsDirty] = useState(false);
 
   const [exporting, setExporting] = useState<'archive' | 'csv' | null>(null);
   const [exportError, setExportError] = useState('');
@@ -120,7 +165,12 @@ export default function SettingsPage() {
 
       try {
         const nextProperty = await getPrimaryPropertyForUser(user.id);
-        const details = nextProperty ? await getPropertyAddressDetails(nextProperty.id) : null;
+        const [details, profile] = nextProperty
+          ? await Promise.all([
+              getPropertyAddressDetails(nextProperty.id),
+              getPropertyDetails(nextProperty.id)
+            ])
+          : [null, null];
 
         if (!isMounted) {
           return;
@@ -134,6 +184,21 @@ export default function SettingsPage() {
         setAddressPostal(details?.postal_code || '');
         setAddressEnabled(details?.address_is_enabled || false);
         setAddressDirty(false);
+
+        setDetailsNickname(profile?.nickname || nextProperty?.nickname || '');
+        setDetailsType(profile?.property_type ?? asPropertyType(nextProperty?.property_type));
+        setDetailsUnitLabel(profile?.unit_label || nextProperty?.unit_label || '');
+        setDetailsSquareFeet(profile?.square_feet != null ? String(profile.square_feet) : '');
+        setDetailsYearBuilt(profile?.year_built != null ? String(profile.year_built) : '');
+        setDetailsFloorCount(profile?.floor_count != null ? String(profile.floor_count) : '');
+        setDetailsHasGarage(profile?.has_garage || false);
+        setDetailsHasBasement(profile?.has_basement || false);
+        setDetailsHasAttic(profile?.has_attic || false);
+        setDetailsHasCrawlSpace(profile?.has_crawl_space || false);
+        setDetailsHasYard(profile?.has_yard || false);
+        setDetailsHasShed(profile?.has_shed || false);
+        setDetailsDirty(false);
+        setDetailsSaved(false);
       } catch (loadError) {
         if (isMounted) {
           setAddressLoadFailed(true);
@@ -188,9 +253,85 @@ export default function SettingsPage() {
     }
   }
 
+  function notePropertyDetailsEdited() {
+    setDetailsSaved(false);
+    setDetailsDirty(true);
+  }
+
+  async function handleSavePropertyDetails(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!property) {
+      return;
+    }
+
+    const currentYear = new Date().getFullYear();
+    const squareFeet = parseOptionalWholeNumber(detailsSquareFeet, { min: 0, max: 10_000_000 });
+    const yearBuilt = parseOptionalWholeNumber(detailsYearBuilt, { min: 1500, max: currentYear + 5 });
+    const floorCount = parseOptionalWholeNumber(detailsFloorCount, { min: 0, max: 200 });
+
+    setDetailsError('');
+    setDetailsSaved(false);
+
+    if (!detailsNickname.trim()) {
+      setDetailsError('Give this property a name — it is how you tell your homes apart.');
+      return;
+    }
+
+    if (squareFeet === 'invalid') {
+      setDetailsError('Square feet should be a whole number, or left blank.');
+      return;
+    }
+
+    if (yearBuilt === 'invalid') {
+      setDetailsError(`Year built should be a four-digit year up to ${currentYear + 5}, or left blank.`);
+      return;
+    }
+
+    if (floorCount === 'invalid') {
+      setDetailsError('Floors should be a whole number, or left blank.');
+      return;
+    }
+
+    setDetailsSaving(true);
+
+    try {
+      await updatePropertyDetails(property.id, {
+        nickname: detailsNickname,
+        property_type: detailsType,
+        unit_label: detailsUnitLabel,
+        square_feet: squareFeet,
+        year_built: yearBuilt,
+        floor_count: floorCount,
+        has_garage: detailsHasGarage,
+        has_basement: detailsHasBasement,
+        has_attic: detailsHasAttic,
+        has_crawl_space: detailsHasCrawlSpace,
+        has_yard: detailsHasYard,
+        has_shed: detailsHasShed
+      });
+
+      setProperty((current) =>
+        current
+          ? {
+              ...current,
+              nickname: detailsNickname.trim(),
+              property_type: detailsType,
+              unit_label: detailsUnitLabel.trim() || null
+            }
+          : current
+      );
+      setDetailsSaved(true);
+      setDetailsDirty(false);
+    } catch (saveError) {
+      setDetailsError(saveError instanceof Error ? saveError.message : 'Failed to save the property details.');
+    } finally {
+      setDetailsSaving(false);
+    }
+  }
+
   // Typing a correction and navigating away used to lose it silently.
   useEffect(() => {
-    if (!addressDirty) {
+    if (!addressDirty && !detailsDirty) {
       return;
     }
 
@@ -201,7 +342,7 @@ export default function SettingsPage() {
 
     window.addEventListener('beforeunload', warnOnUnload);
     return () => window.removeEventListener('beforeunload', warnOnUnload);
-  }, [addressDirty]);
+  }, [addressDirty, detailsDirty]);
 
   useEffect(() => {
     let isMounted = true;
@@ -604,6 +745,150 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
+            <h2 style={{ marginTop: 0 }}>Property details</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              What this property is, and what it has. A name typed in a hurry can be
+              corrected here. The seasonal maintenance plan reads the state from the
+              address above, along with whether there is a yard or a basement, so
+              filling these in makes the plan match the actual home.
+            </p>
+            {!supabaseReady || !user ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Sign in to edit your property details.
+              </p>
+            ) : !property && !addressLoading ? (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                  Create a property first — these details belong to it.
+                </p>
+                <div>
+                  <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSavePropertyDetails} style={{ display: 'grid', gap: 14 }}>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                  <label>
+                    <span>Property name</span>
+                    <Input
+                      value={detailsNickname}
+                      onChange={(event) => { setDetailsNickname(event.target.value); notePropertyDetailsEdited(); }}
+                      placeholder="The Maple Street house"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>Property type</span>
+                    <Select
+                      value={detailsType}
+                      onChange={(event) => { setDetailsType(event.target.value as PropertyType); notePropertyDetailsEdited(); }}
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    >
+                      {PROPERTY_TYPES.map((value) => (
+                        <option key={value} value={value}>
+                          {formatEnumLabel(value)}
+                        </option>
+                      ))}
+                    </Select>
+                  </label>
+                  <label>
+                    <span>Unit label (optional)</span>
+                    <Input
+                      value={detailsUnitLabel}
+                      onChange={(event) => { setDetailsUnitLabel(event.target.value); notePropertyDetailsEdited(); }}
+                      placeholder="Unit 2B"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                </div>
+
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                  <label>
+                    <span>Square feet</span>
+                    <Input
+                      value={detailsSquareFeet}
+                      onChange={(event) => { setDetailsSquareFeet(event.target.value); notePropertyDetailsEdited(); }}
+                      inputMode="numeric"
+                      placeholder="1850"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>Year built</span>
+                    <Input
+                      value={detailsYearBuilt}
+                      onChange={(event) => { setDetailsYearBuilt(event.target.value); notePropertyDetailsEdited(); }}
+                      inputMode="numeric"
+                      placeholder="1974"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>Floors</span>
+                    <Input
+                      value={detailsFloorCount}
+                      onChange={(event) => { setDetailsFloorCount(event.target.value); notePropertyDetailsEdited(); }}
+                      inputMode="numeric"
+                      placeholder="2"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                </div>
+
+                <fieldset style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-control)', padding: 16, margin: 0 }}>
+                  <legend style={{ padding: '0 6px', fontWeight: 600 }}>What this property has</legend>
+                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+                    {([
+                      ['Garage', detailsHasGarage, setDetailsHasGarage],
+                      ['Basement', detailsHasBasement, setDetailsHasBasement],
+                      ['Attic', detailsHasAttic, setDetailsHasAttic],
+                      ['Crawl space', detailsHasCrawlSpace, setDetailsHasCrawlSpace],
+                      ['Yard', detailsHasYard, setDetailsHasYard],
+                      ['Shed', detailsHasShed, setDetailsHasShed]
+                    ] as Array<[string, boolean, (next: boolean) => void]>).map(([featureLabel, checked, setChecked]) => (
+                      <label key={featureLabel} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) => { setChecked(event.target.checked); notePropertyDetailsEdited(); }}
+                          disabled={addressLoading}
+                        />
+                        <span style={{ textTransform: 'none', letterSpacing: 'normal', fontFamily: 'var(--font-body)', fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                          {featureLabel}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                {detailsError ? (
+                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{detailsError}</p>
+                ) : null}
+                {detailsSaved ? (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Property details saved.</p>
+                ) : null}
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <Button type="submit" disabled={addressLoading || detailsSaving}>
+                    {detailsSaving ? 'Saving...' : 'Save property details'}
+                  </Button>
+                  {detailsDirty ? (
+                    <span style={{ color: 'var(--status-attention)', fontWeight: 600, fontSize: 14 }}>
+                      Unsaved changes
+                    </span>
+                  ) : null}
+                </div>
+              </form>
+            )}
+          </Card>
+
+          <Card>
             <h2 style={{ marginTop: 0 }}>Security and privacy</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <UtilityBadge label="Private home record" />
@@ -633,6 +918,10 @@ export default function SettingsPage() {
               A short note about what is coming up, so nothing quietly becomes
               urgent. It lists titles and dates only — never your address, what
               you own, or anything you wrote down.
+            </p>
+            <p style={{ color: 'var(--text-primary)', fontWeight: 600, marginTop: 0 }}>
+              Sending is not switched on yet — these settings are saved and will
+              apply as soon as it is.
             </p>
             {!supabaseReady || !user ? (
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>
@@ -686,10 +975,6 @@ export default function SettingsPage() {
                     {digestSaving ? 'Saving...' : 'Save reminder settings'}
                   </Button>
                 </div>
-                <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14 }}>
-                  Sending is not switched on yet — these settings are saved and will
-                  apply as soon as it is.
-                </p>
               </form>
             )}
           </Card>
