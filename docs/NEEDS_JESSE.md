@@ -158,13 +158,36 @@ What I need from you:
 - A **Stripe account**.
 - A **CPA's view** on whether your state taxes digital products. I deliberately
   did not research state tax rules; a wrong answer there costs real money.
-- **(New, 2026-07-30)** When you create the Stripe account, also create the
-  **Portfolio plan** recurring price (suggested $29/mo) alongside the two
-  one-time packs, and set `NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK` on the
-  web host. Steps and pricing rationale: docs/ACTIVATION_RUNBOOK.md §B and
-  docs/PORTFOLIO.md. Until then the landlord features run ungated on purpose.
-  A third Payment Link (`pro_binder`, one-time, $15–25) covers the pro
-  channel — same section of the runbook.
+- ~~**(New, 2026-07-30)** create the Portfolio plan price and link~~ —
+  **DONE 2026-08-01.** The Stripe account exists (JBran LLC,
+  `acct_1TzLnGJiLFGoCM3v`) and the Portfolio plan is built:
+
+  | | |
+  | --- | --- |
+  | Product | `prod_UzOpKwRqfodFxq` — "Home Folder — Portfolio" |
+  | Price | `price_1TzQ1sJiLFGoCM3v3IqGZkN0` — **$29/mo** recurring |
+  | Payment Link | `https://buy.stripe.com/7sY28s9L2dFM0G331b6Zy00` |
+
+  The link carries metadata `product_key = portfolio_plan`, which Stripe
+  copies onto every Checkout Session it creates — that is the value
+  `stripe-webhook` reads at `index.ts:120`. Billing address is collected;
+  subscription mode always collects the email the webhook falls back to.
+
+  **Still blocked:** the account is not activated (`charges_enabled: false`),
+  so the link cannot take a payment yet. Finish the activation form at
+  dashboard.stripe.com — business type, MCC, representative details, bank
+  account, ToS. Those fields are yours to type.
+
+  Then: `supabase secrets set STRIPE_SECRET_KEY=… STRIPE_WEBHOOK_SIGNING_SECRET=…`,
+  `supabase functions deploy stripe-webhook`, register the endpoint for
+  `checkout.session.completed`, `invoice.paid`,
+  `customer.subscription.deleted`, `charge.refunded`,
+  `charge.dispute.created`, and set
+  `NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK` to the link above in the
+  **Workers Builds** environment (build-time — it needs a redeploy).
+
+  Not yet created: the two one-time packs and the `pro_binder` link. Same
+  recipe, different `product_key` metadata — docs/ACTIVATION_RUNBOOK.md §B.
 - **(New, 2026-07-30) Anthropic API key for the data-plate scanner.** You
   approved the vision feature; the `analyze-plate` function is deployed and
   inert until you run `supabase secrets set ANTHROPIC_API_KEY=sk-ant-...`

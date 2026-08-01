@@ -218,11 +218,21 @@ The landlord tier (migration 023, `product_key = portfolio_plan`) is a
 **recurring** price, unlike the two one-time packs. Same webhook, three extra
 moving parts:
 
-**1. Create one Product with a recurring monthly Price** (suggested anchor:
-$29/mo covering up to 10 doors — the 2026 market research in
-docs/PORTFOLIO.md justifies $29–49 + per-unit beyond, but start simple with
-one flat price). Create a **Payment Link** for it and set metadata
-`product_key` to `portfolio_plan` on the link. Enable email collection.
+**1. ~~Create one Product with a recurring monthly Price~~ — DONE 2026-08-01.**
+Ruled at **$29/mo** flat. Product `prod_UzOpKwRqfodFxq`, price
+`price_1TzQ1sJiLFGoCM3v3IqGZkN0`, Payment Link
+`https://buy.stripe.com/7sY28s9L2dFM0G331b6Zy00` carrying metadata
+`product_key = portfolio_plan`.
+
+Worth knowing, because it is the whole reason the webhook can identify the
+purchase: metadata set on a **Payment Link** is copied by Stripe onto every
+Checkout Session the link creates, so it arrives as `session.metadata` in
+`checkout.session.completed`. Metadata set on `subscription_data` would NOT —
+that lands on the Subscription instead. Both are set here; the top-level one
+is the one that matters.
+
+Email collection is automatic in subscription mode (a Customer is always
+created), so there is nothing to switch on for the webhook's email fallback.
 
 **2. Subscribe the webhook to three more events** in addition to the ones in
 step 4 above: `invoice.paid`, `customer.subscription.deleted`. (You can also
