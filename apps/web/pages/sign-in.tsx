@@ -8,7 +8,6 @@ import {
   enabledOAuthProviders,
   formatAuthError,
   isSupabaseConfigured,
-  signInWithApple,
   signInWithEmail,
   signInWithGoogle
 } from '../lib/auth';
@@ -19,7 +18,7 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [oauthProvider, setOauthProvider] = useState<'google' | 'apple' | null>(null);
+  const [oauthProvider, setOauthProvider] = useState<'google' | null>(null);
 
   const setupMissing = !isSupabaseConfigured();
   const oauthProviders = enabledOAuthProviders();
@@ -46,13 +45,13 @@ export default function SignInPage() {
     router.push(nextPath);
   };
 
-  const handleOAuthSignIn = async (provider: 'google' | 'apple') => {
+  const handleOAuthSignIn = async (provider: 'google') => {
     if (loading || oauthProvider) return;
 
     setError('');
     setOauthProvider(provider);
 
-    const result = provider === 'google' ? await signInWithGoogle() : await signInWithApple();
+    const result = await signInWithGoogle();
     if (result.error) {
       setError(formatAuthError(result.error));
       setOauthProvider(null);
@@ -111,16 +110,6 @@ export default function SignInPage() {
                 style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
               >
                 {oauthProvider === 'google' ? 'Redirecting...' : 'Continue with Google'}
-              </button>
-            ) : null}
-            {oauthProviders.includes('apple') ? (
-              <button
-                type="button"
-                disabled={loading || Boolean(oauthProvider)}
-                onClick={() => handleOAuthSignIn('apple')}
-                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
-              >
-                {oauthProvider === 'apple' ? 'Redirecting...' : 'Continue with Apple'}
               </button>
             ) : null}
           </div>

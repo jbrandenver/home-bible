@@ -182,28 +182,32 @@ export async function signInWithEmail(email: string, password: string): Promise<
   };
 }
 
-// OAuth buttons render only for providers named in NEXT_PUBLIC_OAUTH_PROVIDERS
-// (comma-separated, e.g. "google,apple"). A provider that is not ALSO enabled
-// in the Supabase dashboard (Authentication → Providers, with real Google
-// Cloud / Apple Developer credentials) sends the visitor to a bare JSON error
-// page — so the buttons stay hidden until both halves exist. Setup steps live
-// in docs/NEEDS_JESSE.md.
-export function enabledOAuthProviders(): Array<'google' | 'apple'> {
+// Google is the only social provider. Sign in with Apple was removed
+// 2026-08-01: it requires a paid Apple Developer account, and Apple's rule
+// that an iOS app offering other social logins must also offer Apple's does
+// not apply to a web app. Re-adding it means an `'google' | 'apple'` union
+// here, a second button on both auth pages, and the Supabase provider.
+//
+// The button still renders only when NEXT_PUBLIC_OAUTH_PROVIDERS names google
+// AND the provider is enabled in Supabase (Authentication → Providers, with
+// real Google Cloud credentials). A provider enabled on one side only sends
+// the visitor to a bare JSON error page, so the gate stays.
+export function enabledOAuthProviders(): Array<'google'> {
   const raw = process.env.NEXT_PUBLIC_OAUTH_PROVIDERS || '';
   return raw
     .split(',')
     .map((entry) => entry.trim().toLowerCase())
-    .filter((entry): entry is 'google' | 'apple' => entry === 'google' || entry === 'apple');
+    .filter((entry): entry is 'google' => entry === 'google');
 }
 
-async function signInWithProvider(provider: 'google' | 'apple'): Promise<AuthResult> {
+export async function signInWithGoogle(): Promise<AuthResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return { data: null, error: new Error(getSupabaseSetupMessage()) };
   }
 
   const result = await supabase.auth.signInWithOAuth({
-    provider,
+    provider: 'google',
     // Land back in the app after the provider round-trip. The URL must also be
     // listed in Supabase → Authentication → URL Configuration → Redirect URLs.
     options: { redirectTo: `${window.location.origin}/dashboard` }
@@ -213,14 +217,6 @@ async function signInWithProvider(provider: 'google' | 'apple'): Promise<AuthRes
     data: result.data,
     error: result.error
   };
-}
-
-export async function signInWithGoogle(): Promise<AuthResult> {
-  return signInWithProvider('google');
-}
-
-export async function signInWithApple(): Promise<AuthResult> {
-  return signInWithProvider('apple');
 }
 
 /**

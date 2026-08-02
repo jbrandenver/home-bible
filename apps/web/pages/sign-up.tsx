@@ -8,7 +8,6 @@ import {
   enabledOAuthProviders,
   formatAuthError,
   isSupabaseConfigured,
-  signInWithApple,
   signInWithGoogle,
   signUpWithEmail
 } from '../lib/auth';
@@ -103,22 +102,6 @@ export default function SignUpPage() {
                 style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
               >
                 Continue with Google
-              </button>
-            ) : null}
-            {oauthProviders.includes('apple') ? (
-              <button
-                type="button"
-                disabled={loading}
-                onClick={async () => {
-                  setError('');
-                  const result = await signInWithApple();
-                  if (result.error) {
-                    setError(formatAuthError(result.error));
-                  }
-                }}
-                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
-              >
-                Continue with Apple
               </button>
             ) : null}
           </div>
