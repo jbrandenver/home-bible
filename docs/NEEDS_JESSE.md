@@ -10,22 +10,31 @@ Last updated: 2026-07-30
 
 ## Blocking a public launch
 
-### 0. Enable Google / Apple sign-in (added 2026-07-31)
-The "Continue with Google/Apple" buttons are hidden until you finish this —
-both providers are disabled in Supabase, and clicking through used to land on
-a raw JSON error page. To switch them on:
+### 0. ~~Enable Google sign-in~~ — DONE 2026-08-01
+"Continue with Google" is live on `/sign-in` and `/sign-up`. Verified:
+Supabase reports `google: true`, and the button renders in production.
 
-1. **Google:** Google Cloud Console → create an OAuth client (Web application);
-   authorized redirect URI: `https://<your-project-ref>.supabase.co/auth/v1/callback`.
-   Copy client ID + secret into Supabase → Authentication → Providers → Google.
-2. **Apple** (needs the paid Apple Developer account): create a Services ID +
-   Sign in with Apple key, same redirect URI, then fill Supabase → Providers → Apple.
-3. Supabase → Authentication → URL Configuration → add
-   `https://ourhomefolder.com/dashboard` and `https://ourhomefolder.com/reset-password`
-   to Redirect URLs (Site URL should already be `https://ourhomefolder.com`).
-4. In the Cloudflare Workers Builds environment set
-   `NEXT_PUBLIC_OAUTH_PROVIDERS=google,apple` (or just `google`) and redeploy —
-   that is what un-hides the buttons.
+Setup, for reference if it ever needs redoing:
+
+1. **Google Cloud Console** → OAuth client (Web application). Authorized
+   **redirect URI** (the field with a path):
+   `https://gdntnlhnjyyzxcjuypuy.supabase.co/auth/v1/callback`.
+   Authorized **JavaScript origins** takes origins only — no path, no
+   trailing slash — and is optional for this flow. Client ID + secret go into
+   Supabase → Authentication → Providers → Google.
+2. Supabase → Authentication → URL Configuration → Redirect URLs include
+   `https://ourhomefolder.com/dashboard` and
+   `https://ourhomefolder.com/reset-password`.
+3. Cloudflare Workers Builds **build** variables (not runtime — `NEXT_PUBLIC_*`
+   is inlined at build time): `NEXT_PUBLIC_OAUTH_PROVIDERS=google`, then
+   redeploy.
+
+**Sign in with Apple was removed (2026-08-01, founder ruling).** It needs a
+paid Apple Developer account, and Apple's requirement to offer it alongside
+other social logins applies to iOS apps, not web apps. If a native iOS app
+ships later, Apple sign-in becomes mandatory there — re-adding it means the
+provider in Supabase plus restoring the `'google' | 'apple'` union in
+`apps/web/lib/auth.ts` and a second button on both auth pages.
 
 Password reset (forgot-password → emailed link → reset-password) works with
 email/password accounts as soon as step 3's redirect URL is in place.
