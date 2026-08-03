@@ -11,6 +11,7 @@ import {
   signOut
 } from '../lib/auth';
 import {
+  deletePropertyForOwner,
   formatAddressLine,
   getPrimaryPropertyForUser,
   getPropertyAddressDetails,
@@ -111,6 +112,9 @@ export default function SettingsPage() {
   const [detailsError, setDetailsError] = useState('');
   const [detailsSaved, setDetailsSaved] = useState(false);
   const [detailsDirty, setDetailsDirty] = useState(false);
+
+  const [deletingProperty, setDeletingProperty] = useState(false);
+  const [propertyDeleteError, setPropertyDeleteError] = useState('');
 
   const [exporting, setExporting] = useState<'archive' | 'csv' | null>(null);
   const [exportError, setExportError] = useState('');
@@ -480,6 +484,39 @@ export default function SettingsPage() {
   async function handleSignOut() {
     await signOut();
     setUser(null);
+  }
+
+  async function handleDeleteProperty() {
+    if (!property) {
+      return;
+    }
+
+    const label = property.nickname || 'this home';
+    if (
+      !window.confirm(
+        `Delete ${label}? Everything recorded in it — rooms, utilities, appliances, documents, reminders, and history — is removed from your account. This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingProperty(true);
+    setPropertyDeleteError('');
+
+    try {
+      if (!user) {
+        throw new Error('Sign in to delete this home.');
+      }
+      await deletePropertyForOwner(property.id, user.id);
+      // A full load, not a client-side push: every cached data context and the
+      // property switcher must re-resolve now that this home is gone.
+      window.location.assign('/dashboard');
+    } catch (deleteError) {
+      setPropertyDeleteError(
+        deleteError instanceof Error ? deleteError.message : 'Failed to delete this home.'
+      );
+      setDeletingProperty(false);
+    }
   }
 
   async function handleDeleteAccount() {
@@ -885,6 +922,41 @@ export default function SettingsPage() {
                   ) : null}
                 </div>
               </form>
+            )}
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Delete this home</h2>
+            {!supabaseReady || !user ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Sign in to manage your properties.
+              </p>
+            ) : !property ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                No property to delete — create one first.
+              </p>
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                  Removes <strong>{property.nickname || 'this home'}</strong> and everything
+                  recorded in it — rooms, utilities, appliances, documents, reminders, and
+                  history — from your account. A building takes its units with it. Your
+                  account and any other homes stay. This cannot be undone.
+                </p>
+                {propertyDeleteError ? (
+                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{propertyDeleteError}</p>
+                ) : null}
+                <div>
+                  <Button
+                    type="button"
+                    disabled={deletingProperty}
+                    onClick={handleDeleteProperty}
+                    style={{ background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
+                  >
+                    {deletingProperty ? 'Deleting...' : 'Delete this home'}
+                  </Button>
+                </div>
+              </div>
             )}
           </Card>
 

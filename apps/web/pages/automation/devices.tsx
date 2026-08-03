@@ -5,6 +5,7 @@ import {
   AUTOMATION_PROTOCOLS,
   AUTOMATION_STATUS_LABELS,
   formatEnumLabel,
+  sortEnumForDisplay,
   type AutomationDeviceCategory,
   type AutomationProtocol
 } from '@home-folder/shared';
@@ -163,8 +164,9 @@ export default function AutomationDevicesPage() {
     <>
       <PageHeader eyebrow="Smart Home" title="Devices" description="Every connected device in the home.">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <ActionLink href="/automation">Overview</ActionLink>
-          <ActionLink href="/automation/add-device" variant="secondary">Guided add</ActionLink>
+          <ActionLink href="/automation/add-device">Add device</ActionLink>
+          <ActionLink href="/automation" variant="secondary">Smart home overview</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </PageHeader>
 
@@ -181,7 +183,7 @@ export default function AutomationDevicesPage() {
               <label>
                 <span>Type</span>
                 <Select value={qCategory} onChange={(e) => setQCategory(e.target.value as AutomationDeviceCategory)} style={{ marginTop: 6 }}>
-                  {AUTOMATION_DEVICE_CATEGORIES.map((c) => (
+                  {sortEnumForDisplay(AUTOMATION_DEVICE_CATEGORIES).map((c) => (
                     <option key={c} value={c}>{formatEnumLabel(c)}</option>
                   ))}
                 </Select>
@@ -210,7 +212,7 @@ export default function AutomationDevicesPage() {
                 <span>Connects via</span>
                 <Select value={qProtocol} onChange={(e) => setQProtocol(e.target.value as AutomationProtocol | '')} style={{ marginTop: 6 }}>
                   <option value="">Unknown</option>
-                  {AUTOMATION_PROTOCOLS.map((p) => (
+                  {sortEnumForDisplay(AUTOMATION_PROTOCOLS).map((p) => (
                     <option key={p} value={p}>{formatEnumLabel(p)}</option>
                   ))}
                 </Select>
@@ -231,7 +233,7 @@ export default function AutomationDevicesPage() {
               <span>Type</span>
               <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ marginTop: 6 }}>
                 <option value="">All types</option>
-                {AUTOMATION_DEVICE_CATEGORIES.map((c) => (
+                {sortEnumForDisplay(AUTOMATION_DEVICE_CATEGORIES).map((c) => (
                   <option key={c} value={c}>{formatEnumLabel(c)}</option>
                 ))}
               </Select>

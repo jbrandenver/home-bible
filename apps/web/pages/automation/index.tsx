@@ -105,6 +105,7 @@ export default function AutomationOverviewPage() {
           <ActionLink href="/automation/map" variant="secondary">Connection map</ActionLink>
           <ActionLink href="/automation/failure-impact" variant="secondary">What fails if…</ActionLink>
           <ActionLink href="/automation/emergency" variant="secondary">Emergency guide</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </PageHeader>
 

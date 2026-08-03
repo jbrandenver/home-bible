@@ -26,8 +26,10 @@ export const AUTOMATION_ECOSYSTEMS = [
   'aqara', 'hue', 'lutron', 'ring', 'nest', 'ecobee', 'shelly', 'tuya', 'other'
 ] as const;
 
+// 'working_not_connected': the device does its job but is not talking to its
+// hub/app — a real state homeowners recognize (requires migration 027).
 export const AUTOMATION_DEVICE_STATUSES = [
-  'online', 'offline', 'intermittent', 'needs_attention', 'low_battery',
+  'online', 'working_not_connected', 'offline', 'intermittent', 'needs_attention', 'low_battery',
   'updating', 'unconfigured', 'retired', 'unknown'
 ] as const;
 
@@ -86,6 +88,7 @@ export type AutomationRoutineDeviceRole = (typeof AUTOMATION_ROUTINE_DEVICE_ROLE
 // Homeowner-friendly labels — plain language first (spec design requirement).
 export const AUTOMATION_STATUS_LABELS: Record<AutomationDeviceStatus, string> = {
   online: 'Working',
+  working_not_connected: 'Working but not connected',
   offline: 'Not responding',
   intermittent: 'Drops out sometimes',
   needs_attention: 'Needs attention',
@@ -94,6 +97,18 @@ export const AUTOMATION_STATUS_LABELS: Record<AutomationDeviceStatus, string> = 
   unconfigured: 'Not set up yet',
   retired: 'Retired',
   unknown: 'Not checked'
+};
+
+// Plain-language power labels ('mains' means nothing to most homeowners; the
+// DB value stays 'mains' — only the label says "Plug").
+export const AUTOMATION_POWER_LABELS: Record<AutomationPowerType, string> = {
+  mains: 'Plug (wall outlet)',
+  battery: 'Battery',
+  solar: 'Solar',
+  poe: 'Network cable (PoE)',
+  usb: 'USB',
+  hardwired: 'Hardwired',
+  other: 'Other'
 };
 
 // ---------------------------------------------------------------------------

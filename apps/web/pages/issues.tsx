@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useRouter } from 'next/router';
 import {
   formatEnumLabel,
   ISSUE_SEVERITIES,
@@ -124,6 +125,22 @@ export default function IssuesPage() {
   const [assetId, setAssetId] = useState('');
   const [utilityId, setUtilityId] = useState('');
   const [repairId, setRepairId] = useState('');
+
+  const router = useRouter();
+
+  // "Add issue" on a utility's page arrives with the utility pre-linked, so
+  // the form starts pointed at the right record.
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const queryUtilityId = router.query.utilityId;
+    const prefillUtilityId = Array.isArray(queryUtilityId) ? queryUtilityId[0] : queryUtilityId;
+    if (prefillUtilityId) {
+      setUtilityId(prefillUtilityId);
+    }
+  }, [router.isReady, router.query.utilityId]);
 
   const [flagTitle, setFlagTitle] = useState('');
   const [flagType, setFlagType] = useState<TrendFlagType>('manual_flag');

@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { AUTOMATION_HUB_TYPES, AUTOMATION_STATUS_LABELS, formatEnumLabel, type AutomationHubType } from '@home-folder/shared';
+import { AUTOMATION_HUB_TYPES, AUTOMATION_STATUS_LABELS, formatEnumLabel, sortEnumForDisplay, type AutomationHubType } from '@home-folder/shared';
 import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
 import {
   createHubForContext,
+  createNetworkForContext,
   deleteHubForContext,
   getAutomationContext,
   getHubsForContext,
@@ -23,6 +24,9 @@ import { getRoomsForProperty } from '../../lib/rooms';
 
 type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
+// Sentinel for "name a new network right here" in the network dropdown.
+const NEW_NETWORK_VALUE = '__new-network__';
+
 export default function AutomationHubsPage() {
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AutomationDataMode>('demo');
@@ -36,6 +40,7 @@ export default function AutomationHubsPage() {
   const [roomChoice, setRoomChoice] = useState('');
   const [roomCustomName, setRoomCustomName] = useState('');
   const [networkId, setNetworkId] = useState('');
+  const [newNetworkName, setNewNetworkName] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -98,6 +103,10 @@ export default function AutomationHubsPage() {
       setFormError('Create a property before adding a new location.');
       return;
     }
+    if (networkId === NEW_NETWORK_VALUE && !newNetworkName.trim()) {
+      setFormError('Give the new network a name — "Home Wi-Fi" works.');
+      return;
+    }
 
     setSaving(true);
     setFormError('');
@@ -114,11 +123,25 @@ export default function AutomationHubsPage() {
       const resolved = await resolveLocationRoomId(roomValue, resolutionContext);
       createdRoomId = resolved.createdRoomId;
 
+      // The network the hub hangs off can be named right here — nobody should
+      // hit a "no network" dead end and have to abandon the hub form.
+      let resolvedNetworkId: string | null = networkId || null;
+      if (networkId === NEW_NETWORK_VALUE) {
+        const createdNetwork = await createNetworkForContext(context, {
+          name: newNetworkName.trim(),
+          network_type: 'wifi',
+          is_guest: false,
+          is_iot: false
+        });
+        setNetworks((current) => [...current, createdNetwork].sort((a, b) => a.name.localeCompare(b.name)));
+        resolvedNetworkId = createdNetwork.id;
+      }
+
       const created = await createHubForContext(context, {
         name: name.trim(),
         hub_type: hubType,
         room_id: resolved.roomId,
-        network_id: networkId || null,
+        network_id: resolvedNetworkId,
         local_control: true,
         cloud_dependency: false,
         internet_dependency: false,
@@ -129,6 +152,8 @@ export default function AutomationHubsPage() {
       setName('');
       setRoomChoice(resolved.roomId || '');
       setRoomCustomName('');
+      setNetworkId(created.network_id || '');
+      setNewNetworkName('');
       if (wasPreset && context.mode === 'supabase' && context.property) {
         setRooms((await getRoomsForProperty(context.property.id)) as Room[]);
       }
@@ -157,18 +182,21 @@ export default function AutomationHubsPage() {
   return (
     <>
       <PageHeader eyebrow="Smart Home" title="Hubs & controllers" description="Bridges, hubs, Thread border routers, and controllers your devices depend on.">
-        <ActionLink href="/automation" variant="secondary">Overview</ActionLink>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <ActionLink href="/automation" variant="secondary">Smart home overview</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+        </div>
       </PageHeader>
 
       <div style={{ display: 'grid', gap: 24 }}>
         {dataMode === 'supabase' ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Add a hub or controller</h2>
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', alignItems: 'end' }}>
+            <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', alignItems: 'start' }}>
               <label><span>Name</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Hue Bridge" style={{ marginTop: 6 }} /></label>
               <label><span>Type</span>
                 <Select value={hubType} onChange={(e) => setHubType(e.target.value as AutomationHubType)} style={{ marginTop: 6 }}>
-                  {AUTOMATION_HUB_TYPES.map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}
+                  {sortEnumForDisplay(AUTOMATION_HUB_TYPES).map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}
                 </Select>
               </label>
               <RoomLocationSelect
@@ -181,12 +209,32 @@ export default function AutomationHubsPage() {
                 emptyLabel="No room recorded"
                 disabled={loading}
               />
-              <label><span>On network</span>
-                <Select value={networkId} onChange={(e) => setNetworkId(e.target.value)} style={{ marginTop: 6 }} disabled={loading}>
+              <div style={{ display: 'grid', gap: 8 }}>
+                <label htmlFor="hub-network" style={{ fontWeight: 600 }}>On network</label>
+                <Select id="hub-network" value={networkId} onChange={(e) => setNetworkId(e.target.value)} disabled={loading}>
                   <option value="">Not recorded</option>
                   {networks.map((network) => <option key={network.id} value={network.id}>{network.name}</option>)}
+                  <option value={NEW_NETWORK_VALUE}>Add a network…</option>
                 </Select>
-              </label>
+                {networkId === NEW_NETWORK_VALUE ? (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <label htmlFor="hub-new-network" style={{ fontSize: '0.9rem' }}>What is this network called?</label>
+                    <Input
+                      id="hub-new-network"
+                      value={newNetworkName}
+                      placeholder="Home Wi-Fi"
+                      onChange={(e) => setNewNetworkName(e.target.value)}
+                    />
+                  </div>
+                ) : null}
+                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {networks.length === 0
+                    ? 'No networks recorded yet — name yours here and it joins your record when you save.'
+                    : 'New networks join your record when you save.'}
+                </p>
+              </div>
+            </div>
+            <div style={{ marginTop: 16 }}>
               <Button onClick={add} disabled={saving}>{saving ? 'Adding…' : 'Add hub'}</Button>
             </div>
             {formError ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700, marginBottom: 0 }}>{formError}</p> : null}

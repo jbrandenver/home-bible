@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import {
   formatEnumLabel,
   REMINDER_FREQUENCIES,
@@ -40,6 +41,7 @@ function formatDateLabel(value: string | null) {
 }
 
 export default function RemindersPage() {
+  const router = useRouter();
   const [context, setContext] = useState<ReminderDataContext | null>(null);
   const [dataMode, setDataMode] = useState<ReminderDataMode>('demo');
   const [property, setProperty] = useState<PropertyOption | null>(null);
@@ -67,6 +69,21 @@ export default function RemindersPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [linkedFilter, setLinkedFilter] = useState('');
   const [sortBy, setSortBy] = useState<'due_date' | 'priority' | 'status'>('due_date');
+
+  // "Add reminder" on a utility's page arrives with the utility pre-linked, so
+  // the form starts pointed at the right record.
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const queryUtilityId = router.query.utilityId;
+    const prefillUtilityId = Array.isArray(queryUtilityId) ? queryUtilityId[0] : queryUtilityId;
+    if (prefillUtilityId) {
+      setLinkedType('utility');
+      setLinkedId(prefillUtilityId);
+    }
+  }, [router.isReady, router.query.utilityId]);
 
   useEffect(() => {
     let isMounted = true;

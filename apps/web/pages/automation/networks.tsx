@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, type AutomationNetworkType } from '@home-folder/shared';
+import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationNetworkType } from '@home-folder/shared';
 import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import {
@@ -11,18 +11,37 @@ import {
   type AutomationDataMode,
   type AutomationNetworkRow
 } from '../../lib/automation';
+import { getRoomsForProperty } from '../../lib/rooms';
+import { formatRoomLocation } from '../../lib/roomLabels';
+
+type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
+
+// Sentinel for "somewhere that isn't a mapped room" in the router-location
+// dropdown. The chosen room's label (or the typed text) is what gets stored —
+// networks record where equipment physically sits, not a room link.
+const CUSTOM_LOCATION_VALUE = '__custom-location__';
+
+const textareaStyle = { width: '100%', minHeight: 54, marginTop: 6, padding: 10 };
 
 export default function AutomationNetworksPage() {
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AutomationDataMode>('demo');
   const [networks, setNetworks] = useState<AutomationNetworkRow[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [name, setName] = useState('');
   const [networkType, setNetworkType] = useState<AutomationNetworkType>('wifi');
   const [ssid, setSsid] = useState('');
+  const [provider, setProvider] = useState('');
+  const [locationChoice, setLocationChoice] = useState('');
+  const [locationCustom, setLocationCustom] = useState('');
+  const [details, setDetails] = useState<Record<string, string>>({});
+  const [isIot, setIsIot] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  const [savedNote, setSavedNote] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -32,10 +51,17 @@ export default function AutomationNetworksPage() {
       try {
         const nextContext = await getAutomationContext();
         const list = await getNetworksForContext(nextContext);
+        // The router-location dropdown offers the mapped rooms, so "where the
+        // router sits" is a pick rather than a guess at wording.
+        const roomList =
+          nextContext.mode === 'supabase' && nextContext.property
+            ? ((await getRoomsForProperty(nextContext.property.id)) as Room[])
+            : [];
         if (!isMounted) return;
         setContext(nextContext);
         setDataMode(nextContext.mode);
         setNetworks(list);
+        setRooms(roomList);
       } catch (loadError) {
         if (isMounted) setError(loadError instanceof Error ? loadError.message : 'Failed to load networks.');
       } finally {
@@ -53,25 +79,62 @@ export default function AutomationNetworksPage() {
     };
   }, []);
 
+  const setDetail = (key: string, value: string) => setDetails((current) => ({ ...current, [key]: value }));
+  const detail = (key: string) => details[key] ?? '';
+  const detailOrNull = (key: string) => (details[key] ?? '').trim() || null;
+
   const add = async () => {
     if (!context) return;
     if (!name.trim()) {
-      setFormError('Give the network a name first.');
+      setFormError('Give the network a name first — "Home Wi-Fi" works.');
+      return;
+    }
+    if (locationChoice === CUSTOM_LOCATION_VALUE && !locationCustom.trim()) {
+      setFormError('Say where the router sits, or set the location back to "Not recorded".');
       return;
     }
     setSaving(true);
     setFormError('');
+    setSavedNote('');
     try {
+      const physicalLocation =
+        locationChoice === CUSTOM_LOCATION_VALUE ? locationCustom.trim() : locationChoice || null;
+
       const created = await createNetworkForContext(context, {
         name: name.trim(),
         network_type: networkType,
         ssid: ssid.trim() || null,
-        is_guest: networkType === 'guest',
-        is_iot: networkType === 'iot_vlan'
+        internet_provider: provider.trim() || null,
+        is_guest: isGuest || networkType === 'guest',
+        is_iot: isIot || networkType === 'iot_vlan',
+        physical_location: physicalLocation,
+        router_model: detailOrNull('router_model'),
+        modem: detailOrNull('modem'),
+        mesh_system: detailOrNull('mesh_system'),
+        access_points: detailOrNull('access_points'),
+        gateway: detailOrNull('gateway'),
+        subnet: detailOrNull('subnet'),
+        vlan: detailOrNull('vlan'),
+        dhcp_range: detailOrNull('dhcp_range'),
+        dns_notes: detailOrNull('dns_notes'),
+        backup_internet: detailOrNull('backup_internet'),
+        ups_backup: detailOrNull('ups_backup'),
+        security_notes: detailOrNull('security_notes'),
+        setup_instructions: detailOrNull('setup_instructions'),
+        recovery_instructions: detailOrNull('recovery_instructions'),
+        credential_reference: detailOrNull('credential_reference'),
+        notes: detailOrNull('notes')
       });
       setNetworks((current) => [created, ...current].sort((a, b) => a.name.localeCompare(b.name)));
+      setSavedNote(`Saved ${created.name}.`);
       setName('');
       setSsid('');
+      setProvider('');
+      setLocationChoice('');
+      setLocationCustom('');
+      setDetails({});
+      setIsIot(false);
+      setIsGuest(false);
     } catch (saveError) {
       setFormError(saveError instanceof Error ? saveError.message : 'Failed to add network.');
     } finally {
@@ -93,25 +156,87 @@ export default function AutomationNetworksPage() {
   return (
     <>
       <PageHeader eyebrow="Smart Home" title="Networks" description="The Wi-Fi, wired, IoT, and guest networks your devices live on.">
-        <ActionLink href="/automation" variant="secondary">Overview</ActionLink>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <ActionLink href="/automation" variant="secondary">Smart home overview</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+        </div>
       </PageHeader>
 
       <div style={{ display: 'grid', gap: 24 }}>
         {dataMode === 'supabase' ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Add a network</h2>
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', alignItems: 'end' }}>
-              <label><span>Name</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Home Wi-Fi" style={{ marginTop: 6 }} /></label>
-              <label><span>Type</span>
-                <Select value={networkType} onChange={(e) => setNetworkType(e.target.value as AutomationNetworkType)} style={{ marginTop: 6 }}>
-                  {AUTOMATION_NETWORK_TYPES.map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}
-                </Select>
-              </label>
-              <label><span>SSID</span><Input value={ssid} onChange={(e) => setSsid(e.target.value)} style={{ marginTop: 6 }} /></label>
-              <Button onClick={add} disabled={saving}>{saving ? 'Adding…' : 'Add network'}</Button>
+            <div style={{ display: 'grid', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', alignItems: 'start' }}>
+                <label><span>Name (what you call it)</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Home Wi-Fi" style={{ marginTop: 6 }} /></label>
+                <label><span>Type</span>
+                  <Select value={networkType} onChange={(e) => setNetworkType(e.target.value as AutomationNetworkType)} style={{ marginTop: 6 }}>
+                    {sortEnumForDisplay(AUTOMATION_NETWORK_TYPES).map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}
+                  </Select>
+                </label>
+                <label><span>Wi-Fi network name (SSID)</span><Input value={ssid} onChange={(e) => setSsid(e.target.value)} placeholder="What devices see when they scan" style={{ marginTop: 6 }} /></label>
+                <label><span>Internet provider</span><Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="Comcast, CenturyLink…" style={{ marginTop: 6 }} /></label>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label htmlFor="network-location" style={{ fontWeight: 600 }}>Where the router sits</label>
+                  <Select id="network-location" value={locationChoice} onChange={(e) => setLocationChoice(e.target.value)} disabled={loading}>
+                    <option value="">Not recorded</option>
+                    {rooms.length > 0 ? (
+                      <optgroup label="Rooms on file">
+                        {rooms.map((room) => (
+                          <option key={room.id} value={formatRoomLocation(room)}>{formatRoomLocation(room)}</option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    <option value={CUSTOM_LOCATION_VALUE}>Somewhere else…</option>
+                  </Select>
+                  {locationChoice === CUSTOM_LOCATION_VALUE ? (
+                    <Input
+                      value={locationCustom}
+                      onChange={(e) => setLocationCustom(e.target.value)}
+                      placeholder="Basement shelf by the panel"
+                      aria-label="Where the router sits"
+                    />
+                  ) : null}
+                  <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                    The physical spot — so someone can find the router when the internet is down.
+                  </p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={isIot} onChange={(e) => setIsIot(e.target.checked)} /><span>IoT network</span></label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={isGuest} onChange={(e) => setIsGuest(e.target.checked)} /><span>Guest network</span></label>
+              </div>
+
+              <details>
+                <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Equipment, addressing &amp; recovery (optional)</summary>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 12 }}>
+                  <label><span>Router model</span><Input value={detail('router_model')} onChange={(e) => setDetail('router_model', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Modem</span><Input value={detail('modem')} onChange={(e) => setDetail('modem', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Mesh system</span><Input value={detail('mesh_system')} onChange={(e) => setDetail('mesh_system', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Access points</span><Input value={detail('access_points')} onChange={(e) => setDetail('access_points', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Gateway address</span><Input value={detail('gateway')} onChange={(e) => setDetail('gateway', e.target.value)} placeholder="192.168.1.1" style={{ marginTop: 6 }} /></label>
+                  <label><span>Subnet</span><Input value={detail('subnet')} onChange={(e) => setDetail('subnet', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>VLAN</span><Input value={detail('vlan')} onChange={(e) => setDetail('vlan', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>DHCP range</span><Input value={detail('dhcp_range')} onChange={(e) => setDetail('dhcp_range', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Backup internet</span><Input value={detail('backup_internet')} onChange={(e) => setDetail('backup_internet', e.target.value)} style={{ marginTop: 6 }} /></label>
+                  <label><span>Battery backup (UPS)</span><Input value={detail('ups_backup')} onChange={(e) => setDetail('ups_backup', e.target.value)} style={{ marginTop: 6 }} /></label>
+                </div>
+                <label style={{ display: 'block', marginTop: 12 }}><span>DNS notes</span><textarea value={detail('dns_notes')} onChange={(e) => setDetail('dns_notes', e.target.value)} style={textareaStyle} /></label>
+                <label style={{ display: 'block', marginTop: 12 }}><span>Security notes (reference only — never a password)</span><textarea value={detail('security_notes')} onChange={(e) => setDetail('security_notes', e.target.value)} style={textareaStyle} /></label>
+                <label style={{ display: 'block', marginTop: 12 }}><span>Setup instructions</span><textarea value={detail('setup_instructions')} onChange={(e) => setDetail('setup_instructions', e.target.value)} style={textareaStyle} /></label>
+                <label style={{ display: 'block', marginTop: 12 }}><span>Recovery instructions (shown in the emergency guide)</span><textarea value={detail('recovery_instructions')} onChange={(e) => setDetail('recovery_instructions', e.target.value)} placeholder="Power-cycle the modem, then the router; wait 3 min." style={textareaStyle} /></label>
+                <label style={{ display: 'block', marginTop: 12 }}><span>Where credentials are stored (reference only — never the Wi-Fi password)</span><Input value={detail('credential_reference')} onChange={(e) => setDetail('credential_reference', e.target.value)} placeholder="1Password › Home Wi-Fi" style={{ marginTop: 6 }} /></label>
+                <label style={{ display: 'block', marginTop: 12 }}><span>Notes</span><textarea value={detail('notes')} onChange={(e) => setDetail('notes', e.target.value)} style={textareaStyle} /></label>
+              </details>
+
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <Button onClick={add} disabled={saving}>{saving ? 'Adding…' : 'Add network'}</Button>
+                <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: 0 }}>Never enter a Wi-Fi password here. Store it in a password manager and reference it above.</p>
+              </div>
+              {formError ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{formError}</p> : null}
+              {savedNote ? <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">{savedNote}</p> : null}
             </div>
-            <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 0 }}>Never enter a Wi-Fi password here. Store it in a password manager and reference it on the device.</p>
-            {formError ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700, marginBottom: 0 }}>{formError}</p> : null}
           </Card>
         ) : null}
 

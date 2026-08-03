@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { AUTOMATION_DEVICE_STATUSES, AUTOMATION_STATUS_LABELS, formatEnumLabel, type AutomationDeviceStatus } from '@home-folder/shared';
+import { AUTOMATION_DEVICE_STATUSES, AUTOMATION_POWER_LABELS, AUTOMATION_STATUS_LABELS, formatEnumLabel, type AutomationDeviceStatus } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
 import { RoomLocationSelect, roomSelectionValue } from '../../../components/RoomLocationSelect';
@@ -399,6 +399,8 @@ export default function AutomationDeviceDetailPage() {
           {context?.mode === 'supabase' && !editing ? (
             <Button variant="secondary" onClick={startEdit}>Edit details</Button>
           ) : null}
+          <ActionLink href="/automation/devices" variant="secondary">Back to devices</ActionLink>
+          <ActionLink href="/automation" variant="secondary">Smart home overview</ActionLink>
         </div>
       </PageHeader>
 
@@ -483,7 +485,7 @@ export default function AutomationDeviceDetailPage() {
           <Row label="Through hub" value={hubName || 'Directly (no hub)'} />
           <Row label="On network" value={networkName || null} />
           <Row label="Works without internet" value={device.local_control_available && !device.internet_required ? 'Yes' : 'No — needs internet'} />
-          <Row label="Power" value={device.power_type ? formatEnumLabel(device.power_type) : null} />
+          <Row label="Power" value={device.power_type ? AUTOMATION_POWER_LABELS[device.power_type] : null} />
           <Row label="Battery" value={device.battery_type ? `${device.battery_type}${device.last_battery_replacement ? ` · last changed ${device.last_battery_replacement}` : ''}` : null} />
         </Card>
 

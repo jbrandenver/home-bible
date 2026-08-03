@@ -1040,6 +1040,25 @@ export function formatEnumLabel(value: string) {
     .join(' ');
 }
 
+/**
+ * Enum values ordered the way a dropdown should show them: alphabetically by
+ * their human label, with catch-alls ('other', 'custom') last so "Other" never
+ * lands mid-list. For type-style enums only — status/workflow enums keep their
+ * meaningful order.
+ */
+export function sortEnumForDisplay<T extends string>(
+  values: readonly T[],
+  formatLabel: (value: T) => string = formatEnumLabel
+): T[] {
+  const isCatchAll = (value: T) => value === 'other' || value === 'custom';
+  return [...values].sort((a, b) => {
+    if (isCatchAll(a) !== isCatchAll(b)) {
+      return isCatchAll(a) ? 1 : -1;
+    }
+    return formatLabel(a).localeCompare(formatLabel(b));
+  });
+}
+
 // --- Portfolio (landlord / multi-unit) -------------------------------------
 // Units are properties with parent_property_id set; see migration 023. These
 // mirror the DB check constraints exactly, same as every enum above.

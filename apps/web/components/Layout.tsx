@@ -431,6 +431,17 @@ const portfolioSectionLinks: NavSectionLink[] = [
   { label: 'Condition reports', href: '/condition-reports' }
 ];
 
+// The utilities surfaces are real routes (plus filtered views of the list),
+// so these entries carry full hrefs. They appear under the Utilities tab on
+// desktop and are folded into the More tab on mobile (five tabs only).
+const utilitiesSectionLinks: NavSectionLink[] = [
+  { label: 'All utilities', href: '/utilities' },
+  { label: 'Add utility', href: '/add-utility' },
+  { label: 'HVAC systems', href: '/utilities?type=hvac' },
+  { label: 'Router / modem', href: '/utilities?type=router_modem' },
+  { label: 'Smoke / CO devices', href: '/utilities?type=safety_device' }
+];
+
 // The smart-home surfaces are real routes under /automation, not anchors, so
 // these entries carry full hrefs too. They appear under the Smart home tab on
 // desktop and are folded into the More tab on mobile (five tabs only).
@@ -472,7 +483,14 @@ const desktopSections: NavSection[] = [
     href: '/home',
     label: 'Home',
     icon: 'H',
-    activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms', '/utilities']
+    activeRoutes: ['/home', '/home-map', '/create-property', '/add-rooms', '/rooms']
+  },
+  {
+    href: '/utilities',
+    label: 'Utilities',
+    icon: 'U',
+    activeRoutes: ['/utilities', '/add-utility'],
+    sections: utilitiesSectionLinks
   },
   {
     href: '/automation',
@@ -523,12 +541,15 @@ const desktopSections: NavSection[] = [
 ];
 
 // The bottom bar is a five-column grid, so the tabs that don't earn a slot on a
-// phone (Documents, Portfolio, Smart home) are dropped here and their section
-// links are folded into the More tab's jump menu instead.
+// phone (Documents, Portfolio, Smart home, Utilities) are dropped here and
+// their section links are folded into the More tab's jump menu instead.
 const mobileSections = desktopSections
   .filter(
     (section) =>
-      section.href !== '/documents' && section.href !== '/portfolio' && section.href !== '/automation'
+      section.href !== '/documents' &&
+      section.href !== '/portfolio' &&
+      section.href !== '/automation' &&
+      section.href !== '/utilities'
   )
   .map((section) =>
     section.href === '/more'
@@ -540,12 +561,18 @@ const mobileSections = desktopSections
             '/compliance',
             '/tenancies',
             '/condition-reports',
-            '/automation'
+            '/automation',
+            '/utilities',
+            '/add-utility'
           ],
           // "Overview" is already taken by the More page itself, so the
-          // portfolio and smart-home overview entries are labeled by their
-          // own names here — every entry in this menu needs a unique label.
+          // portfolio, smart-home, and utilities overview entries are labeled
+          // by their own names here — every entry in this menu needs a unique
+          // label.
           sections: [
+            ...utilitiesSectionLinks.map((item) =>
+              item.href === '/utilities' ? { ...item, label: 'Utilities' } : item
+            ),
             ...portfolioSectionLinks.map((item) =>
               item.href === '/portfolio' ? { ...item, label: 'Portfolio' } : item
             ),

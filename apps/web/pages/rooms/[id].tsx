@@ -18,7 +18,7 @@ import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../../l
 import { getReminderDataContext, getRemindersForRoom, type ReminderRow } from '../../lib/reminders';
 import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../../lib/repairs';
-import { deleteRoomForProperty, getRoomById, updateRoomForProperty } from '../../lib/rooms';
+import { createRoomsForProperty, deleteRoomForProperty, getRoomById, updateRoomForProperty } from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../../lib/trendFlags';
 import { getUtilitiesForRoom, getUtilityDataContext, type UtilityRow } from '../../lib/utilities';
@@ -102,6 +102,10 @@ export default function RoomDetailPage() {
   const [roomDeleting, setRoomDeleting] = useState(false);
   const [roomFormError, setRoomFormError] = useState('');
   const [roomSaved, setRoomSaved] = useState(false);
+
+  const [closetAdding, setClosetAdding] = useState(false);
+  const [closetError, setClosetError] = useState('');
+  const [closetCreatedId, setClosetCreatedId] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -462,6 +466,54 @@ export default function RoomDetailPage() {
     }
   }
 
+  // A closet is its own selectable space (same model as the add-rooms flow):
+  // "Primary Bedroom Closet" joins the home record and things can be filed
+  // under it. This exists here for the room that was mapped without one.
+  async function handleAddCloset() {
+    if (!room) {
+      return;
+    }
+
+    setClosetError('');
+    setClosetCreatedId(null);
+    setClosetAdding(true);
+
+    const closetName = `${room.name} Closet`;
+    const floorName = room.floor_name === 'Unassigned' ? 'Main Floor' : room.floor_name;
+
+    try {
+      if (isAccountRoom) {
+        if (!propertyId) {
+          setClosetError('This room is still loading. Please try again in a moment.');
+          return;
+        }
+
+        const allRooms = await createRoomsForProperty(propertyId, [
+          { name: closetName, room_type: 'closet', floor_name: floorName }
+        ]);
+        const created = allRooms.find(
+          (candidate) =>
+            candidate.room_type === 'closet' &&
+            candidate.name.trim().toLowerCase() === closetName.toLowerCase()
+        );
+        setClosetCreatedId(created?.id || null);
+      } else {
+        const id = crypto.randomUUID();
+        setDemoRooms([
+          ...getDemoRooms(),
+          { id, name: closetName, room_type: 'closet', floor_name: floorName }
+        ]);
+        setClosetCreatedId(id);
+      }
+    } catch (closetAddError) {
+      setClosetError(
+        closetAddError instanceof Error ? closetAddError.message : 'Failed to add the closet.'
+      );
+    } finally {
+      setClosetAdding(false);
+    }
+  }
+
   async function handleDeleteRoom() {
     if (!room) {
       return;
@@ -530,7 +582,12 @@ export default function RoomDetailPage() {
       <PageHeader
         title={room.name}
         description={`${formatEnumLabel(room.room_type)} on ${room.floor_name}`}
-      />
+      >
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <ActionLink href="/home-map" variant="secondary">Back to home map</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+        </div>
+      </PageHeader>
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
@@ -773,6 +830,30 @@ export default function RoomDetailPage() {
                 : 'Removing a room here only changes this browser’s demo data. Anything recorded in it will show its room as deleted.'}
             </p>
           </form>
+        </Card>
+
+        <Card>
+          <h2 style={{ marginTop: 0 }}>Closet</h2>
+          <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+            Forgot to add a closet when this room was mapped? Add it now —
+            &ldquo;{room.name} Closet&rdquo; becomes its own selectable space, so
+            things stored in it can be filed under it.
+          </p>
+          {closetError ? (
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: '0 0 12px' }} role="alert">{closetError}</p>
+          ) : null}
+          {closetCreatedId ? (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">
+                Closet added to {room.floor_name === 'Unassigned' ? 'Main Floor' : room.floor_name}.
+              </p>
+              <ActionLink href={`/rooms/${closetCreatedId}`} variant="secondary">Open the closet</ActionLink>
+            </div>
+          ) : (
+            <Button type="button" variant="secondary" onClick={handleAddCloset} disabled={closetAdding}>
+              {closetAdding ? 'Adding closet...' : 'Add a closet to this room'}
+            </Button>
+          )}
         </Card>
 
         <RelatedDocuments
