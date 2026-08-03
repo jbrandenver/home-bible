@@ -1,8 +1,11 @@
 import type { CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { Card } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { PlateRow, PlateSeal } from '../components/PlateRow';
 import { Seo } from '../components/Seo';
+import { getCurrentUser } from '../lib/auth';
+import { getPerHomeCheckoutUrl, getPortfolioCheckoutUrl } from '../lib/entitlements';
 
 /* Schedule of fees — the register's pricing page (Persuade). Same direction
    contract as pages/index.tsx: a fee schedule inside the instrument, not a
@@ -14,7 +17,10 @@ import { Seo } from '../components/Seo';
    products, the doc, and this page together so the page never contradicts
    the bill. NOTE: enforcement is soft until the Stripe products exist —
    lib/entitlements.ts still allows 2 free properties, which only ever errs
-   in the customer's favor. */
+   in the customer's favor. Checkout buttons light up when the Payment Link
+   env vars are set on the Worker build (NEXT_PUBLIC_STRIPE_PER_HOME_
+   PAYMENT_LINK, NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK); until then
+   signed-in readers are told checkout has not opened, in plain words. */
 
 const monoLabel: CSSProperties = {
   fontFamily: 'var(--font-mono)',
@@ -26,6 +32,32 @@ const monoLabel: CSSProperties = {
 };
 
 export default function PricingPage() {
+  // The schedule doubles as the upgrade path for signed-in owners, so the
+  // buttons must know who is reading: a member is offered checkout (or told
+  // plainly that checkout has not opened), never "begin your record".
+  const [userId, setUserId] = useState<string | null>(null);
+  const [signedIn, setSignedIn] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    getCurrentUser()
+      .then((user) => {
+        if (isMounted) {
+          setUserId(user?.id ?? null);
+          setSignedIn(Boolean(user));
+        }
+      })
+      .catch(() => {
+        /* signed-out is the safe default */
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const perHomeCheckout = getPerHomeCheckoutUrl(userId);
+  const portfolioCheckout = getPortfolioCheckoutUrl(userId);
+
   return (
     <div style={{ display: 'grid', gap: 28 }}>
       <Seo
@@ -80,7 +112,11 @@ export default function PricingPage() {
           </div>
         </div>
         <div style={{ marginTop: 16 }}>
-          <ActionLink href="/sign-up">Begin your record — free</ActionLink>
+          {signedIn ? (
+            <ActionLink href="/dashboard">You&rsquo;re on the register — open your dashboard</ActionLink>
+          ) : (
+            <ActionLink href="/sign-up">Begin your record — free</ActionLink>
+          )}
         </div>
       </Card>
 
@@ -105,6 +141,18 @@ export default function PricingPage() {
             <PlateRow label="Everything in the free register" value="Included, per home" />
             <PlateRow label="Cancel" value="Any time — your records remain exportable" />
           </div>
+        </div>
+        <div style={{ marginTop: 16 }}>
+          {perHomeCheckout ? (
+            <ActionLink href={perHomeCheckout}>Add a home — $4.99 a month</ActionLink>
+          ) : signedIn ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
+              Checkout has not opened yet — until it does, additional homes are simply
+              included. Add the next one from your dashboard.
+            </p>
+          ) : (
+            <ActionLink href="/sign-up" variant="secondary">Begin free — add homes from your account</ActionLink>
+          )}
         </div>
       </Card>
 
@@ -131,9 +179,20 @@ export default function PricingPage() {
             <PlateRow label="Cancel" value="Any time — your records remain exportable" />
           </div>
         </div>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: 16, marginBottom: 0 }}>
-          Begin free; upgrade from inside your account when the fourth home arrives.
-        </p>
+        <div style={{ marginTop: 16 }}>
+          {portfolioCheckout ? (
+            <ActionLink href={portfolioCheckout}>Get the Portfolio plan — $29 a month</ActionLink>
+          ) : signedIn ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
+              Checkout has not opened yet — until it does, the Portfolio tools are simply
+              included, however many homes you keep.
+            </p>
+          ) : (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
+              Begin free; upgrade from inside your account when the fourth home arrives.
+            </p>
+          )}
+        </div>
       </Card>
 
       {/* ── Entry 4 · The professional channel ────────────────────────── */}
@@ -182,14 +241,20 @@ export default function PricingPage() {
             most and see for yourself.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-            <ActionLink href="/sign-up">Begin your record — free</ActionLink>
-            <ActionLink
-              href="/welcome"
-              variant="secondary"
-              style={{ color: 'var(--text-inverse)', borderColor: 'rgba(227,194,136,0.56)' }}
-            >
-              Try it in this browser
-            </ActionLink>
+            {signedIn ? (
+              <ActionLink href="/dashboard">Open your dashboard</ActionLink>
+            ) : (
+              <>
+                <ActionLink href="/sign-up">Begin your record — free</ActionLink>
+                <ActionLink
+                  href="/welcome"
+                  variant="secondary"
+                  style={{ color: 'var(--text-inverse)', borderColor: 'rgba(227,194,136,0.56)' }}
+                >
+                  Try it in this browser
+                </ActionLink>
+              </>
+            )}
           </div>
         </div>
       </Card>

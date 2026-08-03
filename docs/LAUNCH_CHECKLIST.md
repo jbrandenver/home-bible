@@ -88,7 +88,9 @@ when. Check them off in this file.
       "Enforcement lag" note — the code still allows 2 free homes on
       purpose until this exists).
 - [ ] Env vars on the Worker build: `NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK`,
-      `NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK`.
+      `NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK`, and (new 2026-08-03)
+      `NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK` — the pricing page's
+      checkout buttons light up automatically once these are set.
 - [ ] **Supabase Pro ($25/mo) the same day** — free projects pause when
       idle; a paused project takes money and delivers nothing.
 - [ ] CPA's view on state digital-goods tax before the first dollar.

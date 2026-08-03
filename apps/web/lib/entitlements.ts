@@ -30,11 +30,10 @@ export function hasPortfolioPlan(): Promise<boolean> {
 // where a portfolio starts — at the third door or the first building.
 export const FREE_PROPERTY_ALLOWANCE = 2;
 
-// The Stripe Payment Link for the recurring Portfolio plan, configured the
-// same way as the one-time products in docs/ACTIVATION_RUNBOOK.md. Absent
-// until Jesse creates the Stripe account — and everything here stays inert.
-export function getPortfolioCheckoutUrl(userId: string | null): string | null {
-  const base = process.env.NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK;
+// Stripe Payment Links, configured the same way as the one-time products in
+// docs/ACTIVATION_RUNBOOK.md. Absent until Jesse activates the Stripe
+// account — and everything here stays inert.
+function buildPaymentLinkUrl(base: string | undefined, userId: string | null): string | null {
   if (!base || !/^https:\/\//i.test(base)) {
     return null;
   }
@@ -43,6 +42,16 @@ export function getPortfolioCheckoutUrl(userId: string | null): string | null {
   }
   const separator = base.includes('?') ? '&' : '?';
   return `${base}${separator}client_reference_id=${encodeURIComponent(userId)}`;
+}
+
+/** The recurring Portfolio plan ($29/mo, unlimited homes). */
+export function getPortfolioCheckoutUrl(userId: string | null): string | null {
+  return buildPaymentLinkUrl(process.env.NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK, userId);
+}
+
+/** The per-additional-home subscription ($4.99/mo, homes two and three). */
+export function getPerHomeCheckoutUrl(userId: string | null): string | null {
+  return buildPaymentLinkUrl(process.env.NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK, userId);
 }
 
 export type PortfolioAccess = {
