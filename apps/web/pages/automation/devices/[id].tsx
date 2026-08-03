@@ -35,6 +35,7 @@ import {
 } from '../../../lib/locationPresets';
 import { getRoomsForProperty } from '../../../lib/rooms';
 import { formatRoomLocation } from '../../../lib/roomLabels';
+import { getUtilityDataContext, getUtilityForDevice, type UtilityRow } from '../../../lib/utilities';
 
 type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
@@ -84,6 +85,7 @@ export default function AutomationDeviceDetailPage() {
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
   const [linked, setLinked] = useState<DeviceLinkedRecords | null>(null);
+  const [linkedUtility, setLinkedUtility] = useState<UtilityRow | null>(null);
   const [relatedAutomations, setRelatedAutomations] = useState<Array<{ id: string; name: string }>>([]);
   const [dependencies, setDependencies] = useState<Array<{ id: string; label: string }>>([]);
   const [issueTitle, setIssueTitle] = useState('');
@@ -148,9 +150,21 @@ export default function AutomationDeviceDetailPage() {
             .map((rel) => ({ id: rel.id, label: `${rel.relationship_type.replace(/_/g, ' ')} ${rel.target_label || rel.target_type}` }));
         }
 
+        // The critical-utility record linked to this device, when its category
+        // crosses over (smoke/CO detector, water or sprinkler shutoff).
+        let utilityRecord: UtilityRow | null = null;
+        if (nextDevice) {
+          try {
+            utilityRecord = await getUtilityForDevice(await getUtilityDataContext(), deviceId);
+          } catch {
+            // The link is a convenience; the device page must load without it.
+          }
+        }
+
         if (!isMounted) return;
         setContext(nextContext);
         setDevice(nextDevice);
+        setLinkedUtility(utilityRecord);
         setRooms(roomRows);
         setHubs(hubList);
         setNetworks(networkList);
@@ -488,6 +502,20 @@ export default function AutomationDeviceDetailPage() {
           <Row label="Power" value={device.power_type ? AUTOMATION_POWER_LABELS[device.power_type] : null} />
           <Row label="Battery" value={device.battery_type ? `${device.battery_type}${device.last_battery_replacement ? ` · last changed ${device.last_battery_replacement}` : ''}` : null} />
         </Card>
+
+        {linkedUtility ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Critical utility record</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              This device is also one of the home&rsquo;s critical utilities — the two
+              records are linked, so its location and emergency notes live with the
+              other shutoffs and detectors.
+            </p>
+            <ActionLink href={`/utilities/${linkedUtility.id}`} variant="secondary">
+              Open utility record
+            </ActionLink>
+          </Card>
+        ) : null}
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Details</h2>

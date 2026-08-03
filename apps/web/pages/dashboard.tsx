@@ -20,6 +20,7 @@ import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/
 import { getReminderDataContext, getRemindersForContext, type ReminderRow } from '../lib/reminders';
 import { formatReceiptAmount, getReceiptDataContext, getReceiptsForContext, type ReceiptRow } from '../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../lib/repairs';
+import { isOutdoorArea } from '../lib/floorOrder';
 import { getFloorsForProperty, getRoomsForProperty } from '../lib/rooms';
 import { formatRoomLocation, formatRoomTypeLabel, getRoomSpaceSummary } from '../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
@@ -47,7 +48,7 @@ export default function DashboardPage() {
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
-  const [floorCount, setFloorCount] = useState(0);
+  const [floorNames, setFloorNames] = useState<string[]>([]);
   const [utilityError, setUtilityError] = useState('');
   const [assetError, setAssetError] = useState('');
   const [reminderError, setReminderError] = useState('');
@@ -235,7 +236,7 @@ export default function DashboardPage() {
               return;
             }
 
-            setFloorCount(floors.length);
+            setFloorNames(floors.map((floor) => floor.name));
             setRooms(
               remoteRooms.map((room) => ({
                 id: room.id,
@@ -248,12 +249,12 @@ export default function DashboardPage() {
             if (!isMounted) {
               return;
             }
-            setFloorCount(0);
+            setFloorNames([]);
             setRooms([]);
             setRoomError(loadError instanceof Error ? loadError.message : 'Failed to load rooms.');
           }
         } else {
-          setFloorCount(0);
+          setFloorNames([]);
           setRooms([]);
         }
       } else {
@@ -264,7 +265,7 @@ export default function DashboardPage() {
         setHasProperty(Boolean(demoProperty));
         setPropertyNickname(demoProperty?.nickname || 'Your property');
         setRooms(demoRooms);
-        setFloorCount(Array.from(new Set(demoRooms.map((room) => room.floor_name))).length);
+        setFloorNames(Array.from(new Set(demoRooms.map((room) => room.floor_name))));
       }
 
     }
@@ -280,7 +281,13 @@ export default function DashboardPage() {
     };
   }, [reloadKey]);
 
-  const floors = floorCount || Array.from(new Set(rooms.map((room) => room.floor_name))).length;
+  // "Back yard", "Outside", and friends are areas, not floors — counting them
+  // as floors made a one-story house read as three. Real floors and outdoor
+  // areas get their own badges.
+  const allFloorNames =
+    floorNames.length > 0 ? floorNames : Array.from(new Set(rooms.map((room) => room.floor_name)));
+  const floors = allFloorNames.filter((name) => !isOutdoorArea(name)).length;
+  const outdoorAreas = allFloorNames.length - floors;
   const roomSpaceSummary = useMemo(() => getRoomSpaceSummary(rooms), [rooms]);
 
   const completeness = useMemo(
@@ -713,6 +720,9 @@ export default function DashboardPage() {
             <h2 style={{ marginTop: 0 }}>Rooms & spaces</h2>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <UtilityBadge label={`${floors} floor${floors === 1 ? '' : 's'}`} />
+              {outdoorAreas > 0 ? (
+                <UtilityBadge label={`${outdoorAreas} outdoor area${outdoorAreas === 1 ? '' : 's'}`} />
+              ) : null}
               <UtilityBadge label={`${rooms.length} room${rooms.length === 1 ? ' or space' : 's & spaces'}`} />
               {roomSpaceSummary.map((item) => (
                 <UtilityBadge key={item.roomType} label={item.label} />

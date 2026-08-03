@@ -10,6 +10,7 @@ import {
   type AutomationProtocol
 } from '@home-folder/shared';
 import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
+import { createLinkedUtilityForDevice } from '../../lib/deviceUtilityCrossover';
 import { ActionLink } from '../../components/ActionLink';
 import {
   createDeviceForContext,
@@ -143,6 +144,16 @@ export default function AutomationDevicesPage() {
         primary_protocol: qProtocol || null
       });
       setDevices((current) => [created, ...current].sort((a, b) => a.name.localeCompare(b.name)));
+
+      // Safety-critical categories are also critical utilities — write the
+      // linked record so the shutoff/detector shows up with the utilities.
+      // Never lose the device over this; just say the utility didn't write.
+      try {
+        await createLinkedUtilityForDevice(created);
+      } catch {
+        setFormError('Device saved, but its critical-utility record could not be created — add it from the Utilities page.');
+      }
+
       if (wasPreset && context.mode === 'supabase' && context.property) {
         setRooms((await getRoomsForProperty(context.property.id)) as Room[]);
         setQRoom(created.room_id || '');

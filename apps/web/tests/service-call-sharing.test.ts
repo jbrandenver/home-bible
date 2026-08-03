@@ -46,6 +46,7 @@ function makeUtility(overrides: Partial<UtilityRow> = {}): UtilityRow {
     id: 'util-hvac',
     property_id: 'prop-1',
     room_id: null,
+    device_id: null,
     utility_type: 'hvac_unit',
     name: 'Heat pump',
     location_notes: 'East side of house',

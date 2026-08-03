@@ -26,6 +26,7 @@ import {
   type AutomationHubRow,
   type AutomationNetworkRow
 } from '../../lib/automation';
+import { DEVICE_CATEGORY_UTILITY_TYPE, createLinkedUtilityForDevice } from '../../lib/deviceUtilityCrossover';
 import {
   getAvailableLocationPresets,
   isLocationPresetValue,
@@ -69,7 +70,12 @@ export default function AddDevicePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [notReady, setNotReady] = useState('');
-  const [savedDevice, setSavedDevice] = useState<{ id: string; label: string } | null>(null);
+  const [savedDevice, setSavedDevice] = useState<{
+    id: string;
+    label: string;
+    utilityId: string | null;
+    utilityFailed: boolean;
+  } | null>(null);
 
   const [form, setForm] = useState({ ...EMPTY_FORM });
 
@@ -165,7 +171,20 @@ export default function AddDevicePage() {
         credential_reference: form.credential_reference.trim() || null,
         ecosystems: form.ecosystems
       });
-      setSavedDevice({ id: created.id, label: form.nickname.trim() || form.name.trim() });
+      // Safety-critical categories (smoke/CO detectors, water and sprinkler
+      // shutoffs) are also critical utilities — write that record now, linked
+      // to this device, so it shows up with the other shutoffs. A failure
+      // here must not lose the device that just saved.
+      let utilityId: string | null = null;
+      let utilityFailed = false;
+      try {
+        const linkedUtility = await createLinkedUtilityForDevice(created);
+        utilityId = linkedUtility?.id || null;
+      } catch {
+        utilityFailed = Boolean(DEVICE_CATEGORY_UTILITY_TYPE[created.category]);
+      }
+
+      setSavedDevice({ id: created.id, label: form.nickname.trim() || form.name.trim(), utilityId, utilityFailed });
       setForm({ ...EMPTY_FORM });
       setSaving(false);
       window.scrollTo({ top: 0 });
@@ -199,13 +218,22 @@ export default function AddDevicePage() {
         <Card>
           <p style={{ marginTop: 0, color: 'var(--status-good)', fontWeight: 600 }} role="status">
             {savedDevice.label} is in your smart home record.
+            {savedDevice.utilityId ? ' It is also listed under your critical utilities.' : ''}
           </p>
+          {savedDevice.utilityFailed ? (
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 600 }}>
+              The matching critical-utility record could not be created — add it from the Utilities page.
+            </p>
+          ) : null}
           <p style={{ color: 'var(--text-muted)' }}>
             Anything you skipped can be filled in later from the device&rsquo;s record.
           </p>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Button onClick={() => { setSavedDevice(null); setError(''); }}>Add another device</Button>
             <ActionLink href={`/automation/devices/${savedDevice.id}`} variant="secondary">Open device record</ActionLink>
+            {savedDevice.utilityId ? (
+              <ActionLink href={`/utilities/${savedDevice.utilityId}`} variant="secondary">Open utility record</ActionLink>
+            ) : null}
             <ActionLink href="/automation" variant="secondary">Back to Smart home</ActionLink>
           </div>
         </Card>

@@ -14,6 +14,8 @@ export type UtilityRow = {
   id: string;
   property_id: string | null;
   room_id: string | null;
+  /** Smart home device this utility record describes (see migration 028). */
+  device_id: string | null;
   utility_type: UtilityType;
   name: string;
   location_notes: string | null;
@@ -27,6 +29,7 @@ export type UtilityInput = {
   utility_type: UtilityType;
   name: string;
   room_id?: string | null;
+  device_id?: string | null;
   location_notes?: string | null;
   emergency_notes?: string | null;
 };
@@ -39,7 +42,7 @@ export type UtilityDataContext = {
 };
 
 const UTILITY_SELECT =
-  'id, property_id, room_id, utility_type, name, location_notes, emergency_notes, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, device_id, utility_type, name, location_notes, emergency_notes, created_at, updated_at, deleted_at';
 
 function normalizeUtility(raw: Partial<UtilityRow>): UtilityRow {
   const createdAt = raw.created_at || new Date().toISOString();
@@ -51,6 +54,7 @@ function normalizeUtility(raw: Partial<UtilityRow>): UtilityRow {
     id: raw.id || crypto.randomUUID(),
     property_id: raw.property_id || null,
     room_id: raw.room_id || null,
+    device_id: raw.device_id || null,
     utility_type: utilityType,
     name: raw.name || 'Untitled utility',
     location_notes: raw.location_notes || null,
@@ -162,6 +166,32 @@ export async function getUtilitiesForRoom(context: UtilityDataContext, roomId: s
   return ((data ?? []) as Partial<UtilityRow>[]).map(normalizeUtility);
 }
 
+/** The utility record describing a smart home device, if one is linked. */
+export async function getUtilityForDevice(context: UtilityDataContext, deviceId: string) {
+  if (context.mode === 'demo') {
+    return getDemoUtilities().find((utility) => utility.device_id === deviceId) || null;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase
+    .from('utilities')
+    .select(UTILITY_SELECT)
+    .eq('device_id', deviceId)
+    .is('deleted_at', null)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message || 'Failed to load the linked utility.');
+  }
+
+  return data ? normalizeUtility(data as Partial<UtilityRow>) : null;
+}
+
 export async function getUtilityByIdForContext(context: UtilityDataContext, utilityId: string) {
   if (context.mode === 'demo') {
     return getDemoUtilities().find((utility) => utility.id === utilityId) || null;
@@ -200,6 +230,7 @@ export async function createUtilityForContext(context: UtilityDataContext, input
       id: crypto.randomUUID(),
       property_id: demoProperty?.id || null,
       room_id: input.room_id || null,
+      device_id: input.device_id || null,
       utility_type: input.utility_type,
       name: input.name.trim(),
       location_notes: input.location_notes?.trim() || null,
@@ -227,6 +258,7 @@ export async function createUtilityForContext(context: UtilityDataContext, input
     .insert({
       property_id: context.property.id,
       room_id: input.room_id || null,
+      device_id: input.device_id || null,
       utility_type: input.utility_type,
       name: input.name.trim(),
       location_notes: input.location_notes?.trim() || null,

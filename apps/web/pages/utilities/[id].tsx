@@ -403,6 +403,16 @@ export default function UtilityDetailPage() {
           </div>
           {utility.location_notes ? <p><strong>Location:</strong> {utility.location_notes}</p> : null}
           {utility.emergency_notes ? <p style={{ color: 'var(--status-urgent)' }}><strong>Emergency:</strong> {utility.emergency_notes}</p> : null}
+          {utility.device_id ? (
+            <div style={{ marginTop: 12 }}>
+              <p style={{ margin: '0 0 8px', color: 'var(--text-muted)' }}>
+                This utility is also a smart home device — the two records are linked.
+              </p>
+              <ActionLink href={`/automation/devices/${utility.device_id}`} variant="secondary">
+                Open smart device record
+              </ActionLink>
+            </div>
+          ) : null}
         </Card>
 
         <Card tone="dark">
