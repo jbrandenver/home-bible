@@ -729,181 +729,33 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <h2 style={{ marginTop: 0 }}>Property address</h2>
+            <h2 style={{ marginTop: 0 }}>{property?.nickname?.trim() || 'This home'}</h2>
             <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-              Optional. When enabled, the address appears on service call sheets and handover
-              reports so a technician knows where to go — it is never shown anywhere else.
+              One card for this home — its details, its address, and its removal.
             </p>
             {!supabaseReady || !user ? (
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                Sign in to save your property address.
-              </p>
-            ) : addressLoadFailed ? (
-              <div style={{ display: 'grid', gap: 12 }}>
-                <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">
-                  We could not load your property address.
-                </p>
-                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                  {addressError} Nothing has been changed — this is a loading problem, not a
-                  missing property, so please retry rather than creating a new one.
-                </p>
-                <div>
-                  <Button type="button" variant="secondary" onClick={() => setUser((current) => (current ? { ...current } : current))}>
-                    Retry
-                  </Button>
-                </div>
-              </div>
-            ) : !property && !addressLoading ? (
-              <div style={{ display: 'grid', gap: 12 }}>
-                <p style={{ color: 'var(--text-muted)', margin: 0 }}>Create a property first — the address belongs to it.</p>
-                <div>
-                  <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
-                </div>
-              </div>
-            ) : (
-              <form onSubmit={handleSaveAddress} style={{ display: 'grid', gap: 14 }}>
-                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-                  <label>
-                    <span>Street address</span>
-                    <Input
-                      value={addressLine1}
-                      onChange={(event) => { setAddressLine1(event.target.value); noteAddressEdited(); }}
-                      placeholder="123 Main St"
-                      autoComplete="address-line1"
-                      disabled={addressLoading}
-                      style={{ marginTop: 6 }}
-                    />
-                  </label>
-                  <label>
-                    <span>Apt, unit, etc. (optional)</span>
-                    <Input
-                      value={addressLine2}
-                      onChange={(event) => { setAddressLine2(event.target.value); noteAddressEdited(); }}
-                      placeholder="Unit B"
-                      autoComplete="address-line2"
-                      disabled={addressLoading}
-                      style={{ marginTop: 6 }}
-                    />
-                  </label>
-                </div>
-                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-                  <label>
-                    <span>City</span>
-                    <Input
-                      value={addressCity}
-                      onChange={(event) => { setAddressCity(event.target.value); noteAddressEdited(); }}
-                      autoComplete="address-level2"
-                      disabled={addressLoading}
-                      style={{ marginTop: 6 }}
-                    />
-                  </label>
-                  <label>
-                    <span>State</span>
-                    <Input
-                      value={addressState}
-                      onChange={(event) => { setAddressState(event.target.value); noteAddressEdited(); }}
-                      autoComplete="address-level1"
-                      disabled={addressLoading}
-                      style={{ marginTop: 6 }}
-                    />
-                  </label>
-                  <label>
-                    <span>ZIP</span>
-                    <Input
-                      value={addressPostal}
-                      onChange={(event) => { setAddressPostal(event.target.value); noteAddressEdited(); }}
-                      autoComplete="postal-code"
-                      disabled={addressLoading}
-                      style={{ marginTop: 6 }}
-                    />
-                  </label>
-                </div>
-                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <input
-                    type="checkbox"
-                    checked={addressEnabled}
-                    onChange={(event) => { setAddressEnabled(event.target.checked); noteAddressEdited(); }}
-                    disabled={addressLoading}
-                    style={{ marginTop: 4 }}
-                  />
-                  <span style={{ textTransform: 'none', letterSpacing: 'normal', fontFamily: 'var(--font-body)', fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>
-                    Include this address on service call sheets and handover reports.
-                  </span>
-                </label>
-                {!addressEnabled &&
-                formatAddressLine({
-                  address_line_1: addressLine1,
-                  address_line_2: addressLine2,
-                  city: addressCity,
-                  state: addressState,
-                  postal_code: addressPostal
-                }) ? (
-                  <p style={{ color: 'var(--status-attention)', fontWeight: 600, margin: 0 }}>
-                    Saved, but it will not appear anywhere until you tick the box above.
-                  </p>
-                ) : null}
-                {formatAddressLine({
-                  address_line_1: addressLine1,
-                  address_line_2: addressLine2,
-                  city: addressCity,
-                  state: addressState,
-                  postal_code: addressPostal
-                }) ? (
-                  <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14 }}>
-                    Will appear as:{' '}
-                    <strong style={{ color: 'var(--text-primary)' }}>
-                      {formatAddressLine({
-                        address_line_1: addressLine1,
-                        address_line_2: addressLine2,
-                        city: addressCity,
-                        state: addressState,
-                        postal_code: addressPostal
-                      })}
-                    </strong>
-                  </p>
-                ) : null}
-                {addressError ? (
-                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{addressError}</p>
-                ) : null}
-                {addressSaved ? (
-                  <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Address saved.</p>
-                ) : null}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <Button type="submit" disabled={addressLoading || addressSaving}>
-                    {addressSaving ? 'Saving...' : 'Save address'}
-                  </Button>
-                  {addressDirty ? (
-                    <span style={{ color: 'var(--status-attention)', fontWeight: 600, fontSize: 14 }}>
-                      Unsaved changes
-                    </span>
-                  ) : null}
-                </div>
-              </form>
-            )}
-          </Card>
-
-          <Card>
-            <h2 style={{ marginTop: 0 }}>Property details</h2>
-            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-              What this property is, and what it has. A name typed in a hurry can be
-              corrected here. The seasonal maintenance plan reads the state from the
-              address above, along with whether there is a yard or a basement, so
-              filling these in makes the plan match the actual home.
-            </p>
-            {!supabaseReady || !user ? (
-              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                Sign in to edit your property details.
+                Sign in to manage your property.
               </p>
             ) : !property && !addressLoading ? (
               <div style={{ display: 'grid', gap: 12 }}>
                 <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                  Create a property first — these details belong to it.
+                  Create a property first — these settings belong to it.
                 </p>
                 <div>
                   <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
                 </div>
               </div>
             ) : (
+              <div style={{ display: 'grid', gap: 24 }}>
+                <section>
+                  <h3 style={{ marginTop: 0 }}>Details</h3>
+                  <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                    What this property is, and what it has. A name typed in a hurry can be
+                    corrected here. The seasonal maintenance plan reads the state from the
+                    address below, along with whether there is a yard or a basement, so
+                    filling these in makes the plan match the actual home.
+                  </p>
               <form onSubmit={handleSavePropertyDetails} style={{ display: 'grid', gap: 14 }}>
                 <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                   <label>
@@ -1023,40 +875,175 @@ export default function SettingsPage() {
                   ) : null}
                 </div>
               </form>
-            )}
-          </Card>
+                </section>
 
-          <Card>
-            <h2 style={{ marginTop: 0 }}>Delete this home</h2>
-            {!supabaseReady || !user ? (
-              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                Sign in to manage your properties.
-              </p>
-            ) : !property ? (
-              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                No property to delete — create one first.
-              </p>
-            ) : (
-              <div style={{ display: 'grid', gap: 12 }}>
-                <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                  Removes <strong>{property.nickname || 'this home'}</strong> and everything
-                  recorded in it — rooms, utilities, appliances, documents, reminders, and
-                  history — from your account. A building takes its units with it. Your
-                  account and any other homes stay. This cannot be undone.
-                </p>
-                {propertyDeleteError ? (
-                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{propertyDeleteError}</p>
-                ) : null}
-                <div>
-                  <Button
-                    type="button"
-                    disabled={deletingProperty}
-                    onClick={handleDeleteProperty}
-                    style={{ background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
-                  >
-                    {deletingProperty ? 'Deleting...' : 'Delete this home'}
-                  </Button>
+                <section style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
+                  <h3 style={{ marginTop: 0 }}>Address</h3>
+                  <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+                    Optional. When enabled, the address appears on service call sheets and handover
+                    reports so a technician knows where to go — it is never shown anywhere else.
+                  </p>
+                  {addressLoadFailed ? (
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">
+                        We could not load your property address.
+                      </p>
+                      <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                        {addressError} Nothing has been changed — this is a loading problem, not a
+                        missing property, so please retry rather than creating a new one.
+                      </p>
+                      <div>
+                        <Button type="button" variant="secondary" onClick={() => setUser((current) => (current ? { ...current } : current))}>
+                          Retry
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+              <form onSubmit={handleSaveAddress} style={{ display: 'grid', gap: 14 }}>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+                  <label>
+                    <span>Street address</span>
+                    <Input
+                      value={addressLine1}
+                      onChange={(event) => { setAddressLine1(event.target.value); noteAddressEdited(); }}
+                      placeholder="123 Main St"
+                      autoComplete="address-line1"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>Apt, unit, etc. (optional)</span>
+                    <Input
+                      value={addressLine2}
+                      onChange={(event) => { setAddressLine2(event.target.value); noteAddressEdited(); }}
+                      placeholder="Unit B"
+                      autoComplete="address-line2"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
                 </div>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                  <label>
+                    <span>City</span>
+                    <Input
+                      value={addressCity}
+                      onChange={(event) => { setAddressCity(event.target.value); noteAddressEdited(); }}
+                      autoComplete="address-level2"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>State</span>
+                    <Input
+                      value={addressState}
+                      onChange={(event) => { setAddressState(event.target.value); noteAddressEdited(); }}
+                      autoComplete="address-level1"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                  <label>
+                    <span>ZIP</span>
+                    <Input
+                      value={addressPostal}
+                      onChange={(event) => { setAddressPostal(event.target.value); noteAddressEdited(); }}
+                      autoComplete="postal-code"
+                      disabled={addressLoading}
+                      style={{ marginTop: 6 }}
+                    />
+                  </label>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={addressEnabled}
+                    onChange={(event) => { setAddressEnabled(event.target.checked); noteAddressEdited(); }}
+                    disabled={addressLoading}
+                    style={{ marginTop: 4 }}
+                  />
+                  <span style={{ textTransform: 'none', letterSpacing: 'normal', fontFamily: 'var(--font-body)', fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 500 }}>
+                    Include this address on service call sheets and handover reports.
+                  </span>
+                </label>
+                {!addressEnabled &&
+                formatAddressLine({
+                  address_line_1: addressLine1,
+                  address_line_2: addressLine2,
+                  city: addressCity,
+                  state: addressState,
+                  postal_code: addressPostal
+                }) ? (
+                  <p style={{ color: 'var(--status-attention)', fontWeight: 600, margin: 0 }}>
+                    Saved, but it will not appear anywhere until you tick the box above.
+                  </p>
+                ) : null}
+                {formatAddressLine({
+                  address_line_1: addressLine1,
+                  address_line_2: addressLine2,
+                  city: addressCity,
+                  state: addressState,
+                  postal_code: addressPostal
+                }) ? (
+                  <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14 }}>
+                    Will appear as:{' '}
+                    <strong style={{ color: 'var(--text-primary)' }}>
+                      {formatAddressLine({
+                        address_line_1: addressLine1,
+                        address_line_2: addressLine2,
+                        city: addressCity,
+                        state: addressState,
+                        postal_code: addressPostal
+                      })}
+                    </strong>
+                  </p>
+                ) : null}
+                {addressError ? (
+                  <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{addressError}</p>
+                ) : null}
+                {addressSaved ? (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">Address saved.</p>
+                ) : null}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <Button type="submit" disabled={addressLoading || addressSaving}>
+                    {addressSaving ? 'Saving...' : 'Save address'}
+                  </Button>
+                  {addressDirty ? (
+                    <span style={{ color: 'var(--status-attention)', fontWeight: 600, fontSize: 14 }}>
+                      Unsaved changes
+                    </span>
+                  ) : null}
+                </div>
+              </form>
+                  )}
+                </section>
+
+                <section style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 20 }}>
+                  <h3 style={{ marginTop: 0 }}>Delete this home</h3>
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                      Removes <strong>{property?.nickname || 'this home'}</strong> and everything
+                      recorded in it — rooms, utilities, appliances, documents, reminders, and
+                      history — from your account. A building takes its units with it. Your
+                      account and any other homes stay. This cannot be undone.
+                    </p>
+                    {propertyDeleteError ? (
+                      <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{propertyDeleteError}</p>
+                    ) : null}
+                    <div>
+                      <Button
+                        type="button"
+                        disabled={deletingProperty}
+                        onClick={handleDeleteProperty}
+                        style={{ background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
+                      >
+                        {deletingProperty ? 'Deleting...' : 'Delete this home'}
+                      </Button>
+                    </div>
+                  </div>
+                </section>
               </div>
             )}
           </Card>
