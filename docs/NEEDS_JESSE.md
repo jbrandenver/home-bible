@@ -80,11 +80,13 @@ New flows shipped since the audit (2026-07-30):
       report with a photo, mark completed, print the deposit packet.
 - [ ] Compliance: add an obligation from a template, mark it completed →
       next due date advances.
-- [ ] Transfer: mint a code on /sharing (keep yourself as viewer), claim it
+- [x] Transfer: mint a code on /sharing (keep yourself as viewer), claim it
       on /claim with a second account → ownership moves, shares cleared,
       you retain viewer. **The single most important new check.**
-- [ ] Pro: register a partner profile on /pro, re-issue a transfer → the
-      claim page shows "Prepared by {business}".
+      — VERIFIED WORKING by Jesse 2026-08-03 (after same-day fixes: claim
+      discoverability on welcome/dashboard, sharing card layout).
+- [x] Pro: register a partner profile on /pro, re-issue a transfer → the
+      claim page shows "Prepared by {business}". — VERIFIED 2026-08-03.
 - [ ] Export: Settings → Download full archive → zip contains files/ folder.
 - [ ] Plate scan: add-asset → "Scan the data plate" → confirms the friendly
       "not enabled yet" message (key not set — expected).

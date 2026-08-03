@@ -70,11 +70,14 @@ when. Check them off in this file.
       `https://ourhomefolder.com/**`. (Sign-in worked in your QA pass, so
       this is likely done — confirm the redirect list too, it covers
       password-reset emails.)
-- [ ] **Hand-test the two flows with zero live usage**: ownership transfer
-      (mint on /sharing → claim on /claim with a second account) and the pro
-      flow (/pro registration → co-branded claim). The tables show 0 rows
-      ever — everything else in the app has been human-verified; these two
-      have not.
+- [x] **Hand-test the two flows with zero live usage** — verified working
+      by Jesse 2026-08-03: /pro registration → transfer minted on /sharing →
+      claimed on /claim by a second account with "Prepared by {business}"
+      co-branding, ownership moved, kept-role honored. The first run
+      surfaced and fixed three real gaps the same day: signed-out invite
+      links dead-ended (accept-invite), transfer recipients had no path to
+      /claim (links added to welcome + empty dashboard), and the Transfer
+      ownership card was misaligned with no copy-link button.
 - [ ] Optional: Cloudflare redirect rule `www → apex` (canonical tags
       already point at the apex, so this is tidiness, not SEO rescue).
 
