@@ -62,11 +62,9 @@ when. Check them off in this file.
 
 ## Jesse — required before announcing (each ≤5 minutes)
 
-- [ ] **Cloudflare: turn on "Always Use HTTPS"** (dash.cloudflare.com →
-      ourhomefolder.com zone → SSL/TLS → Edge Certificates). Today plain
-      http:// serves the site without redirecting; the HSTS header we now
-      send only helps after the first https visit. This is the one remaining
-      HIGH item.
+- [x] **Cloudflare: turn on "Always Use HTTPS"** — verified done 2026-08-03:
+      plain http:// now 301s to https://, HSTS header present. (Was the one
+      remaining HIGH item.)
 - [ ] **Verify Supabase auth URLs** (Authentication → URL Configuration):
       Site URL `https://ourhomefolder.com`, redirects
       `https://ourhomefolder.com/**`. (Sign-in worked in your QA pass, so

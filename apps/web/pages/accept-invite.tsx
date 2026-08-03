@@ -2,17 +2,67 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { Button, Card, PageHeader } from '@home-folder/ui';
+import { ActionLink } from '../components/ActionLink';
+import { getCurrentUser } from '../lib/auth';
 import { acceptPropertyInvitation } from '../lib/sharing';
 
 export default function AcceptInvitePage() {
   const router = useRouter();
-  const token = typeof router.query.token === 'string' ? router.query.token : '';
+  const queryToken = typeof router.query.token === 'string' ? router.query.token : '';
+  // Fallback: read the token straight off the URL. The router's query is
+  // empty until hydration finishes, and this link is opened cold from an
+  // email — the recipient must never see "missing its code" while it loads.
+  const [urlToken, setUrlToken] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setUrlToken(new URLSearchParams(window.location.search).get('token') || '');
+    }
+  }, []);
+
+  const token = queryToken || urlToken;
+  // Who is here decides what happens: a signed-in visitor accepts right away;
+  // a signed-out one gets told what this link is and how to create the
+  // account first. Firing the accept blind left signed-out recipients staring
+  // at "Accepting invitation..." forever (found in Jesse's launch QA).
+  const [authState, setAuthState] = useState<'checking' | 'signed-out' | 'signed-in'>('checking');
   const [status, setStatus] = useState<'idle' | 'accepting' | 'accepted' | 'failed'>('idle');
   const [propertyId, setPropertyId] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!router.isReady || !token || status !== 'idle') {
+    let isMounted = true;
+
+    // If the auth client stalls, fall through to the signed-out screen: its
+    // sign-in/sign-up buttons are safe for everyone (a signed-in visitor who
+    // clicks sign-in bounces straight back here), whereas an endless spinner
+    // is safe for no one.
+    const fallback = window.setTimeout(() => {
+      if (isMounted) {
+        setAuthState((current) => (current === 'checking' ? 'signed-out' : current));
+      }
+    }, 4000);
+
+    getCurrentUser()
+      .then((user) => {
+        if (isMounted) {
+          setAuthState(user ? 'signed-in' : 'signed-out');
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setAuthState('signed-out');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(fallback);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!router.isReady || !token || authState !== 'signed-in' || status !== 'idle') {
       return;
     }
 
@@ -41,7 +91,9 @@ export default function AcceptInvitePage() {
     return () => {
       isMounted = false;
     };
-  }, [router.isReady, status, token]);
+  }, [router.isReady, authState, status, token]);
+
+  const nextParam = encodeURIComponent(router.asPath);
 
   return (
     <>
@@ -51,10 +103,37 @@ export default function AcceptInvitePage() {
       />
 
       <Card>
-        {!token ? <p>This invitation link is missing its token.</p> : null}
-        {status === 'idle' || status === 'accepting' ? <p>Accepting invitation...</p> : null}
-
-        {status === 'accepted' ? (
+        {!token ? (
+          authState === 'checking' || !router.isReady ? (
+            <p style={{ margin: 0 }}>Checking your invitation...</p>
+          ) : (
+            <p style={{ margin: 0 }}>
+              This invitation link is missing its code. Ask the person who invited you to send
+              the link again.
+            </p>
+          )
+        ) : authState === 'checking' ? (
+          <p style={{ margin: 0 }}>Checking your invitation...</p>
+        ) : authState === 'signed-out' ? (
+          <div style={{ display: 'grid', gap: 12 }}>
+            <p style={{ margin: 0 }}>
+              Someone has shared their home record with you. To open it, you need a free
+              Our Home Folder account — your invitation is attached to this link, so
+              you&rsquo;ll land right back here after signing up.
+            </p>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <ActionLink href={`/sign-up?next=${nextParam}`}>Create a free account</ActionLink>
+              <ActionLink href={`/sign-in?next=${nextParam}`} variant="secondary">
+                I already have an account — sign in
+              </ActionLink>
+            </div>
+            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>
+              You&rsquo;ll only see what the inviter chose to share, at the access level they set.
+            </p>
+          </div>
+        ) : status === 'idle' || status === 'accepting' ? (
+          <p style={{ margin: 0 }}>Accepting invitation...</p>
+        ) : status === 'accepted' ? (
           <div style={{ display: 'grid', gap: 12 }}>
             <p style={{ margin: 0 }}>Invitation accepted. You now have access to this shared property.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -62,17 +141,22 @@ export default function AcceptInvitePage() {
               {propertyId ? <Link href="/home-map">Open home map</Link> : null}
             </div>
           </div>
-        ) : null}
-
-        {status === 'failed' ? (
+        ) : (
           <div style={{ display: 'grid', gap: 12 }}>
             <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{error}</p>
             <p style={{ margin: 0 }}>
-              If you are not signed in yet, sign in first and then reopen the invite link.
+              The invitation could not be accepted. It may have expired or already been used —
+              ask the inviter to send a fresh link. If you signed in with a different email
+              than the one that was invited, sign out and use the invited address.
             </p>
-            <Link href={`/sign-in?next=${encodeURIComponent(router.asPath)}`}>Sign in</Link>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Button type="button" onClick={() => { setStatus('idle'); setError(''); }}>
+                Try again
+              </Button>
+              <ActionLink href="/dashboard" variant="secondary">Go to dashboard</ActionLink>
+            </div>
           </div>
-        ) : null}
+        )}
       </Card>
     </>
   );
