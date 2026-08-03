@@ -96,7 +96,14 @@ New flows shipped since the audit (2026-07-30):
 
 ## Decisions only you can make
 
-### 3. Delete the duplicate `.env.local` at the repo root
+### 3. ~~Delete the duplicate `.env.local` at the repo root~~ — DONE 2026-08-03
+Deleted with Jesse's go-ahead; `apps/web/.env.local` (the one Next.js loads)
+untouched. Item 4 (ripgrep) also done the same day — `pnpm security:audit`
+now genuinely runs: PASS 9 / WARNING 16 / FAIL 0.
+
+Original item, for the record:
+
+### 3-old. Delete the duplicate `.env.local` at the repo root
 There are two: `/.env.local` and `/apps/web/.env.local`. Next.js only loads the
 second. The root copy is dead weight that doubles the rotation surface and the
 accidental-`cat` surface. Both are correctly gitignored and **nothing has
