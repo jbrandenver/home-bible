@@ -184,7 +184,14 @@ export default function WelcomePage() {
         eyebrow="First run"
         title="Let's start with the two things nobody can find"
         description="Most people don't know where their water shuts off until water is coming through the ceiling. Five minutes now, and it's written down for good."
-      />
+      >
+        {/* A transfer recipient does not set up a new home — the record they
+            were handed already exists. Without this path, launch QA showed
+            them funneled into new-home setup with nowhere to enter a code. */}
+        <ActionLink href="/claim" variant="secondary">
+          Been handed a home? Claim it with your transfer code
+        </ActionLink>
+      </PageHeader>
 
       <div style={{ display: 'grid', gap: 24 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

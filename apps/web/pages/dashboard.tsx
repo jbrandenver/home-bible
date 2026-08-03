@@ -546,7 +546,12 @@ export default function DashboardPage() {
           <Card tone="dark">
             <h2 style={{ marginTop: 0 }}>{nextStep.title}</h2>
             <p style={{ color: 'rgba(255,248,234,0.78)' }}>{nextStep.description}</p>
-            <ActionLink href={nextStep.href}>{nextStep.action}</ActionLink>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+              <ActionLink href={nextStep.href}>{nextStep.action}</ActionLink>
+              {!hasProperty ? (
+                <ActionLink href="/claim" variant="secondary">Been handed a home? Claim it with your code</ActionLink>
+              ) : null}
+            </div>
           </Card>
 
           {hasProperty ? (

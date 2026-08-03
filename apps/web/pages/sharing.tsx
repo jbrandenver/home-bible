@@ -732,7 +732,7 @@ export default function SharingPage() {
               </p>
             ) : (
               <form onSubmit={createTransfer} style={{ display: 'grid', gap: 12 }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, alignItems: 'start' }}>
                   <label style={{ display: 'grid', gap: 6 }}>
                     <span style={{ fontWeight: 600 }}>Recipient email (optional)</span>
                     <input
@@ -793,14 +793,14 @@ export default function SharingPage() {
                       gap: 10
                     }}
                   >
-                    <strong>Your transfer code — we can’t show this again.</strong>
+                    <strong>Your transfer code — we can&rsquo;t show this again.</strong>
                     <input
                       readOnly
                       value={formatTransferCode(createdTransfer.code)}
                       aria-label="Transfer code"
-                      style={{ ...fieldStyle, width: '100%', fontFamily: 'var(--font-mono)' }}
+                      style={{ ...fieldStyle, width: '100%', boxSizing: 'border-box', fontFamily: 'var(--font-mono)' }}
                     />
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                       <Button
                         type="button"
                         variant="secondary"
@@ -811,11 +811,22 @@ export default function SharingPage() {
                       >
                         Copy code
                       </Button>
-                      <span style={subtleText}>
-                        Send it to the new owner along with {createdTransfer.claimUrl} — they claim it there. Expires{' '}
-                        {formatDate(createdTransfer.expiresAt)}.
-                      </span>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={async () => {
+                          await navigator.clipboard?.writeText(createdTransfer.claimUrl);
+                          setTransferNotice('Claim link copied.');
+                        }}
+                      >
+                        Copy claim link
+                      </Button>
                     </div>
+                    <p style={{ ...subtleText, margin: 0 }}>
+                      Send the new owner the code and the claim page —{' '}
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{createdTransfer.claimUrl}</span>.
+                      They enter the code there. Expires {formatDate(createdTransfer.expiresAt)}.
+                    </p>
                   </div>
                 ) : null}
 
