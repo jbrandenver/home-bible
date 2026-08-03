@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import { AUTOMATION_CRITICALITIES, AUTOMATION_HUB_TYPES, formatEnumLabel, type AutomationCriticality, type AutomationHubType } from '@home-folder/shared';
+import { AUTOMATION_CRITICALITIES, AUTOMATION_HUB_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationCriticality, type AutomationHubType } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
 import { RoomLocationSelect, roomSelectionValue } from '../../../components/RoomLocationSelect';
@@ -194,6 +194,8 @@ export default function HubDetailPage() {
           {hub.internet_dependency ? <UtilityBadge label="Needs internet" tone="attention" /> : <UtilityBadge label="Local" tone="good" />}
           {hub.criticality === 'critical' || hub.criticality === 'high' ? <UtilityBadge label={formatEnumLabel(hub.criticality)} tone="attention" /> : null}
           {context?.mode === 'supabase' && !editing ? <Button variant="secondary" onClick={startEdit}>Edit</Button> : null}
+          <ActionLink href="/automation/hubs" variant="secondary">Back to hubs</ActionLink>
+          <ActionLink href="/automation" variant="secondary">Smart home overview</ActionLink>
         </div>
       </PageHeader>
 
@@ -204,7 +206,7 @@ export default function HubDetailPage() {
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                 <label><span>Name</span><Input value={String(form.name ?? '')} onChange={(e) => set('name', e.target.value)} style={{ marginTop: 6 }} /></label>
-                <label><span>Type</span><Select value={String(form.hub_type ?? '')} onChange={(e) => set('hub_type', e.target.value)} style={{ marginTop: 6 }}>{AUTOMATION_HUB_TYPES.map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}</Select></label>
+                <label><span>Type</span><Select value={String(form.hub_type ?? '')} onChange={(e) => set('hub_type', e.target.value)} style={{ marginTop: 6 }}>{sortEnumForDisplay(AUTOMATION_HUB_TYPES).map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}</Select></label>
                 <label><span>Importance</span><Select value={String(form.criticality ?? '')} onChange={(e) => set('criticality', e.target.value)} style={{ marginTop: 6 }}>{AUTOMATION_CRITICALITIES.map((c) => <option key={c} value={c}>{formatEnumLabel(c)}</option>)}</Select></label>
                 <label><span>Manufacturer</span><Input value={String(form.manufacturer ?? '')} onChange={(e) => set('manufacturer', e.target.value)} style={{ marginTop: 6 }} /></label>
                 <label><span>Model</span><Input value={String(form.model ?? '')} onChange={(e) => set('model', e.target.value)} style={{ marginTop: 6 }} /></label>

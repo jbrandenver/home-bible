@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, type AutomationNetworkType } from '@home-folder/shared';
+import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationNetworkType } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
 import {
@@ -11,6 +11,14 @@ import {
   type AutomationDataContext,
   type AutomationNetworkRow
 } from '../../../lib/automation';
+import { getRoomsForProperty } from '../../../lib/rooms';
+import { formatRoomLocation } from '../../../lib/roomLabels';
+
+type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
+
+// Sentinel for "somewhere that isn't a mapped room" in the router-location
+// dropdown; the stored value is always the label text.
+const CUSTOM_LOCATION_VALUE = '__custom-location__';
 
 export default function NetworkDetailPage() {
   const router = useRouter();
@@ -19,11 +27,14 @@ export default function NetworkDetailPage() {
 
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [network, setNetwork] = useState<AutomationNetworkRow | null>(null);
+  const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string | boolean>>({});
+  const [locationChoice, setLocationChoice] = useState('');
+  const [locationCustom, setLocationCustom] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -34,9 +45,14 @@ export default function NetworkDetailPage() {
       try {
         const ctx = await getAutomationContext();
         const row = await getNetworkById(ctx, networkId);
+        const roomList =
+          ctx.mode === 'supabase' && ctx.property
+            ? ((await getRoomsForProperty(ctx.property.id)) as Room[])
+            : [];
         if (!isMounted) return;
         setContext(ctx);
         setNetwork(row);
+        setRooms(roomList);
       } catch (e) {
         if (isMounted) setError(e instanceof Error ? e.message : 'Failed to load network.');
       } finally {
@@ -56,6 +72,12 @@ export default function NetworkDetailPage() {
 
   const startEdit = () => {
     if (!network) return;
+    // The stored location is plain text. When it matches a mapped room's label
+    // the dropdown opens on that room; anything else opens as custom text.
+    const storedLocation = network.physical_location || '';
+    const matchesRoom = rooms.some((room) => formatRoomLocation(room) === storedLocation);
+    setLocationChoice(storedLocation ? (matchesRoom ? storedLocation : CUSTOM_LOCATION_VALUE) : '');
+    setLocationCustom(storedLocation && !matchesRoom ? storedLocation : '');
     setForm({
       name: network.name,
       network_type: network.network_type,
@@ -90,6 +112,9 @@ export default function NetworkDetailPage() {
     setError('');
     try {
       const s = (k: string) => (typeof form[k] === 'string' ? (form[k] as string).trim() || null : null);
+      const physicalLocation =
+        locationChoice === CUSTOM_LOCATION_VALUE ? locationCustom.trim() || null : locationChoice || null;
+
       const updated = await updateNetworkForContext(context, network.id, {
         name: String(form.name || '').trim() || network.name,
         network_type: form.network_type as AutomationNetworkType,
@@ -97,7 +122,7 @@ export default function NetworkDetailPage() {
         internet_provider: s('internet_provider'),
         is_guest: Boolean(form.is_guest),
         is_iot: Boolean(form.is_iot),
-        physical_location: s('physical_location'),
+        physical_location: physicalLocation,
         router_model: s('router_model'),
         gateway: s('gateway'),
         mesh_system: s('mesh_system'),
@@ -150,6 +175,8 @@ export default function NetworkDetailPage() {
           {network.is_iot ? <UtilityBadge label="IoT" /> : null}
           {network.is_guest ? <UtilityBadge label="Guest" /> : null}
           {context?.mode === 'supabase' && !editing ? <Button variant="secondary" onClick={startEdit}>Edit</Button> : null}
+          <ActionLink href="/automation/networks" variant="secondary">Back to networks</ActionLink>
+          <ActionLink href="/automation" variant="secondary">Smart home overview</ActionLink>
         </div>
       </PageHeader>
 
@@ -160,10 +187,31 @@ export default function NetworkDetailPage() {
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                 <label><span>Name</span><Input value={String(form.name ?? '')} onChange={(e) => set('name', e.target.value)} style={{ marginTop: 6 }} /></label>
-                <label><span>Type</span><Select value={String(form.network_type ?? '')} onChange={(e) => set('network_type', e.target.value)} style={{ marginTop: 6 }}>{AUTOMATION_NETWORK_TYPES.map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}</Select></label>
-                <label><span>SSID</span><Input value={String(form.ssid ?? '')} onChange={(e) => set('ssid', e.target.value)} style={{ marginTop: 6 }} /></label>
-                <label><span>Provider</span><Input value={String(form.internet_provider ?? '')} onChange={(e) => set('internet_provider', e.target.value)} style={{ marginTop: 6 }} /></label>
-                <label><span>Location</span><Input value={String(form.physical_location ?? '')} onChange={(e) => set('physical_location', e.target.value)} style={{ marginTop: 6 }} /></label>
+                <label><span>Type</span><Select value={String(form.network_type ?? '')} onChange={(e) => set('network_type', e.target.value)} style={{ marginTop: 6 }}>{sortEnumForDisplay(AUTOMATION_NETWORK_TYPES).map((t) => <option key={t} value={t}>{formatEnumLabel(t)}</option>)}</Select></label>
+                <label><span>Wi-Fi network name (SSID)</span><Input value={String(form.ssid ?? '')} onChange={(e) => set('ssid', e.target.value)} style={{ marginTop: 6 }} /></label>
+                <label><span>Internet provider</span><Input value={String(form.internet_provider ?? '')} onChange={(e) => set('internet_provider', e.target.value)} style={{ marginTop: 6 }} /></label>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label htmlFor="network-location-edit" style={{ fontWeight: 600 }}>Where the router sits</label>
+                  <Select id="network-location-edit" value={locationChoice} onChange={(e) => setLocationChoice(e.target.value)}>
+                    <option value="">Not recorded</option>
+                    {rooms.length > 0 ? (
+                      <optgroup label="Rooms on file">
+                        {rooms.map((room) => (
+                          <option key={room.id} value={formatRoomLocation(room)}>{formatRoomLocation(room)}</option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    <option value={CUSTOM_LOCATION_VALUE}>Somewhere else…</option>
+                  </Select>
+                  {locationChoice === CUSTOM_LOCATION_VALUE ? (
+                    <Input
+                      value={locationCustom}
+                      onChange={(e) => setLocationCustom(e.target.value)}
+                      placeholder="Basement shelf by the panel"
+                      aria-label="Where the router sits"
+                    />
+                  ) : null}
+                </div>
               </div>
               {/* Migration 012 defined these columns and no form ever wrote them.
                   They are what someone needs to rebuild the network after a

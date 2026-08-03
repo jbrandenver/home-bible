@@ -288,7 +288,12 @@ export default function UtilitiesPage() {
       <PageHeader
         title="Utilities"
         description="Where the critical systems live."
-      />
+      >
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <ActionLink href="/add-utility">Add utility</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+        </div>
+      </PageHeader>
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>

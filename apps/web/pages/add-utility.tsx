@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
-import { UTILITY_TYPES, formatEnumLabel } from '@home-folder/shared';
+import { UTILITY_TYPES, formatEnumLabel, sortEnumForDisplay } from '@home-folder/shared';
 import { PageHeader, Card, Input, Select, Button } from '@home-folder/ui';
+import { ActionLink } from '../components/ActionLink';
 import { getDemoRooms } from '../lib/demoStorage';
 import {
   getAvailableLocationPresets,
@@ -10,6 +11,7 @@ import {
   rollbackCreatedLocation
 } from '../lib/locationPresets';
 import { getRoomsForProperty } from '../lib/rooms';
+import { createServiceRecordForContext, getServiceRecordDataContext } from '../lib/serviceRecords';
 import {
   createUtilityForContext,
   getUtilityDataContext,
@@ -36,6 +38,9 @@ export default function AddUtilityPage() {
   const [roomId, setRoomId] = useState('');
   const [locationNotes, setLocationNotes] = useState('');
   const [emergencyNotes, setEmergencyNotes] = useState('');
+  const [dateInstalled, setDateInstalled] = useState('');
+  const [lastServiceDate, setLastServiceDate] = useState('');
+  const [savedNote, setSavedNote] = useState('');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [context, setContext] = useState<UtilityDataContext | null>(null);
   const [dataMode, setDataMode] = useState<UtilityDataMode>('demo');
@@ -118,7 +123,10 @@ export default function AddUtilityPage() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    await saveUtility(false);
+  }
 
+  async function saveUtility(addAnother: boolean) {
     if (!name.trim()) {
       setError('Utility name is required.');
       return;
@@ -136,6 +144,7 @@ export default function AddUtilityPage() {
 
     setSaving(true);
     setError('');
+    setSavedNote('');
 
     const resolutionContext =
       context.mode === 'supabase' && context.property
@@ -156,6 +165,40 @@ export default function AddUtilityPage() {
         emergency_notes: emergencyNotes.trim() || null
       });
 
+      // The install date is history worth keeping — it lands in the service
+      // log as an installation record rather than in a field nobody reads.
+      if (dateInstalled) {
+        const serviceContext = await getServiceRecordDataContext();
+        await createServiceRecordForContext(serviceContext, {
+          service_title: `${createdUtility.name} installed`,
+          service_type: 'installation',
+          service_date: dateInstalled,
+          utility_id: createdUtility.id,
+          room_id: createdUtility.room_id || null
+        });
+      }
+
+      // A last-service date deserves a complete entry — who came, what it
+      // cost — so it hands off to the service history form, prefilled.
+      if (lastServiceDate) {
+        router.push(
+          `/utilities/${createdUtility.id}?serviceDate=${encodeURIComponent(lastServiceDate)}`
+        );
+        return;
+      }
+
+      if (addAnother) {
+        setSavedNote(`Saved ${createdUtility.name}. Add the next one.`);
+        setName('');
+        setRoomId('');
+        setLocationNotes('');
+        setEmergencyNotes('');
+        setDateInstalled('');
+        setLastServiceDate('');
+        setSaving(false);
+        return;
+      }
+
       router.push(`/utilities/${createdUtility.id}`);
     } catch (submitError) {
       // Picking an outdoor preset creates a room before the utility is written.
@@ -172,7 +215,12 @@ export default function AddUtilityPage() {
       <PageHeader
         title="Add utility"
         description="Add a shutoff, panel, system, or other critical home utility."
-      />
+      >
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <ActionLink href="/utilities" variant="secondary">Back to utilities</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+        </div>
+      </PageHeader>
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
@@ -230,7 +278,7 @@ export default function AddUtilityPage() {
               value={utilityType}
               onChange={(event) => setUtilityType(event.target.value as (typeof UTILITY_TYPES)[number])}
             >
-              {UTILITY_TYPES.map((type) => (
+              {sortEnumForDisplay(UTILITY_TYPES).map((type) => (
                 <option key={type} value={type}>
                   {formatEnumLabel(type)}
                 </option>
@@ -299,6 +347,51 @@ export default function AddUtilityPage() {
             />
           </div>
 
+          <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+            <div>
+              <label
+                htmlFor="dateInstalled"
+                style={{
+                  display: 'block',
+                  fontWeight: 700,
+                  marginBottom: 8
+                }}
+              >
+                Date installed (optional)
+              </label>
+              <Input
+                id="dateInstalled"
+                type="date"
+                value={dateInstalled}
+                onChange={(event) => setDateInstalled(event.target.value)}
+              />
+              <p style={{ marginTop: 6, marginBottom: 0, color: 'var(--text-muted)', fontSize: 14 }}>
+                Recorded in the service history as an installation.
+              </p>
+            </div>
+            <div>
+              <label
+                htmlFor="lastServiceDate"
+                style={{
+                  display: 'block',
+                  fontWeight: 700,
+                  marginBottom: 8
+                }}
+              >
+                Date of last service (optional)
+              </label>
+              <Input
+                id="lastServiceDate"
+                type="date"
+                value={lastServiceDate}
+                onChange={(event) => setLastServiceDate(event.target.value)}
+              />
+              <p style={{ marginTop: 6, marginBottom: 0, color: 'var(--text-muted)', fontSize: 14 }}>
+                After saving, you&rsquo;ll complete the service history entry for this date.
+              </p>
+            </div>
+          </div>
+
           <div>
             <label
               htmlFor="emergencyNotes"
@@ -323,10 +416,23 @@ export default function AddUtilityPage() {
               {error}
             </p>
           ) : null}
+          {savedNote ? (
+            <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">
+              {savedNote}
+            </p>
+          ) : null}
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button type="submit" disabled={saving || loading}>
               {saving ? 'Saving...' : 'Save utility'}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => saveUtility(true)}
+              disabled={saving || loading}
+            >
+              Save &amp; add another
             </Button>
             <button
               type="button"

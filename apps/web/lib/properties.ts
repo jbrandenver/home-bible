@@ -262,6 +262,51 @@ export async function updatePropertyDetails(propertyId: string, input: PropertyD
   clearCachedProperty();
 }
 
+// Soft delete, matching rooms and the delete-account flow: the row keeps its
+// history but disappears from every deleted_at-filtered read. A building takes
+// its units with it — a unit whose parent is gone would be unreachable in the
+// switcher. RLS allows any editor to update, so the owner filter here keeps
+// this rare, destructive action to the person who created the home.
+export async function deletePropertyForOwner(propertyId: string, ownerUserId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const deletedAt = new Date().toISOString();
+
+  const { error: unitsError } = await supabase
+    .from('properties')
+    .update({ deleted_at: deletedAt })
+    .eq('parent_property_id', propertyId)
+    .eq('owner_user_id', ownerUserId)
+    .is('deleted_at', null);
+
+  if (unitsError) {
+    throw new Error(formatPropertySetupError('delete this home', unitsError.message));
+  }
+
+  const { error, count } = await supabase
+    .from('properties')
+    .update({ deleted_at: deletedAt }, { count: 'exact' })
+    .eq('id', propertyId)
+    .eq('owner_user_id', ownerUserId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(formatPropertySetupError('delete this home', error.message));
+  }
+
+  if (count === 0) {
+    throw new Error('Only the person who created this home can delete it.');
+  }
+
+  if (getActivePropertyId() === propertyId) {
+    setActivePropertyId(null);
+  }
+  clearCachedProperty();
+}
+
 // Same problem as the auth user: every data context resolves the primary
 // property independently, so one page load ran this 1-3 query lookup up to
 // eight times. Concurrent callers share one in-flight lookup, and the result is

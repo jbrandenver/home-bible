@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
-import { formatEnumLabel, UTILITY_TYPES } from '@home-folder/shared';
+import { SERVICE_TYPES, formatEnumLabel, sortEnumForDisplay, UTILITY_TYPES } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
@@ -25,7 +25,14 @@ import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, typ
 import { getRepairDataContext, getRepairsForUtility, type RepairRow } from '../../lib/repairs';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { formatRoomLocation } from '../../lib/roomLabels';
-import { getServiceRecordDataContext, getServiceRecordsForUtility, type ServiceRecordRow } from '../../lib/serviceRecords';
+import {
+  createServiceRecordForContext,
+  getServiceRecordDataContext,
+  getServiceRecordsForUtility,
+  type ServiceRecordDataContext,
+  type ServiceRecordRow,
+  type ServiceRecordType
+} from '../../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForUtility, type TrendFlagRow } from '../../lib/trendFlags';
 import {
   deleteUtilityForContext,
@@ -64,6 +71,17 @@ export default function UtilityDetailPage() {
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
+  const [serviceRecordContext, setServiceRecordContext] = useState<ServiceRecordDataContext | null>(null);
+  const [serviceFormOpen, setServiceFormOpen] = useState(false);
+  const [serviceTitle, setServiceTitle] = useState('');
+  const [serviceType, setServiceType] = useState<ServiceRecordType>('maintenance');
+  const [serviceDate, setServiceDate] = useState('');
+  const [serviceProvider, setServiceProvider] = useState('');
+  const [serviceCost, setServiceCost] = useState('');
+  const [serviceNotes, setServiceNotes] = useState('');
+  const [serviceNextDate, setServiceNextDate] = useState('');
+  const [serviceSaving, setServiceSaving] = useState(false);
+  const [serviceError, setServiceError] = useState('');
   const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [receiptContext, setReceiptContext] = useState<ReceiptDataContext | null>(null);
@@ -95,7 +113,7 @@ export default function UtilityDetailPage() {
       setFormError('');
 
       try {
-        const [nextContext, reminderContext, repairContext, serviceRecordContext, nextDocumentContext, nextReceiptContext, issueContext, trendFlagContext] = await Promise.all([
+        const [nextContext, reminderContext, repairContext, nextServiceRecordContext, nextDocumentContext, nextReceiptContext, issueContext, trendFlagContext] = await Promise.all([
           getUtilityDataContext(),
           getReminderDataContext(),
           getRepairDataContext(),
@@ -113,7 +131,7 @@ export default function UtilityDetailPage() {
             : Promise.resolve(getDemoRooms()),
           getRemindersForUtility(reminderContext, utilityId),
           getRepairsForUtility(repairContext, utilityId),
-          getServiceRecordsForUtility(serviceRecordContext, utilityId),
+          getServiceRecordsForUtility(nextServiceRecordContext, utilityId),
           getDocumentsForLink(nextDocumentContext, { field: 'utility_id', id: utilityId }),
           getReceiptsForLink(nextReceiptContext, { field: 'utility_id', id: utilityId }),
           getIssuesForUtility(issueContext, utilityId),
@@ -131,6 +149,7 @@ export default function UtilityDetailPage() {
         setReminders(nextReminders);
         setRepairs(nextRepairs);
         setServiceRecords(nextServiceRecords);
+        setServiceRecordContext(nextServiceRecordContext);
         setDocumentContext(nextDocumentContext);
         setDocuments(nextDocuments);
         setReceiptContext(nextReceiptContext);
@@ -167,6 +186,71 @@ export default function UtilityDetailPage() {
       isMounted = false;
     };
   }, [utilityId]);
+
+  // Arriving from "Add utility" with a last-service date opens the service
+  // history form prefilled, so the log gets completed rather than forgotten.
+  useEffect(() => {
+    if (!router.isReady) {
+      return;
+    }
+
+    const queryServiceDate = router.query.serviceDate;
+    const prefillDate = Array.isArray(queryServiceDate) ? queryServiceDate[0] : queryServiceDate;
+    if (prefillDate) {
+      setServiceDate(prefillDate);
+      setServiceFormOpen(true);
+    }
+  }, [router.isReady, router.query.serviceDate]);
+
+  const addServiceRecord = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!serviceRecordContext || !utility) return;
+
+    if (!serviceTitle.trim()) {
+      setServiceError('Give the service a short title — "Annual furnace tune-up".');
+      return;
+    }
+    if (!serviceDate) {
+      setServiceError('When was the service done?');
+      return;
+    }
+
+    const parsedCost = serviceCost.trim() ? Number(serviceCost) : null;
+    if (parsedCost !== null && (!Number.isFinite(parsedCost) || parsedCost < 0)) {
+      setServiceError('Cost should be a number, or left blank.');
+      return;
+    }
+
+    setServiceSaving(true);
+    setServiceError('');
+
+    try {
+      const created = await createServiceRecordForContext(serviceRecordContext, {
+        service_title: serviceTitle.trim(),
+        service_type: serviceType,
+        service_date: serviceDate,
+        provider_name: serviceProvider.trim() || null,
+        cost: parsedCost,
+        notes: serviceNotes.trim() || null,
+        next_service_date: serviceNextDate || null,
+        utility_id: utility.id,
+        room_id: utility.room_id || null
+      });
+      setServiceRecords((current) => [created, ...current]);
+      setServiceFormOpen(false);
+      setServiceTitle('');
+      setServiceType('maintenance');
+      setServiceDate('');
+      setServiceProvider('');
+      setServiceCost('');
+      setServiceNotes('');
+      setServiceNextDate('');
+    } catch (saveError) {
+      setServiceError(saveError instanceof Error ? saveError.message : 'Failed to save the service record.');
+    } finally {
+      setServiceSaving(false);
+    }
+  };
 
   const roomName = utility?.room_id
     ? formatRoomLocation(rooms.find((room) => room.id === utility.room_id) || { name: 'Room was deleted' })
@@ -285,7 +369,12 @@ export default function UtilityDetailPage() {
 
   return (
     <>
-      <PageHeader title={utility.name} description={formatEnumLabel(utility.utility_type)} />
+      <PageHeader title={utility.name} description={formatEnumLabel(utility.utility_type)}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <ActionLink href="/utilities" variant="secondary">Back to utilities</ActionLink>
+          <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
+        </div>
+      </PageHeader>
 
       <div style={{ display: 'grid', gap: 24 }}>
         <Card>
@@ -348,7 +437,7 @@ export default function UtilityDetailPage() {
               <label style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontWeight: 600 }}>Type</span>
                 <select value={utilityType} onChange={(event) => setUtilityType(event.target.value as UtilityType)} style={fieldStyle}>
-                  {UTILITY_TYPES.map((type) => (
+                  {sortEnumForDisplay(UTILITY_TYPES).map((type) => (
                     <option key={type} value={type}>{formatEnumLabel(type)}</option>
                   ))}
                 </select>
@@ -405,23 +494,101 @@ export default function UtilityDetailPage() {
           </form>
         </Card>
 
-        <RelatedList title="Reminders" empty="No reminders linked to this utility.">
+        <RelatedList
+          title="Reminders"
+          empty="No reminders linked to this utility."
+          action={<ActionLink href={`/reminders?utilityId=${encodeURIComponent(utility.id)}`} variant="secondary">Add reminder</ActionLink>}
+        >
           {reminders.map((reminder) => (
             <RelatedItem key={reminder.id} title={reminder.title} detail={`${reminder.due_date || 'No due date'} • ${formatEnumLabel(reminder.status)}`} />
           ))}
         </RelatedList>
 
-        <RelatedList title="Repairs" empty="No repairs linked to this utility.">
+        <RelatedList
+          title="Repairs"
+          empty="No repairs linked to this utility."
+          action={
+            <ActionLink
+              href={`/repairs?utilityId=${encodeURIComponent(utility.id)}${utility.room_id ? `&roomId=${encodeURIComponent(utility.room_id)}` : ''}&title=${encodeURIComponent(utility.name)}`}
+              variant="secondary"
+            >
+              Add repair
+            </ActionLink>
+          }
+        >
           {repairs.map((repair) => (
             <RelatedItem key={repair.id} title={repair.title} detail={`${repair.reported_date || 'No reported date'} • ${formatEnumLabel(repair.status)}`} href={`/repairs/${repair.id}`} />
           ))}
         </RelatedList>
 
-        <RelatedList title="Service History" empty="No service history linked to this utility.">
-          {serviceRecords.map((record) => (
-            <RelatedItem key={record.id} title={record.service_title} detail={`${record.service_date} • ${formatEnumLabel(record.service_type)}`} />
-          ))}
-        </RelatedList>
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0 }}>Service History</h2>
+            {!serviceFormOpen ? (
+              <Button type="button" variant="secondary" onClick={() => setServiceFormOpen(true)}>
+                Add service history
+              </Button>
+            ) : null}
+          </div>
+          {serviceFormOpen ? (
+            <form onSubmit={addServiceRecord} style={{ display: 'grid', gap: 12, marginTop: 16, border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16 }}>
+              <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>What was done</span>
+                  <input value={serviceTitle} onChange={(event) => setServiceTitle(event.target.value)} placeholder="Annual furnace tune-up" style={fieldStyle} />
+                </label>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Type</span>
+                  <select value={serviceType} onChange={(event) => setServiceType(event.target.value as ServiceRecordType)} style={fieldStyle}>
+                    {sortEnumForDisplay(SERVICE_TYPES).map((type) => (
+                      <option key={type} value={type}>{formatEnumLabel(type)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Service date</span>
+                  <input type="date" value={serviceDate} onChange={(event) => setServiceDate(event.target.value)} style={fieldStyle} />
+                </label>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Who did the work</span>
+                  <input value={serviceProvider} onChange={(event) => setServiceProvider(event.target.value)} placeholder="Company or person" style={fieldStyle} />
+                </label>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Cost</span>
+                  <input value={serviceCost} onChange={(event) => setServiceCost(event.target.value)} inputMode="decimal" placeholder="180" style={fieldStyle} />
+                </label>
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Next service due</span>
+                  <input type="date" value={serviceNextDate} onChange={(event) => setServiceNextDate(event.target.value)} style={fieldStyle} />
+                </label>
+              </div>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 600 }}>Notes</span>
+                <textarea value={serviceNotes} onChange={(event) => setServiceNotes(event.target.value)} style={{ ...fieldStyle, minHeight: 60 }} />
+              </label>
+              {serviceError ? (
+                <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{serviceError}</p>
+              ) : null}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <Button type="submit" disabled={serviceSaving}>{serviceSaving ? 'Saving...' : 'Save service record'}</Button>
+                <Button type="button" variant="secondary" onClick={() => { setServiceFormOpen(false); setServiceError(''); }} disabled={serviceSaving}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : null}
+          <div style={{ marginTop: 16 }}>
+            {serviceRecords.length > 0 ? (
+              <div style={{ display: 'grid', gap: 10 }}>
+                {serviceRecords.map((record) => (
+                  <RelatedItem key={record.id} title={record.service_title} detail={`${record.service_date} • ${formatEnumLabel(record.service_type)}`} />
+                ))}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No service history linked to this utility.</p>
+            )}
+          </div>
+        </Card>
 
         <RelatedDocuments
           documents={documents}
@@ -437,7 +604,11 @@ export default function UtilityDetailPage() {
           empty="No receipts linked to this utility."
         />
 
-        <RelatedList title="Issues" empty="No issues linked to this utility.">
+        <RelatedList
+          title="Issues"
+          empty="No issues linked to this utility."
+          action={<ActionLink href={`/issues?utilityId=${encodeURIComponent(utility.id)}`} variant="secondary">Add issue</ActionLink>}
+        >
           {issues.map((issue) => (
             <RelatedItem key={issue.id} title={issue.title} detail={`${formatEnumLabel(issue.status)} • ${formatEnumLabel(issue.severity)}`} href={`/issues/${issue.id}`} />
           ))}
@@ -458,12 +629,15 @@ export default function UtilityDetailPage() {
   );
 }
 
-function RelatedList({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
+function RelatedList({ title, empty, action, children }: { title: string; empty: string; action?: React.ReactNode; children: React.ReactNode }) {
   const hasItems = Array.isArray(children) ? children.length > 0 : Boolean(children);
 
   return (
     <Card>
-      <h2 style={{ marginTop: 0 }}>{title}</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+        <h2 style={{ margin: 0 }}>{title}</h2>
+        {action}
+      </div>
       {hasItems ? <div style={{ display: 'grid', gap: 10 }}>{children}</div> : <p style={{ color: 'var(--text-muted)', margin: 0 }}>{empty}</p>}
     </Card>
   );
