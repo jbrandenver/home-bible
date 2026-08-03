@@ -17,3 +17,18 @@
 
 /og.png
   Cache-Control: public, max-age=86400
+
+# The service worker must never be cached long — a stale worker pins users to
+# a stale app. Browsers bypass HTTP cache for SW updates within 24h anyway;
+# no-cache makes every check hit the network.
+/sw.js
+  Cache-Control: no-cache
+
+/manifest.webmanifest
+  Cache-Control: public, max-age=86400
+
+/icon-192.png
+  Cache-Control: public, max-age=86400
+
+/icon-512.png
+  Cache-Control: public, max-age=86400

@@ -1,0 +1,17 @@
+{
+  "name": "Our Home Folder",
+  "short_name": "Home Folder",
+  "description": "A home, documented — rooms, systems, papers, repairs, and the handover, kept where you can find them.",
+  "id": "/",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F4EEDD",
+  "theme_color": "#16302A",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
