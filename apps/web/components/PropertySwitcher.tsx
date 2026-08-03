@@ -65,7 +65,10 @@ export function PropertySwitcher() {
           return;
         }
 
-        const list = sortPortfolio(await listPropertiesForUser(user.id));
+        // Archived homes are set aside — they don't belong in the switcher.
+        const list = sortPortfolio(
+          (await listPropertiesForUser(user.id)).filter((property) => !property.archived_at)
+        );
         if (!isMounted) {
           return;
         }

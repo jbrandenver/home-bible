@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationNetworkType } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
@@ -105,6 +105,17 @@ export default function NetworkDetailPage() {
     });
     setEditing(true);
   };
+
+  // Every option should be visible on arrival — nobody should have to find
+  // an Edit button to see what can be recorded (launch QA 2026-08-03).
+  // Cancel still collapses to the read-only view for this visit.
+  const autoOpenedEdit = useRef(false);
+  useEffect(() => {
+    if (!autoOpenedEdit.current && network && context?.mode === 'supabase') {
+      autoOpenedEdit.current = true;
+      startEdit();
+    }
+  });
 
   const save = async () => {
     if (!context || !network) return;

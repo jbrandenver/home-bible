@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SERVICE_TYPES, formatEnumLabel, sortEnumForDisplay, UTILITY_TYPES } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
@@ -58,6 +58,29 @@ const fieldStyle = {
   border: '1px solid var(--border-subtle)',
   background: 'var(--surface-card)'
 };
+
+// The example service shown in the form matches what the utility actually is —
+// a water heater should never suggest a furnace tune-up (launch QA 2026-08-03).
+const SERVICE_EXAMPLES: Partial<Record<UtilityType, string>> = {
+  main_water_shutoff: 'Shut-off valve exercised',
+  electrical_panel: 'Panel inspected',
+  breaker_panel: 'Panel inspected',
+  gas_shutoff: 'Gas line inspected',
+  water_heater: 'Water heater flushed',
+  hvac_unit: 'Annual HVAC service',
+  furnace: 'Annual furnace tune-up',
+  air_conditioner: 'AC coils cleaned',
+  sump_pump: 'Sump pump tested',
+  irrigation_shutoff: 'Sprinklers winterized',
+  internet_modem: 'Modem replaced',
+  router: 'Router replaced',
+  smoke_detector: 'Batteries replaced',
+  carbon_monoxide_detector: 'Batteries replaced'
+};
+
+function serviceExampleFor(utilityType: UtilityType): string {
+  return SERVICE_EXAMPLES[utilityType] || 'Annual service';
+}
 
 export default function UtilityDetailPage() {
   const router = useRouter();
@@ -189,6 +212,9 @@ export default function UtilityDetailPage() {
 
   // Arriving from "Add utility" with a last-service date opens the service
   // history form prefilled, so the log gets completed rather than forgotten.
+  const serviceCardRef = useRef<HTMLDivElement | null>(null);
+  const shouldScrollToServiceForm = useRef(false);
+
   useEffect(() => {
     if (!router.isReady) {
       return;
@@ -199,15 +225,29 @@ export default function UtilityDetailPage() {
     if (prefillDate) {
       setServiceDate(prefillDate);
       setServiceFormOpen(true);
+      shouldScrollToServiceForm.current = true;
     }
   }, [router.isReady, router.query.serviceDate]);
+
+  // Landing at the top of the page with the form somewhere below is a hunt;
+  // the handoff should put the form in the middle of the screen.
+  useEffect(() => {
+    if (loading || !serviceFormOpen || !shouldScrollToServiceForm.current) {
+      return;
+    }
+
+    shouldScrollToServiceForm.current = false;
+    window.requestAnimationFrame(() => {
+      serviceCardRef.current?.scrollIntoView({ block: 'center' });
+    });
+  }, [loading, serviceFormOpen]);
 
   const addServiceRecord = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!serviceRecordContext || !utility) return;
 
     if (!serviceTitle.trim()) {
-      setServiceError('Give the service a short title — "Annual furnace tune-up".');
+      setServiceError(`Give the service a short title — "${serviceExampleFor(utility.utility_type)}".`);
       return;
     }
     if (!serviceDate) {
@@ -531,6 +571,7 @@ export default function UtilityDetailPage() {
           ))}
         </RelatedList>
 
+        <div ref={serviceCardRef}>
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0 }}>Service History</h2>
@@ -545,7 +586,7 @@ export default function UtilityDetailPage() {
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                 <label style={{ display: 'grid', gap: 6 }}>
                   <span style={{ fontWeight: 600 }}>What was done</span>
-                  <input value={serviceTitle} onChange={(event) => setServiceTitle(event.target.value)} placeholder="Annual furnace tune-up" style={fieldStyle} />
+                  <input value={serviceTitle} onChange={(event) => setServiceTitle(event.target.value)} placeholder={serviceExampleFor(utility.utility_type)} style={fieldStyle} />
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
                   <span style={{ fontWeight: 600 }}>Type</span>
@@ -599,6 +640,7 @@ export default function UtilityDetailPage() {
             )}
           </div>
         </Card>
+        </div>
 
         <RelatedDocuments
           documents={documents}

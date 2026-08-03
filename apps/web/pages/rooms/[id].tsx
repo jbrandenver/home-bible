@@ -658,10 +658,11 @@ export default function RoomDetailPage() {
         </Card>
 
         <Card>
-          <h2 style={{ marginTop: 0 }}>Edit room</h2>
+          <h2 style={{ marginTop: 0 }}>Room details &amp; options</h2>
           <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-            Correct the name, move it to another floor, or record the details a
-            technician asks for — outlets, vents, and which breaker feeds the room.
+            Everything about this room lives here — its name and floor, the details
+            a technician asks for (outlets, vents, plumbing, which breaker feeds
+            it), and its closet.
           </p>
           <form onSubmit={handleSaveRoom} style={{ display: 'grid', gap: 14 }}>
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
@@ -830,30 +831,30 @@ export default function RoomDetailPage() {
                 : 'Removing a room here only changes this browser’s demo data. Anything recorded in it will show its room as deleted.'}
             </p>
           </form>
-        </Card>
 
-        <Card>
-          <h2 style={{ marginTop: 0 }}>Closet</h2>
-          <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
-            Forgot to add a closet when this room was mapped? Add it now —
-            &ldquo;{room.name} Closet&rdquo; becomes its own selectable space, so
-            things stored in it can be filed under it.
-          </p>
-          {closetError ? (
-            <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: '0 0 12px' }} role="alert">{closetError}</p>
-          ) : null}
-          {closetCreatedId ? (
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">
-                Closet added to {room.floor_name === 'Unassigned' ? 'Main Floor' : room.floor_name}.
-              </p>
-              <ActionLink href={`/rooms/${closetCreatedId}`} variant="secondary">Open the closet</ActionLink>
-            </div>
-          ) : (
-            <Button type="button" variant="secondary" onClick={handleAddCloset} disabled={closetAdding}>
-              {closetAdding ? 'Adding closet...' : 'Add a closet to this room'}
-            </Button>
-          )}
+          <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 16, paddingTop: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Closet</h3>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              Forgot to add a closet when this room was mapped? Add it now —
+              &ldquo;{room.name} Closet&rdquo; becomes its own selectable space, so
+              things stored in it can be filed under it.
+            </p>
+            {closetError ? (
+              <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: '0 0 12px' }} role="alert">{closetError}</p>
+            ) : null}
+            {closetCreatedId ? (
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">
+                  Closet added to {room.floor_name === 'Unassigned' ? 'Main Floor' : room.floor_name}.
+                </p>
+                <ActionLink href={`/rooms/${closetCreatedId}`} variant="secondary">Open the closet</ActionLink>
+              </div>
+            ) : (
+              <Button type="button" variant="secondary" onClick={handleAddCloset} disabled={closetAdding}>
+                {closetAdding ? 'Adding closet...' : 'Add a closet to this room'}
+              </Button>
+            )}
+          </div>
         </Card>
 
         <RelatedDocuments

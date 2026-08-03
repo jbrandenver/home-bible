@@ -543,7 +543,7 @@ export default function SettingsPage() {
     const label = property.nickname || 'this home';
     if (
       !window.confirm(
-        `Delete ${label}? Everything recorded in it — rooms, utilities, appliances, documents, reminders, and history — is removed from your account. This cannot be undone.`
+        `Delete ${label}? Everything recorded in it — rooms, utilities, appliances, documents, reminders, and history — is removed from your account. If your plan is priced per home, the downgrade takes effect at your next billing cycle — nothing is prorated. This cannot be undone.`
       )
     ) {
       return;

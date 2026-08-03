@@ -26,10 +26,12 @@ export type PropertySummary = {
   created_at: string;
   parent_property_id: string | null;
   unit_label: string | null;
+  /** Set when the home is archived (migration 029) — hidden from active use, restorable for a window. */
+  archived_at?: string | null;
 };
 
 const PROPERTY_SUMMARY_COLUMNS =
-  'id, household_id, owner_user_id, nickname, property_type, created_at, parent_property_id, unit_label';
+  'id, household_id, owner_user_id, nickname, property_type, created_at, parent_property_id, unit_label, archived_at';
 
 function formatPropertySetupError(step: string, message?: string) {
   const fallback = `Failed to ${step}.`;
@@ -307,6 +309,109 @@ export async function deletePropertyForOwner(propertyId: string, ownerUserId: st
   clearCachedProperty();
 }
 
+// How long an archived home is restorable before it is treated like any other
+// deletion. Archiving never changes billing; only deletion does.
+export const ARCHIVE_RETENTION_DAYS = 90;
+
+export function archiveDeleteDate(archivedAt: string): Date {
+  const date = new Date(archivedAt);
+  date.setDate(date.getDate() + ARCHIVE_RETENTION_DAYS);
+  return date;
+}
+
+// Archive: the home leaves the switcher and every active list but keeps all
+// of its rows, restorable for ARCHIVE_RETENTION_DAYS. A building archives
+// its units with it, same as delete.
+export async function archivePropertyForOwner(propertyId: string, ownerUserId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const archivedAt = new Date().toISOString();
+
+  const { error: unitsError } = await supabase
+    .from('properties')
+    .update({ archived_at: archivedAt })
+    .eq('parent_property_id', propertyId)
+    .eq('owner_user_id', ownerUserId)
+    .is('deleted_at', null);
+
+  if (unitsError) {
+    throw new Error(formatPropertySetupError('archive this home', unitsError.message));
+  }
+
+  const { error, count } = await supabase
+    .from('properties')
+    .update({ archived_at: archivedAt }, { count: 'exact' })
+    .eq('id', propertyId)
+    .eq('owner_user_id', ownerUserId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(formatPropertySetupError('archive this home', error.message));
+  }
+  if (count === 0) {
+    throw new Error('Only the person who created this home can archive it.');
+  }
+
+  if (getActivePropertyId() === propertyId) {
+    setActivePropertyId(null);
+  }
+  clearCachedProperty();
+}
+
+export async function restorePropertyForOwner(propertyId: string, ownerUserId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const { error: unitsError } = await supabase
+    .from('properties')
+    .update({ archived_at: null })
+    .eq('parent_property_id', propertyId)
+    .eq('owner_user_id', ownerUserId)
+    .is('deleted_at', null);
+
+  if (unitsError) {
+    throw new Error(formatPropertySetupError('restore this home', unitsError.message));
+  }
+
+  const { error } = await supabase
+    .from('properties')
+    .update({ archived_at: null })
+    .eq('id', propertyId)
+    .eq('owner_user_id', ownerUserId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(formatPropertySetupError('restore this home', error.message));
+  }
+
+  clearCachedProperty();
+}
+
+// Archives past their retention window become deletions. Run opportunistically
+// when the portfolio loads — no cron required at this scale, and a stale
+// archive lingering a few extra days until the next visit only errs gently.
+export async function purgeExpiredArchivedProperties(ownerUserId: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return;
+  }
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - ARCHIVE_RETENTION_DAYS);
+
+  await supabase
+    .from('properties')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('owner_user_id', ownerUserId)
+    .lt('archived_at', cutoff.toISOString())
+    .is('deleted_at', null);
+}
+
 // Same problem as the auth user: every data context resolves the primary
 // property independently, so one page load ran this 1-3 query lookup up to
 // eight times. Concurrent callers share one in-flight lookup, and the result is
@@ -488,7 +593,11 @@ async function loadPrimaryPropertyForUser(userId: string): Promise<PropertySumma
   // "this user has no property yet" and fall back to demo/localStorage data —
   // so a momentary network failure used to replace a signed-in user's real
   // records with leftover browser data, silently and with no error shown.
-  const properties = await listPropertiesForUser(userId);
+  // Archived homes are set aside — they must never become the active
+  // property the whole app works inside.
+  const properties = (await listPropertiesForUser(userId)).filter(
+    (property) => !property.archived_at
+  );
   if (properties.length === 0) {
     return null;
   }

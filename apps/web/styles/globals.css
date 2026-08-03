@@ -145,6 +145,9 @@ input,select,textarea{
   color:var(--text-primary);
   transition:border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
+/* Example text must never be mistaken for an entry: lighter and italic,
+   while typed values keep full-strength ink (launch QA 2026-08-03). */
+input::placeholder,textarea::placeholder{color:var(--text-muted);opacity:0.55;font-style:italic}
 /* Checked controls take the document's ink-green, not the browser's blue. */
 input[type="checkbox"],input[type="radio"]{accent-color:var(--color-green-deep)}
 input:hover,select:hover,textarea:hover{border-color:var(--border-strong)}

@@ -4,9 +4,15 @@ import { Button, Card, Input, PageHeader, getControlStyle } from '@home-folder/u
 import { ActionLink } from '../components/ActionLink';
 import { resolveDataContext, type ResolvedDataContext } from '../lib/dataContext';
 import {
+  ARCHIVE_RETENTION_DAYS,
+  archiveDeleteDate,
+  archivePropertyForOwner,
   createPropertyForUser,
   createUnitsForBuilding,
+  deletePropertyForOwner,
   listPropertiesForUser,
+  purgeExpiredArchivedProperties,
+  restorePropertyForOwner,
   setActivePropertyId,
   type PropertySummary
 } from '../lib/properties';
@@ -123,6 +129,12 @@ export default function PortfolioPage() {
   const [buildingError, setBuildingError] = useState('');
   const [buildingNotice, setBuildingNotice] = useState('');
 
+  // Archive / delete actions on a property row (launch QA 2026-08-03).
+  const [archivedProperties, setArchivedProperties] = useState<PropertySummary[]>([]);
+  const [managingId, setManagingId] = useState<string | null>(null);
+  const [manageError, setManageError] = useState('');
+  const [manageNotice, setManageNotice] = useState('');
+
   // Add-units form (one open building at a time).
   const [unitsTargetId, setUnitsTargetId] = useState<string | null>(null);
   const [unitsDraft, setUnitsDraft] = useState('');
@@ -143,13 +155,21 @@ export default function PortfolioPage() {
       return;
     }
 
-    const list = await listPropertiesForUser(nextContext.user.id);
+    // Archives past their retention window become deletions before anything
+    // is listed — the promise is "restorable for a while", not forever.
+    await purgeExpiredArchivedProperties(nextContext.user.id);
+
+    const fullList = await listPropertiesForUser(nextContext.user.id);
+    const list = fullList.filter((property) => !property.archived_at);
+    const archivedList = fullList.filter((property) => Boolean(property.archived_at));
     const paymentsConfigured = Boolean(getPortfolioCheckoutUrl(null));
     const hasPlan = await hasPortfolioPlan();
+    // Billing counts archived homes too: archiving sets a record aside, it
+    // does not downgrade. Only deletion changes the count.
     const nextAccess = evaluatePortfolioAccess({
       hasPlan,
       paymentsConfigured,
-      propertyCount: list.length
+      propertyCount: fullList.length
     });
 
     let nextOverview: PortfolioOverview | null = null;
@@ -160,6 +180,7 @@ export default function PortfolioPage() {
 
     setContext(nextContext);
     setProperties(list);
+    setArchivedProperties(archivedList.filter((property) => !property.parent_property_id));
     setAccess(nextAccess);
     setOverview(nextOverview);
   }, []);
@@ -195,6 +216,81 @@ export default function PortfolioPage() {
   const checkoutUrl = context?.user ? getPortfolioCheckoutUrl(context.user.id) : null;
   const addingLocked = Boolean(access?.requiresUpgradeToAdd);
   const paymentsConfigured = Boolean(access?.paymentsConfigured);
+
+  // Archive: reversible for ARCHIVE_RETENTION_DAYS, billing unchanged.
+  // Delete: typed-name confirmation, and the plan note — the downgrade takes
+  // effect at the next billing cycle, never prorated.
+  const archiveProperty = async (property: PropertySummary) => {
+    if (!context?.user) return;
+    const confirmed = window.confirm(
+      `Archive "${property.nickname}"? It leaves your active homes and the switcher, but keeps every record and can be restored for ${ARCHIVE_RETENTION_DAYS} days. After that it is deleted automatically. Archiving does not change your plan.`
+    );
+    if (!confirmed) return;
+
+    setManagingId(property.id);
+    setManageError('');
+    setManageNotice('');
+    try {
+      await archivePropertyForOwner(property.id, context.user.id);
+      setManageNotice(`${property.nickname} archived — restorable for ${ARCHIVE_RETENTION_DAYS} days below.`);
+      await load();
+    } catch (actionError) {
+      setManageError(actionError instanceof Error ? actionError.message : 'Failed to archive this home.');
+    } finally {
+      setManagingId(null);
+    }
+  };
+
+  const deleteProperty = async (property: PropertySummary) => {
+    if (!context?.user) return;
+
+    const label = property.parent_property_id
+      ? property.unit_label || property.nickname
+      : property.nickname;
+
+    const typed = window.prompt(
+      `Deleting "${label}" removes everything recorded in it, forever. To confirm, type the name exactly:`
+    );
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== label.trim().toLowerCase()) {
+      setManageError('The name did not match — nothing was deleted.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Last check: delete "${label}" permanently? ${property.parent_property_id ? '' : 'A building takes its units with it. '}If your plan is priced per home, the downgrade takes effect at your next billing cycle — nothing is prorated or refunded mid-cycle. This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setManagingId(property.id);
+    setManageError('');
+    setManageNotice('');
+    try {
+      await deletePropertyForOwner(property.id, context.user.id);
+      setManageNotice(`${label} deleted. Any plan change begins at your next billing cycle.`);
+      await load();
+    } catch (actionError) {
+      setManageError(actionError instanceof Error ? actionError.message : 'Failed to delete this home.');
+    } finally {
+      setManagingId(null);
+    }
+  };
+
+  const restoreProperty = async (property: PropertySummary) => {
+    if (!context?.user) return;
+    setManagingId(property.id);
+    setManageError('');
+    setManageNotice('');
+    try {
+      await restorePropertyForOwner(property.id, context.user.id);
+      setManageNotice(`${property.nickname} restored.`);
+      await load();
+    } catch (actionError) {
+      setManageError(actionError instanceof Error ? actionError.message : 'Failed to restore this home.');
+    } finally {
+      setManagingId(null);
+    }
+  };
 
   const workInProperty = (propertyId: string) => {
     setActivePropertyId(propertyId);
@@ -550,6 +646,9 @@ export default function PortfolioPage() {
                   <th scope="col" style={{ ...headCellStyle, textAlign: 'left' }}>
                     Compliance
                   </th>
+                  <th scope="col" style={{ ...headCellStyle, textAlign: 'left' }}>
+                    Manage
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -618,10 +717,37 @@ export default function PortfolioPage() {
                             <span style={subtleText}>None due</span>
                           ) : null}
                         </td>
+                        <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                          {context?.user && property.owner_user_id === context.user.id ? (
+                            <span style={{ display: 'inline-flex', gap: 8 }}>
+                              {!isUnit ? (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  disabled={managingId === property.id}
+                                  onClick={() => archiveProperty(property)}
+                                >
+                                  Archive
+                                </Button>
+                              ) : null}
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={managingId === property.id}
+                                onClick={() => deleteProperty(property)}
+                                style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
+                              >
+                                Delete
+                              </Button>
+                            </span>
+                          ) : (
+                            <span style={subtleText}>Owner only</span>
+                          )}
+                        </td>
                       </tr>
                       {rowIsBuilding && unitsOpen ? (
                         <tr>
-                          <td colSpan={5} style={{ padding: '12px 12px 18px', background: 'var(--surface-page)' }}>
+                          <td colSpan={6} style={{ padding: '12px 12px 18px', background: 'var(--surface-page)' }}>
                             <form
                               onSubmit={(event) => submitUnits(event, property)}
                               style={{ display: 'grid', gap: 10, maxWidth: 480 }}
@@ -686,7 +812,68 @@ export default function PortfolioPage() {
               </tbody>
             </table>
           </div>
+          {manageError ? (
+            <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: '12px 0 0' }} role="alert">{manageError}</p>
+          ) : null}
+          {manageNotice ? (
+            <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: '12px 0 0' }} role="status">{manageNotice}</p>
+          ) : null}
         </Card>
+
+        {archivedProperties.length > 0 ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Archived homes</h2>
+            <p style={subtleText}>
+              Set aside, not gone: every record is kept and can be restored for {ARCHIVE_RETENTION_DAYS} days
+              from archiving. After that the home is deleted automatically. Archived homes still count
+              toward your plan — only deleting changes it, from your next billing cycle.
+            </p>
+            <div style={{ display: 'grid', gap: 12 }}>
+              {archivedProperties.map((property) => (
+                <div
+                  key={property.id}
+                  style={{
+                    border: '1px solid var(--border-subtle)',
+                    borderRadius: 8,
+                    padding: 12,
+                    display: 'flex',
+                    gap: 12,
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap'
+                  }}
+                >
+                  <div>
+                    <strong>{property.nickname}</strong>
+                    <div style={subtleText}>
+                      Archived {property.archived_at ? new Date(property.archived_at).toLocaleDateString() : ''} ·
+                      auto-deletes {property.archived_at ? archiveDeleteDate(property.archived_at).toLocaleDateString() : ''}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={managingId === property.id}
+                      onClick={() => restoreProperty(property)}
+                    >
+                      Restore
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={managingId === property.id}
+                      onClick={() => deleteProperty(property)}
+                      style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
+                    >
+                      Delete now
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        ) : null}
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Warranties expiring</h2>

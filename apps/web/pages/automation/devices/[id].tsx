@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AUTOMATION_DEVICE_STATUSES, AUTOMATION_POWER_LABELS, AUTOMATION_STATUS_LABELS, formatEnumLabel, type AutomationDeviceStatus } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
@@ -263,6 +263,17 @@ export default function AutomationDeviceDetailPage() {
     });
     setEditing(true);
   };
+
+  // Every option should be visible on arrival — nobody should have to find
+  // an Edit button to see what can be recorded (launch QA 2026-08-03).
+  // Cancel still collapses to the read-only view for this visit.
+  const autoOpenedEdit = useRef(false);
+  useEffect(() => {
+    if (!autoOpenedEdit.current && device && context?.mode === 'supabase') {
+      autoOpenedEdit.current = true;
+      startEdit();
+    }
+  });
 
   const saveEdit = async () => {
     if (!context || !device) return;

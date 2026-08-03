@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AUTOMATION_CRITICALITIES, AUTOMATION_ROUTINE_STATUSES, AUTOMATION_ROUTINE_TYPES, formatEnumLabel, type AutomationCriticality, type AutomationRoutineStatus, type AutomationRoutineType } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
@@ -126,6 +126,17 @@ export default function AutomationDetailPage() {
     });
     setEditing(true);
   };
+
+  // Every option should be visible on arrival — nobody should have to find
+  // an Edit button to see what can be recorded (launch QA 2026-08-03).
+  // Cancel still collapses to the read-only view for this visit.
+  const autoOpenedEdit = useRef(false);
+  useEffect(() => {
+    if (!autoOpenedEdit.current && routine && context?.mode === 'supabase') {
+      autoOpenedEdit.current = true;
+      startEdit();
+    }
+  });
 
   const saveEdit = async () => {
     if (!context || !routine) return;
