@@ -528,12 +528,13 @@ const desktopSections: NavSection[] = [
     href: '/more',
     label: 'More',
     icon: '...',
-    activeRoutes: ['/more', '/handover', '/sharing', '/settings', '/mvp-test', '/sign-in', '/sign-up'],
+    activeRoutes: ['/more', '/handover', '/sharing', '/settings', '/pro', '/mvp-test', '/sign-in', '/sign-up'],
     sections: [
       { label: 'Overview' },
       { label: 'Files', hash: 'files' },
       { label: 'Records', hash: 'records' },
       { label: 'Review tools', hash: 'review-tools' },
+      { label: 'Professional channel', href: '/pro' },
       { label: 'Account', hash: 'account' },
       { label: 'Legal', hash: 'legal' }
     ]

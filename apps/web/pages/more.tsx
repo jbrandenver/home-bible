@@ -45,6 +45,13 @@ const moreLinks = [
     group: 'Review tools'
   },
   {
+    title: 'Professional channel',
+    description: 'For agents, inspectors, and property managers — register your business so records you prepare and transfer carry your name.',
+    href: '/pro',
+    action: 'Open pro channel',
+    group: 'Review tools'
+  },
+  {
     title: 'Settings',
     description: 'Review account state, privacy, security reminders, and development tools.',
     href: '/settings',

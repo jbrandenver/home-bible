@@ -16,11 +16,17 @@ import {
   getPrimaryPropertyForUser,
   getPropertyAddressDetails,
   getPropertyDetails,
+  listPropertiesForUser,
   updatePropertyAddress,
   updatePropertyDetails,
   type PropertySummary,
   type PropertyType
 } from '../lib/properties';
+import {
+  FREE_PROPERTY_ALLOWANCE,
+  getPortfolioCheckoutUrl,
+  hasPortfolioPlan
+} from '../lib/entitlements';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 import {
   DIGEST_FREQUENCIES,
@@ -116,6 +122,12 @@ export default function SettingsPage() {
   const [deletingProperty, setDeletingProperty] = useState(false);
   const [propertyDeleteError, setPropertyDeleteError] = useState('');
 
+  const [planInfo, setPlanInfo] = useState<{
+    homes: number;
+    hasPlan: boolean;
+    paymentsConfigured: boolean;
+  } | null>(null);
+
   const [exporting, setExporting] = useState<'archive' | 'csv' | null>(null);
   const [exportError, setExportError] = useState('');
   const [exportNote, setExportNote] = useState('');
@@ -153,6 +165,43 @@ export default function SettingsPage() {
       unsubscribe();
     };
   }, []);
+
+  // Plan visibility: how many homes are on file and what tier that implies.
+  // Payments are not live yet, so this reports honestly rather than gating.
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPlan() {
+      if (!user) {
+        setPlanInfo(null);
+        return;
+      }
+
+      try {
+        const [list, hasPlan] = await Promise.all([
+          listPropertiesForUser(user.id),
+          hasPortfolioPlan()
+        ]);
+        if (isMounted) {
+          setPlanInfo({
+            homes: list.length,
+            hasPlan,
+            paymentsConfigured: Boolean(getPortfolioCheckoutUrl(null))
+          });
+        }
+      } catch {
+        if (isMounted) {
+          setPlanInfo(null);
+        }
+      }
+    }
+
+    loadPlan();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   useEffect(() => {
     let isMounted = true;
@@ -622,6 +671,58 @@ export default function SettingsPage() {
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   <ActionLink href="/sign-in">Sign in</ActionLink>
                   <ActionLink href="/sign-up" variant="secondary">Create account</ActionLink>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Plan</h2>
+            {!supabaseReady || !user ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                Sign in to see your plan.
+              </p>
+            ) : !planInfo ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading plan...</p>
+            ) : (
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <UtilityBadge label={`${planInfo.homes} home${planInfo.homes === 1 ? '' : 's'} on file`} />
+                  <UtilityBadge
+                    label={
+                      planInfo.hasPlan
+                        ? 'Portfolio plan'
+                        : planInfo.homes > FREE_PROPERTY_ALLOWANCE
+                          ? 'Portfolio scale'
+                          : 'Free plan'
+                    }
+                  />
+                </div>
+                {planInfo.hasPlan ? (
+                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                    You&rsquo;re on the Portfolio plan — every landlord tool is included.
+                  </p>
+                ) : planInfo.paymentsConfigured && planInfo.homes > FREE_PROPERTY_ALLOWANCE ? (
+                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                    With more than {FREE_PROPERTY_ALLOWANCE} homes, the Portfolio plan covers
+                    the landlord tools you&rsquo;re using.
+                  </p>
+                ) : (
+                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                    Paid plans aren&rsquo;t live yet — everything, including the Portfolio
+                    tools for multiple homes, is currently included free. When payments
+                    launch, keeping more than {FREE_PROPERTY_ALLOWANCE} homes will use the
+                    Portfolio plan.
+                  </p>
+                )}
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {!planInfo.hasPlan && planInfo.paymentsConfigured && planInfo.homes > FREE_PROPERTY_ALLOWANCE ? (
+                    <ActionLink href={getPortfolioCheckoutUrl(user.id) || '/pricing'}>
+                      Get the Portfolio plan
+                    </ActionLink>
+                  ) : null}
+                  <ActionLink href="/portfolio" variant="secondary">Open portfolio</ActionLink>
+                  <ActionLink href="/pricing" variant="secondary">See pricing</ActionLink>
                 </div>
               </div>
             )}
