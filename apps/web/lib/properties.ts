@@ -275,32 +275,17 @@ export async function deletePropertyForOwner(propertyId: string, ownerUserId: st
     throw new Error('Supabase is not configured');
   }
 
-  const deletedAt = new Date().toISOString();
-
-  const { error: unitsError } = await supabase
-    .from('properties')
-    .update({ deleted_at: deletedAt })
-    .eq('parent_property_id', propertyId)
-    .eq('owner_user_id', ownerUserId)
-    .is('deleted_at', null);
-
-  if (unitsError) {
-    throw new Error(formatPropertySetupError('delete this home', unitsError.message));
-  }
-
-  const { error, count } = await supabase
-    .from('properties')
-    .update({ deleted_at: deletedAt }, { count: 'exact' })
-    .eq('id', propertyId)
-    .eq('owner_user_id', ownerUserId)
-    .is('deleted_at', null);
+  // A direct UPDATE cannot soft-delete: the RLS policy's WITH CHECK
+  // re-evaluates ownership against the new row, and a deleted row has no
+  // owner. The SECURITY DEFINER RPC (migration 030) verifies auth.uid() is
+  // the live owner itself, and takes a building's units along.
+  void ownerUserId; // ownership is proven server-side from auth.uid()
+  const { error } = await supabase.rpc('delete_property_as_owner', {
+    p_property_id: propertyId
+  });
 
   if (error) {
     throw new Error(formatPropertySetupError('delete this home', error.message));
-  }
-
-  if (count === 0) {
-    throw new Error('Only the person who created this home can delete it.');
   }
 
   if (getActivePropertyId() === propertyId) {
@@ -401,15 +386,12 @@ export async function purgeExpiredArchivedProperties(ownerUserId: string): Promi
     return;
   }
 
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - ARCHIVE_RETENTION_DAYS);
-
-  await supabase
-    .from('properties')
-    .update({ deleted_at: new Date().toISOString() })
-    .eq('owner_user_id', ownerUserId)
-    .lt('archived_at', cutoff.toISOString())
-    .is('deleted_at', null);
+  // Same WITH CHECK trap as deletion — the purge runs through the
+  // SECURITY DEFINER RPC (migration 030), scoped server-side to auth.uid().
+  void ownerUserId;
+  await supabase.rpc('purge_expired_archived_properties', {
+    p_retention_days: ARCHIVE_RETENTION_DAYS
+  });
 }
 
 // Same problem as the auth user: every data context resolves the primary
