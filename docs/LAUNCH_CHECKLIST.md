@@ -125,9 +125,15 @@ when. Check them off in this file.
 - [ ] Reserved-but-unwritten DB tables (`systems`, `audit_events`, 5
       automation event tables, `entitlement_downloads`): comment as
       reserved in a housekeeping migration, or drop.
-- [ ] Guest-role column filtering (`repairs` contractor contacts/costs) —
-      client-side only today; needs a column-filtered view before sharing
-      is marketed hard.
+- [x] Guest-role column filtering — **DB-enforced 2026-08-03** (migration
+      031): table-level SELECT on repairs revoked and re-granted column-by-
+      column excluding contractor contacts/costs; full-household roles
+      (owner/co_owner/editor/viewer) read them via the SECURITY DEFINER
+      `get_repairs_private_fields` RPC, merged back in lib/repairs. Verified
+      by impersonation: direct column select → permission denied; stranger
+      RPC → 0 rows; owner RPC → fields returned. (Found and fixed the
+      Postgres gotcha that column REVOKE is a no-op under a table-level
+      grant.)
 - [ ] $4.99/home entitlement enforcement once the Stripe product exists
       (tighten `FREE_PROPERTY_ALLOWANCE`, add the per-home product key).
 - [ ] Per-unit Portfolio pricing when real 20+ door portfolios appear.

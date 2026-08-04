@@ -73,8 +73,58 @@ export type RepairDataContext = {
   property: PropertySummary | null;
 };
 
+// Contractor contacts and costs are NOT selectable from the base table —
+// migration 031 revoked them so guest-class roles cannot read them with an
+// API client. Full-household roles get them merged back in via the
+// get_repairs_private_fields RPC below.
 const REPAIR_SELECT =
-  'id, property_id, room_id, asset_id, utility_id, title, description, repair_type, status, priority, reported_date, completed_date, scheduled_date, scheduled_window, contractor_name, contractor_phone, contractor_email, estimated_cost, actual_cost, notes, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, asset_id, utility_id, title, description, repair_type, status, priority, reported_date, completed_date, scheduled_date, scheduled_window, notes, created_at, updated_at, deleted_at';
+
+type RepairPrivateFields = {
+  repair_id: string;
+  contractor_name: string | null;
+  contractor_phone: string | null;
+  contractor_email: string | null;
+  estimated_cost: number | null;
+  actual_cost: number | null;
+};
+
+// Merge the privileged columns back into rows. Guests (and any RPC failure)
+// simply keep nulls — the fields read as "not recorded", never as an error.
+async function mergePrivateFields(rows: RepairRow[]): Promise<RepairRow[]> {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return rows;
+  }
+
+  const { data, error } = await supabase.rpc('get_repairs_private_fields', {
+    p_repair_ids: rows.map((row) => row.id)
+  });
+
+  if (error || !data) {
+    return rows;
+  }
+
+  const byId = new Map((data as RepairPrivateFields[]).map((fields) => [fields.repair_id, fields]));
+  return rows.map((row) => {
+    const fields = byId.get(row.id);
+    if (!fields) {
+      return row;
+    }
+    return {
+      ...row,
+      contractor_name: fields.contractor_name,
+      contractor_phone: fields.contractor_phone,
+      contractor_email: fields.contractor_email,
+      estimated_cost: fields.estimated_cost,
+      actual_cost: fields.actual_cost
+    };
+  });
+}
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -256,7 +306,7 @@ export async function getRepairsForProperty(propertyId: string) {
     throw new Error(formatRepairError('load repairs', error.message));
   }
 
-  return sortRepairs(((data ?? []) as Partial<RepairRow>[]).map(normalizeRepair));
+  return sortRepairs(await mergePrivateFields(((data ?? []) as Partial<RepairRow>[]).map(normalizeRepair)));
 }
 
 export async function getRepairsForContext(context: RepairDataContext) {
@@ -297,7 +347,7 @@ export async function getRepairByIdForContext(context: RepairDataContext, repair
     throw new Error(formatRepairError('load repair', error.message));
   }
 
-  return data ? normalizeRepair(data as Partial<RepairRow>) : null;
+  return data ? (await mergePrivateFields([normalizeRepair(data as Partial<RepairRow>)]))[0] : null;
 }
 
 export async function getRepairsForAsset(context: RepairDataContext, assetId: string) {
@@ -322,7 +372,7 @@ export async function getRepairsForAsset(context: RepairDataContext, assetId: st
     throw new Error(formatRepairError('load asset repairs', error.message));
   }
 
-  return sortRepairs(((data ?? []) as Partial<RepairRow>[]).map(normalizeRepair));
+  return sortRepairs(await mergePrivateFields(((data ?? []) as Partial<RepairRow>[]).map(normalizeRepair)));
 }
 
 export async function getRepairsForUtility(context: RepairDataContext, utilityId: string) {
@@ -347,7 +397,7 @@ export async function getRepairsForUtility(context: RepairDataContext, utilityId
     throw new Error(formatRepairError('load utility repairs', error.message));
   }
 
-  return sortRepairs(((data ?? []) as Partial<RepairRow>[]).map(normalizeRepair));
+  return sortRepairs(await mergePrivateFields(((data ?? []) as Partial<RepairRow>[]).map(normalizeRepair)));
 }
 
 export async function createRepairForContext(context: RepairDataContext, input: RepairInput) {
@@ -387,7 +437,7 @@ export async function createRepairForContext(context: RepairDataContext, input: 
     throw new Error(formatRepairError('create repair', error?.message));
   }
 
-  return normalizeRepair(data as Partial<RepairRow>);
+  return (await mergePrivateFields([normalizeRepair(data as Partial<RepairRow>)]))[0];
 }
 
 export async function updateRepairForContext(
@@ -434,7 +484,7 @@ export async function updateRepairForContext(
     throw new Error(formatRepairError('update repair', error?.message));
   }
 
-  return normalizeRepair(data as Partial<RepairRow>);
+  return (await mergePrivateFields([normalizeRepair(data as Partial<RepairRow>)]))[0];
 }
 
 export async function updateRepairStatusForContext(
@@ -485,7 +535,7 @@ export async function updateRepairStatusForContext(
     throw new Error(formatRepairError('update repair', error?.message));
   }
 
-  return normalizeRepair(data as Partial<RepairRow>);
+  return (await mergePrivateFields([normalizeRepair(data as Partial<RepairRow>)]))[0];
 }
 
 export async function deleteRepairForContext(context: RepairDataContext, repairId: string) {
