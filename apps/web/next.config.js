@@ -56,7 +56,27 @@ const securityHeaders = [
   { key: 'Content-Security-Policy', value: contentSecurityPolicy }
 ];
 
+// Stripe Payment Links (live mode, created 2026-08-03). These are PUBLIC
+// values — they render into anchor hrefs on /pricing, /pro, and Settings —
+// so they live in source rather than as host secrets. They moved here from
+// a tracked apps/web/.env.production because the security audit forbids
+// tracked non-example env files. Each link carries product_key metadata the
+// stripe-webhook function keys off. Inlined at build time (NEXT_PUBLIC_*);
+// a host env var or local env file overrides; a redeploy picks up changes.
+const stripePaymentLinks = {
+  NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK:
+    process.env.NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK ||
+    'https://buy.stripe.com/7sY28s9L2dFM0G331b6Zy00',
+  NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK:
+    process.env.NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK ||
+    'https://buy.stripe.com/4gMeVee1i59gbkH1X76Zy01',
+  NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK:
+    process.env.NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK ||
+    'https://buy.stripe.com/5kQcN62iAfNUewTdFP6Zy02',
+};
+
 const nextConfig = {
+  env: { ...stripePaymentLinks },
   transpilePackages: ['@home-folder/ui', '@home-folder/shared'],
   // Don't advertise the framework and its version to a scanner.
   poweredByHeader: false,

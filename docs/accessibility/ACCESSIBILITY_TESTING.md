@@ -81,7 +81,7 @@ Budget/scope with Jesse; document findings in `audits/`.
 ## Selecting the testing stack (per project)
 
 1. Detect the stack and current tooling (see
-   `~/.claude/skills/accessibility/scripts/check-a11y-tooling.sh`, or inspect
+   `.claude/skills/accessibility/scripts/check-a11y-tooling.sh`, or inspect
    `package.json`).
 2. Map to layers:
    - **Next.js** → jsx-a11y (built into its ESLint) + axe in dev + Playwright/
