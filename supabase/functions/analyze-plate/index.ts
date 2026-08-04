@@ -21,8 +21,8 @@
 // like stripe-webhook and send-digest. Turning it on later is one
 // `supabase secrets set ANTHROPIC_API_KEY=...`.
 
-import Anthropic from '@anthropic-ai/sdk';
-import { createClient } from '@supabase/supabase-js';
+import Anthropic from 'npm:@anthropic-ai/sdk@0.115.0';
+import { createClient } from 'npm:@supabase/supabase-js@2.112.0';
 
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 

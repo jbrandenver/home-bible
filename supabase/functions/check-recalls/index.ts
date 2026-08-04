@@ -14,7 +14,7 @@
 // request with a 503, same stance as send-digest's unconfigured mode: inert
 // rather than broken, and switching it on later is one `supabase secrets set`.
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'npm:@supabase/supabase-js@2.112.0';
 
 const CPSC_RECALL_ENDPOINT = 'https://www.saferproducts.gov/RestWebServices/Recall';
 // Politeness cap: a run queries at most this many distinct brands. With a

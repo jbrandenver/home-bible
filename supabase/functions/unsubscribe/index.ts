@@ -11,7 +11,7 @@
 // GET renders a confirm page (so a link scanner cannot unsubscribe anyone);
 // POST acts immediately, which is what RFC 8058 one-click requires.
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'npm:@supabase/supabase-js@2.112.0';
 
 const SITE_URL = Deno.env.get('SITE_URL') ?? 'https://ourhomefolder.com';
 

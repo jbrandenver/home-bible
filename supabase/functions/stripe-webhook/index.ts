@@ -16,8 +16,8 @@
 // SAFE BEFORE STRIPE EXISTS: with no STRIPE_WEBHOOK_SIGNING_SECRET configured
 // the function refuses every request rather than half-working.
 
-import Stripe from 'stripe';
-import { createClient } from '@supabase/supabase-js';
+import Stripe from 'npm:stripe@14.25.0';
+import { createClient } from 'npm:@supabase/supabase-js@2.112.0';
 
 // 'pro_binder' is the one-time per-binder purchase for the pro channel
 // (inspector/agent provisioning — see docs/THREAT_MITIGATION.md T6).

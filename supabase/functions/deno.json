@@ -1,23 +1,22 @@
 {
   "//": [
-    "Pinned dependency versions for every Edge Function.",
+    "Local tooling config for the Edge Functions.",
     "",
-    "These handlers run with SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY and",
-    "ANTHROPIC_API_KEY in scope, so a malicious release in any of these",
-    "packages — or a compromise of the CDN serving them — executes with full",
-    "database access and live payment credentials. Floating specifiers",
-    "('@2', '@14', or no version at all) re-resolve on every deploy, which",
-    "means the code that ships is whatever the registry served that morning.",
+    "Dependency versions are pinned inline in each function's import statement",
+    "(npm:pkg@exact) rather than through an import map here. That is deliberate:",
+    "Supabase's remote bundler does not load this file as an import map, so bare",
+    "specifiers fail to deploy — the version has to travel with the import.",
     "",
-    "Versions are exact. stripe stays on 14.x deliberately: the handler is",
-    "written against that major's API surface. Bump these consciously, and",
-    "re-run `deno check` against each function afterwards."
+    "Why pin at all: these handlers run with SUPABASE_SERVICE_ROLE_KEY,",
+    "STRIPE_SECRET_KEY and ANTHROPIC_API_KEY in scope. A floating specifier",
+    "re-resolves on every deploy, so a malicious release upstream would execute",
+    "with full database access and live payment credentials. Bump versions",
+    "consciously and re-run `deno check` on each function afterwards.",
+    "",
+    "nodeModulesDir is only needed because this repo is a pnpm workspace, which",
+    "makes Deno look for a local node_modules when checking npm: specifiers."
   ],
-  "imports": {
-    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.112.0",
-    "stripe": "npm:stripe@14.25.0",
-    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.115.0"
-  },
+  "nodeModulesDir": "auto",
   "lint": {
     "rules": {
       "tags": ["recommended"]

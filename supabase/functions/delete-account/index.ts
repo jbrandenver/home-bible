@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'npm:@supabase/supabase-js@2.112.0';
 
 // Account deletion is irreversible, so the caller must have signed in recently
 // rather than merely holding a long-lived refreshed session.

@@ -10,7 +10,7 @@
 // *would* have sent without contacting anyone. That makes it deployable and
 // testable today, and turning it on later is one `supabase secrets set`.
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from 'npm:@supabase/supabase-js@2.112.0';
 
 type DigestItem = { title: string; days_out: number };
 type DigestPayload = {
