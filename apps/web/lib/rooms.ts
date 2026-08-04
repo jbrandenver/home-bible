@@ -1,5 +1,6 @@
 import { ROOM_TYPES } from '@home-folder/shared';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { formatDataError } from './errors';
 
 export type RoomDraft = {
   name: string;
@@ -360,7 +361,7 @@ export async function updateRoomForProperty(propertyId: string, roomId: string, 
     .is('deleted_at', null);
 
   if (error) {
-    throw new Error(error.message || 'Failed to update room or space.');
+    throw new Error(formatDataError('save this room', error.message || ''));
   }
 
   return getRoomsForProperty(propertyId);
@@ -380,7 +381,7 @@ export async function deleteRoomForProperty(propertyId: string, roomId: string) 
     .is('deleted_at', null);
 
   if (error) {
-    throw new Error(error.message || 'Failed to delete room or space.');
+    throw new Error(formatDataError('remove this room', error.message || ''));
   }
 
   // Release anything still pointing at the room. The foreign keys are

@@ -5,6 +5,7 @@ import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 import { guardedRead } from './supabase/guardedRead';
+import { formatDataError } from './errors';
 
 const DEMO_UTILITIES_KEY = 'homeFolder.utilities';
 
@@ -205,7 +206,7 @@ export async function getUtilitiesForRoom(context: UtilityDataContext, roomId: s
     .order('created_at', { ascending: false });
 
   if (error) {
-    throw new Error(error.message || 'Failed to load room utilities.');
+    throw new Error(formatDataError('load the utilities in this room', error.message || ''));
   }
 
   const merged = await mergeUtilityPrivateFields(
@@ -234,7 +235,7 @@ export async function getUtilityForDevice(context: UtilityDataContext, deviceId:
     .maybeSingle();
 
   if (error) {
-    throw new Error(error.message || 'Failed to load the linked utility.');
+    throw new Error(formatDataError('open the linked utility', error.message || ''));
   }
 
   if (!data) {
@@ -268,7 +269,7 @@ export async function getUtilityByIdForContext(context: UtilityDataContext, util
     .maybeSingle();
 
   if (error) {
-    throw new Error(error.message || 'Failed to load utility.');
+    throw new Error(formatDataError('open this utility', error.message || ''));
   }
 
   if (!data) {
@@ -326,7 +327,7 @@ export async function createUtilityForContext(context: UtilityDataContext, input
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || 'Failed to create utility.');
+    throw new Error(formatDataError('add a utility', error?.message || ''));
   }
 
   const [merged] = await mergeUtilityPrivateFields([data as Partial<UtilityRow> & { id: string }]);
@@ -382,7 +383,7 @@ export async function updateUtilityForContext(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || 'Failed to update utility.');
+    throw new Error(formatDataError('save this utility', error?.message || ''));
   }
 
   const [merged] = await mergeUtilityPrivateFields([data as Partial<UtilityRow> & { id: string }]);
@@ -412,6 +413,6 @@ export async function deleteUtilityForContext(context: UtilityDataContext, utili
     .is('deleted_at', null);
 
   if (error) {
-    throw new Error(error.message || 'Failed to delete utility.');
+    throw new Error(formatDataError('remove this utility', error.message || ''));
   }
 }

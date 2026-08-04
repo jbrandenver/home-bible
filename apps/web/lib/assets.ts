@@ -12,6 +12,7 @@ import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 import { normalizeVisibilityContexts, visibilityFromContexts } from './visibility';
 import { guardedRead } from './supabase/guardedRead';
+import { formatDataError } from './errors';
 
 const DEMO_ASSETS_KEY = 'homeFolder.assets';
 
@@ -323,7 +324,7 @@ export async function getAssetsForRoom(context: AssetDataContext, roomId: string
     .order('created_at', { ascending: false });
 
   if (error) {
-    throw new Error(error.message || 'Failed to load room assets.');
+    throw new Error(formatDataError('load the appliances in this room', error.message || ''));
   }
 
   const merged = await mergeAssetPrivateFields((data ?? []) as Array<Partial<AssetRow> & { id: string }>);
@@ -348,7 +349,7 @@ export async function getAssetByIdForContext(context: AssetDataContext, assetId:
     .maybeSingle();
 
   if (error) {
-    throw new Error(error.message || 'Failed to load asset.');
+    throw new Error(formatDataError('open this appliance', error.message || ''));
   }
 
   if (!data) {
@@ -397,7 +398,7 @@ export async function createAssetForContext(context: AssetDataContext, input: As
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || 'Failed to create asset.');
+    throw new Error(formatDataError('add an appliance', error?.message || ''));
   }
 
   const [merged] = await mergeAssetPrivateFields([data as Partial<AssetRow> & { id: string }]);
@@ -445,7 +446,7 @@ export async function updateAssetForContext(
     .single();
 
   if (error || !data) {
-    throw new Error(error?.message || 'Failed to update asset.');
+    throw new Error(formatDataError('save this appliance', error?.message || ''));
   }
 
   const [merged] = await mergeAssetPrivateFields([data as Partial<AssetRow> & { id: string }]);
@@ -475,6 +476,6 @@ export async function deleteAssetForContext(context: AssetDataContext, assetId: 
     .is('deleted_at', null);
 
   if (error) {
-    throw new Error(error.message || 'Failed to delete asset.');
+    throw new Error(formatDataError('remove this appliance', error.message || ''));
   }
 }

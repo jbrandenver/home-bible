@@ -7,6 +7,7 @@ import {
 } from './handover';
 import { getSupabaseSetupMessage } from './auth';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { formatDataError } from './errors';
 
 export const SHARING_ROLES = [
   'owner',
@@ -612,7 +613,7 @@ export async function listPropertyInvitations() {
     .order('created_at', { ascending: false });
 
   if (error) {
-    throw new Error(error.message || 'Failed to load invitations.');
+    throw new Error(formatDataError('load invitations', error.message || ''));
   }
 
   return ((data ?? []) as Partial<PropertyInvitation>[]).map(normalizeInvitation);
@@ -641,7 +642,7 @@ export async function createPropertyInvitation(input: {
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to create invitation.');
+    throw new Error(formatDataError('create an invitation', error.message || ''));
   }
 
   const result = Array.isArray(data) ? data[0] : data;
@@ -683,7 +684,7 @@ export async function revokePropertyInvitation(invitationId: string) {
     .is('deleted_at', null);
 
   if (error) {
-    throw new Error(error.message || 'Failed to revoke invitation.');
+    throw new Error(formatDataError('withdraw this invitation', error.message || ''));
   }
 }
 
@@ -753,7 +754,7 @@ export async function getCurrentPropertyRole(propertyId: string): Promise<Sharin
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to check your access level.');
+    throw new Error(formatDataError('check your access level', error.message || ''));
   }
 
   const role = typeof data === 'string' ? data : null;
@@ -802,7 +803,7 @@ export async function listPropertyMembers(): Promise<PropertyMemberAccess> {
     .order('created_at', { ascending: true });
 
   if (error) {
-    throw new Error(error.message || 'Failed to load the people with access.');
+    throw new Error(formatDataError('load the people with access', error.message || ''));
   }
 
   // Names live in `profiles`, which every account can read only for itself, so
@@ -892,7 +893,7 @@ export async function updatePropertyMemberRole(memberId: string, role: SharingRo
     .is('deleted_at', null);
 
   if (error) {
-    throw new Error(error.message || 'Failed to change this person’s access.');
+    throw new Error(formatDataError('change this person’s access', error.message || ''));
   }
 }
 
@@ -914,7 +915,7 @@ export async function removePropertyMember(memberId: string) {
     .eq('property_id', context.property.id);
 
   if (error) {
-    throw new Error(error.message || 'Failed to remove this person.');
+    throw new Error(formatDataError('remove this person', error.message || ''));
   }
 }
 
@@ -929,7 +930,7 @@ export async function acceptPropertyInvitation(inviteToken: string) {
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to accept invitation.');
+    throw new Error(formatDataError('accept this invitation', error.message || ''));
   }
 
   return String(data);
@@ -978,7 +979,7 @@ export async function acceptPendingInvitation(invitationId: string): Promise<str
   });
 
   if (error) {
-    throw new Error(error.message || 'Failed to accept invitation.');
+    throw new Error(formatDataError('accept this invitation', error.message || ''));
   }
 
   return String(data);
