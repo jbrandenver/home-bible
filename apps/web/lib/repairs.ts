@@ -10,6 +10,7 @@ import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from '.
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { guardedRead } from './supabase/guardedRead';
 
 const DEMO_REPAIRS_KEY = 'homeFolder.repairs';
 const PHASE_6F_MIGRATION = 'supabase/migrations/005_phase6f_repairs_service_records.sql';
@@ -295,16 +296,14 @@ export async function getRepairsForProperty(propertyId: string) {
     throw new Error(getSupabaseSetupMessage());
   }
 
-  const { data, error } = await supabase
-    .from('repairs')
-    .select(REPAIR_SELECT)
-    .eq('property_id', propertyId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(formatRepairError('load repairs', error.message));
-  }
+  const data = await guardedRead('your repairs', () =>
+    supabase
+      .from('repairs')
+      .select(REPAIR_SELECT)
+      .eq('property_id', propertyId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+  );
 
   return sortRepairs(await mergePrivateFields(((data ?? []) as Partial<RepairRow>[]).map(normalizeRepair)));
 }

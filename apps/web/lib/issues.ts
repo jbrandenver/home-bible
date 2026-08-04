@@ -10,6 +10,7 @@ import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from '.
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { guardedRead } from './supabase/guardedRead';
 
 const DEMO_ISSUES_KEY = 'homeFolder.issues';
 const PHASE_6G_MIGRATION = 'supabase/migrations/006_phase6g_issues_trend_flags.sql';
@@ -301,16 +302,14 @@ export async function getIssuesForProperty(propertyId: string) {
     throw new Error(getSupabaseSetupMessage());
   }
 
-  const { data, error } = await supabase
-    .from('issues')
-    .select(ISSUE_SELECT)
-    .eq('property_id', propertyId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(formatIssueError('load issues', error.message));
-  }
+  const data = await guardedRead('your issues', () =>
+    supabase
+      .from('issues')
+      .select(ISSUE_SELECT)
+      .eq('property_id', propertyId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+  );
 
   const merged = await mergeIssuePrivateFields((data ?? []) as Array<RawIssue & { id: string }>);
   return sortIssues(merged.map(normalizeIssue));

@@ -12,6 +12,7 @@ import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from '.
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { guardedRead } from './supabase/guardedRead';
 
 const DEMO_REMINDERS_KEY = 'homeFolder.reminders';
 const PHASE_6E_MIGRATION = 'supabase/migrations/004_phase6e_reminders.sql';
@@ -418,16 +419,14 @@ export async function getRemindersForProperty(propertyId: string) {
     throw new Error(getSupabaseSetupMessage());
   }
 
-  const { data, error } = await supabase
-    .from('reminders')
-    .select(REMINDER_SELECT)
-    .eq('property_id', propertyId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(formatReminderError('load reminders', error.message));
-  }
+  const data = await guardedRead('your reminders', () =>
+    supabase
+      .from('reminders')
+      .select(REMINDER_SELECT)
+      .eq('property_id', propertyId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+  );
 
   const merged = await mergeReminderPrivateFields(
     (data ?? []) as Array<Partial<ReminderRow> & { id: string }>

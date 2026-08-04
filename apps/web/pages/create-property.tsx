@@ -6,7 +6,7 @@ import {
 } from '@home-folder/shared';
 import { PageHeader, Card, Input, Select, Button } from '@home-folder/ui';
 import { createPropertyForUser } from '../lib/properties';
-import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
+import { getCurrentUser, getCurrentUserUncached, isSupabaseConfigured } from '../lib/auth';
 import { setDemoActiveProperty } from '../lib/demoStorage';
 
 export default function CreatePropertyPage() {
@@ -61,6 +61,33 @@ export default function CreatePropertyPage() {
         );
         setLoading(false);
         return;
+      }
+    }
+
+    // Reaching here means we believe nobody is signed in. Confirm that against
+    // the auth client rather than the 5-second cache before committing the
+    // home to browser-local storage: mid sign-out -> sign-in the cached answer
+    // can still be the previous `null`, and this branch decides whether the
+    // person's home reaches their account at all.
+    if (supabaseReady) {
+      const confirmed = await getCurrentUserUncached();
+      if (confirmed) {
+        try {
+          await createPropertyForUser(confirmed, {
+            nickname: nickname.trim(),
+            property_type: propertyType
+          });
+          router.push('/add-rooms');
+          return;
+        } catch (submitError) {
+          setError(
+            submitError instanceof Error
+              ? submitError.message
+              : 'Failed to save property to your account.'
+          );
+          setLoading(false);
+          return;
+        }
       }
     }
 

@@ -119,6 +119,33 @@ export async function getCurrentUser() {
   return inFlightUser;
 }
 
+/**
+ * Who is signed in, ignoring the shared cache and asking the auth client
+ * directly.
+ *
+ * `getCurrentUser` answers from a 5-second cache, and during a sign-out →
+ * sign-in switch that cache can still hold the `null` recorded a moment
+ * earlier. Every caller reads `null` as "signed out", so for a branch that
+ * merely renders something that is a harmless flicker — but for a branch that
+ * decides *where a person's data is written*, it silently puts their home in
+ * browser-local demo storage instead of their account.
+ *
+ * Use this before any such branch. It costs one round trip; the alternative
+ * costs the user their data.
+ */
+export async function getCurrentUserUncached(): Promise<User | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return null;
+  }
+
+  clearCachedUser();
+  const { data } = await withAuthTimeout(supabase.auth.getUser(), 'confirming your sign-in');
+  const user = data.user ?? null;
+  cachedUser = { user, at: Date.now() };
+  return user;
+}
+
 export async function ensureProfileForUser(user: User | null) {
   if (!user) {
     return;

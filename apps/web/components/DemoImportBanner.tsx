@@ -23,7 +23,7 @@ export function DemoImportBanner({
   propertyId,
   onImported
 }: {
-  propertyId: string | null;
+  propertyId: string | null | undefined;
   onImported?: () => void;
 }) {
   const [summary, setSummary] = useState<DemoSummary | null>(null);
@@ -135,7 +135,14 @@ export function DemoImportBanner({
         You recorded{summary.propertyNickname ? ` ${summary.propertyNickname}` : ' a home'} in this
         browser before signing in: {parts.join(', ')}. That copy is not saved to your account yet.
       </p>
-      {!propertyId ? (
+      {propertyId === undefined ? (
+        // Not "you have no home" — we simply do not know yet. Saying the wrong
+        // one of those to somebody who does have a home reads as data loss.
+        <p style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
+          Checking your account…
+        </p>
+      ) : null}
+      {propertyId === null ? (
         <p style={{ color: 'var(--status-attention)', fontWeight: 600 }}>
           Create a property first, then come back here to import it.
         </p>

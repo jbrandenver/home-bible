@@ -4,6 +4,7 @@ import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from '.
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { guardedRead } from './supabase/guardedRead';
 
 const DEMO_UTILITIES_KEY = 'homeFolder.utilities';
 
@@ -159,16 +160,14 @@ export async function getUtilitiesForProperty(propertyId: string) {
     throw new Error(getSupabaseSetupMessage());
   }
 
-  const { data, error } = await supabase
-    .from('utilities')
-    .select(UTILITY_SELECT)
-    .eq('property_id', propertyId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(error.message || 'Failed to load utilities.');
-  }
+  const data = await guardedRead('your utilities', () =>
+    supabase
+      .from('utilities')
+      .select(UTILITY_SELECT)
+      .eq('property_id', propertyId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+  );
 
   const merged = await mergeUtilityPrivateFields(
     (data ?? []) as Array<Partial<UtilityRow> & { id: string }>

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { UTILITY_TYPES } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
-import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
+import { getCurrentUser, getCurrentUserUncached, isSupabaseConfigured } from '../lib/auth';
 import { setDemoActiveProperty } from '../lib/demoStorage';
 import { createPropertyForUser, getPrimaryPropertyForUser, type PropertySummary } from '../lib/properties';
 import { createUtilityForContext, getUtilityDataContext } from '../lib/utilities';
@@ -90,7 +90,12 @@ export default function WelcomePage() {
     setError('');
 
     try {
-      const user = await getCurrentUser();
+      // Confirm signed-out state without the cache before writing anywhere.
+      // getCurrentUser answers from a 5-second cache that can still hold the
+      // `null` from a moment earlier during a sign-out -> sign-in switch, and
+      // this branch decides whether the person's home is saved to their
+      // account or only to this browser. Getting that wrong loses their work.
+      const user = (await getCurrentUser()) ?? (await getCurrentUserUncached());
       if (!user) {
         // A signed-out visitor arriving from the landing page's "try it in
         // this browser" promise: keep that promise. Record the home in

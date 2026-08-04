@@ -64,7 +64,7 @@ export default function DashboardPage() {
   const [trendFlagError, setTrendFlagError] = useState('');
   const [roomError, setRoomError] = useState('');
   const [automationSummary, setAutomationSummary] = useState<AutomationOverview | null>(null);
-  const [activePropertyId, setActivePropertyId] = useState<string | null>(null);
+  const [activePropertyId, setActivePropertyId] = useState<string | null | undefined>(undefined);
   const [reloadKey, setReloadKey] = useState(0);
 
   // Isolated, best-effort automation summary — never blocks the main dashboard.

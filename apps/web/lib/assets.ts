@@ -11,6 +11,7 @@ import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
 import { normalizeVisibilityContexts, visibilityFromContexts } from './visibility';
+import { guardedRead } from './supabase/guardedRead';
 
 const DEMO_ASSETS_KEY = 'homeFolder.assets';
 
@@ -279,16 +280,14 @@ export async function getAssetsForProperty(propertyId: string) {
     throw new Error(getSupabaseSetupMessage());
   }
 
-  const { data, error } = await supabase
-    .from('assets')
-    .select(ASSET_SELECT)
-    .eq('property_id', propertyId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(error.message || 'Failed to load assets.');
-  }
+  const data = await guardedRead('your appliances', () =>
+    supabase
+      .from('assets')
+      .select(ASSET_SELECT)
+      .eq('property_id', propertyId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+  );
 
   const merged = await mergeAssetPrivateFields((data ?? []) as Array<Partial<AssetRow> & { id: string }>);
   return merged.map(normalizeAsset);

@@ -5,6 +5,7 @@ import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from '.
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
+import { guardedRead } from './supabase/guardedRead';
 
 const DEMO_SERVICE_RECORDS_KEY = 'homeFolder.serviceRecords';
 const PHASE_6F_MIGRATION = 'supabase/migrations/005_phase6f_repairs_service_records.sql';
@@ -332,16 +333,14 @@ export async function getServiceRecordsForProperty(propertyId: string) {
     throw new Error(getSupabaseSetupMessage());
   }
 
-  const { data, error } = await supabase
-    .from('service_records')
-    .select(SERVICE_RECORD_SELECT)
-    .eq('property_id', propertyId)
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error(formatServiceRecordError('load service records', error.message));
-  }
+  const data = await guardedRead('your service history', () =>
+    supabase
+      .from('service_records')
+      .select(SERVICE_RECORD_SELECT)
+      .eq('property_id', propertyId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+  );
 
   const merged = await mergeServiceRecordPrivateFields(
     (data ?? []) as Array<RawServiceRecord & { id: string }>
