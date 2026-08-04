@@ -136,16 +136,29 @@ export async function ensureProfileForUser(user: User | null) {
         ? user.user_metadata.name
         : null;
 
-  await supabase.from('profiles').upsert(
+  // Deliberately NOT writing `email`. Migration 033 made profiles.email
+  // read-only to close an entitlement hijack (a client could set a victim's
+  // address and be credited with their Stripe purchase) — it is maintained by
+  // the auth_users_sync_profile_email trigger on auth.users instead.
+  //
+  // An upsert needs UPDATE privilege on every column in its DO UPDATE SET, so
+  // including `email` here made the whole statement fail with "permission
+  // denied for table profiles" on every single sign-in. The error was
+  // discarded unread, so it surfaced only as a profile row that silently
+  // stopped tracking full_name.
+  const { error: profileError } = await supabase.from('profiles').upsert(
     {
       id: user.id,
-      email: user.email ?? null,
       full_name: displayName
     },
     {
       onConflict: 'id'
     }
   );
+
+  if (profileError) {
+    console.error('ensureProfileForUser: profile upsert failed', profileError.message);
+  }
 }
 
 export type SignUpResult = AuthResult & {
