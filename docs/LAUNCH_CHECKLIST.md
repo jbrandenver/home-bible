@@ -105,6 +105,10 @@ when. Check them off in this file.
 - [ ] Reminder emails: Resend account + send.ourhomefolder.com DNS +
       postal address + secrets + hourly cron (runbook §A). Should precede
       any paid tier — it is the retention engine.
+      **Progress 2026-08-03:** Resend account created (contact@
+      ourhomefolder.com), domain send.ourhomefolder.com verified, DNS
+      confirmed resolving (DKIM/SPF/MX). Still needed: API key → secret,
+      CAN-SPAM postal address, apex DMARC record, then build the digest.
 - [ ] Data-plate scanner: `supabase secrets set ANTHROPIC_API_KEY=…`
       (runbook §D). ~$3–5 per 1,000 scans, capped server-side.
 
