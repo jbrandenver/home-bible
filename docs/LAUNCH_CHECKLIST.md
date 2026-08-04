@@ -96,25 +96,27 @@ when. Check them off in this file.
       intent), billing address collection, and post-purchase redirects into
       the app. $49 packs deliberately skipped (no env var references them).
       Entitlement gating code for additional_home still to write.
-- [ ] Env vars on the Worker build: `NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK`,
-      `NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK`, and (new 2026-08-03)
-      `NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK` — the pricing page's
-      checkout buttons light up automatically once these are set.
+- [x] Env vars — **DONE 2026-08-03**: all three payment-link URLs committed
+      in `apps/web/.env.production` (public values, inlined at build).
+      Checkout buttons live on /pricing, /pro, and the Settings Plan card.
 - [x] **Supabase Pro** — verified active 2026-08-03 (org plan reads
       "pro" via the management API). The digest cron can be relied on.
 - [ ] CPA's view on state digital-goods tax before the first dollar.
-- [ ] **NEXT (blocks env vars): register the webhook + hand over secrets.**
-      Jesse, in the Stripe dashboard (the Zapier key is restricted and
-      cannot manage webhooks): Developers → Webhooks → Add endpoint →
-      https://gdntnlhnjyyzxcjuypuy.supabase.co/functions/v1/stripe-webhook
-      → events: checkout.session.completed, charge.refunded,
-      charge.dispute.created, invoice.paid, customer.subscription.deleted.
-      Send Claude the whsec_ signing secret + an sk_ secret key for the
-      Edge Function. Then: secrets set, webhook deploy, signed-event test
-      battery, and ONLY THEN the NEXT_PUBLIC_* payment-link env vars go
-      live (buttons before webhook = money taken with no entitlement).
-- [ ] Run the webhook tests in runbook §B (replay, unmatched, bad
-      signature, browser insert) + the subscription lifecycle tests.
+- [x] Webhook registered (Jesse, dashboard, 2026-08-03), secrets set
+      (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SIGNING_SECRET), stripe-webhook
+      redeployed with additional_home in SUBSCRIPTION_PRODUCT_KEYS.
+- [x] Webhook tests — **ALL GREEN 2026-08-03**, run as signed synthetic
+      events against the DEPLOYED endpoint: forged signature → 400, zero
+      DB writes; valid event/unknown buyer → unmatched_purchases row;
+      exact replay → deduplicated (payment_events unique constraint);
+      browser-session entitlement insert → permission denied. Test rows
+      cleaned. Still to watch: unmatched_purchases in the first weeks;
+      subscription lifecycle (invoice.paid roll-forward) will prove out
+      on the first real renewal.
+- [ ] Fee-ladder gating code for additional_home (homes 2–3 vs Portfolio
+      from the 4th) — entitlements are RECORDED correctly today; the app
+      still allows 2 free homes and gates beyond only via the Portfolio
+      offer. Engineering item, not a launch blocker.
 
 ## Jesse — feature switches (independent of money)
 
