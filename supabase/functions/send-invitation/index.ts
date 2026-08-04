@@ -27,7 +27,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.112.0';
 
 const SITE_URL = Deno.env.get('SITE_URL') ?? 'https://ourhomefolder.com';
-const FROM = Deno.env.get('INVITATION_FROM') ?? 'Our Home Folder <invitations@send.ourhomefolder.com>';
+// Send from the address the digest has been warming up, not a brand-new one.
+// The first live invitation (2026-08-04) was Resend-accepted from
+// invitations@ and never reached a Gmail inbox — a cold sender address on a
+// cold recipient is exactly what Gmail quarantines.
+const FROM = Deno.env.get('INVITATION_FROM') ?? 'Our Home Folder <reminders@send.ourhomefolder.com>';
 // CAN-SPAM requires a physical postal address on commercial mail; transactional
 // mail is safer with it too. Same variable the digest uses.
 const POSTAL_ADDRESS = Deno.env.get('POSTAL_ADDRESS') ?? '';
@@ -375,8 +379,35 @@ Deno.serve(async (request) => {
   if (!response.ok) {
     const detail = await response.text().catch(() => '');
     console.error('send-invitation: resend refused', { status: response.status, detail: detail.slice(0, 200) });
+    // Durable record of the refusal, queryable from SQL — function logs rotate.
+    await serviceClient.rpc('log_audit_event', {
+      p_event_type: 'invitation.email_failed',
+      p_property_id: invitation.property_id,
+      p_payload: { invitation_id: invitation.id, status: response.status, detail: detail.slice(0, 300) },
+      p_severity: 'alert',
+      p_actor: caller.id
+    });
     return json({ error: 'The email could not be sent. Copy the link and share it yourself.' }, 502, cors);
   }
+
+  // Resend's message id is the handle for tracing delivery (dashboard,
+  // webhooks, support). Without it, "Resend accepted it" is where the
+  // trail ends — which is exactly where the first live send got stuck.
+  let resendId = '';
+  try {
+    const body = await response.json();
+    resendId = typeof body?.id === 'string' ? body.id : '';
+  } catch {
+    /* accepted but unparseable — the audit row below still records the send */
+  }
+
+  await serviceClient.rpc('log_audit_event', {
+    p_event_type: 'invitation.email_sent',
+    p_property_id: invitation.property_id,
+    p_payload: { invitation_id: invitation.id, to: invitation.invited_email, resend_id: resendId, from: FROM },
+    p_severity: 'info',
+    p_actor: caller.id
+  });
 
   const { error: bookkeepingError } = await serviceClient
     .from('property_invitations')
@@ -391,5 +422,5 @@ Deno.serve(async (request) => {
     console.error('send-invitation: bookkeeping failed', { code: bookkeepingError.code });
   }
 
-  return json({ sent: true, to: invitation.invited_email }, 200, cors);
+  return json({ sent: true, to: invitation.invited_email, resend_id: resendId }, 200, cors);
 });
