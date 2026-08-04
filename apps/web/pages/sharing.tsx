@@ -154,6 +154,10 @@ export default function SharingPage() {
   const [memberNotice, setMemberNotice] = useState('');
   const [savingMemberId, setSavingMemberId] = useState('');
   const [removingMemberId, setRemovingMemberId] = useState('');
+  // In-page confirmation for Remove. window.confirm() proved unreliable here:
+  // when a browser suppresses the dialog it returns false and the click ends
+  // as a silent no-op — no request, no message, and the person stays shared.
+  const [confirmingRemoveId, setConfirmingRemoveId] = useState('');
 
   // Transfer ownership (migration 025). Only the property owner sees this
   // section — same signal the RPC enforces (properties.owner_user_id), read
@@ -345,11 +349,7 @@ export default function SharingPage() {
   const removeMember = async (member: PropertyMember) => {
     if (savingMemberId || removingMemberId) return;
 
-    const confirmed = window.confirm(
-      `Remove ${member.label} from this record? They lose access straight away. You can invite them again later.`
-    );
-    if (!confirmed) return;
-
+    setConfirmingRemoveId('');
     setRemovingMemberId(member.id);
     setMemberError('');
     setMemberNotice('');
@@ -592,15 +592,39 @@ export default function SharingPage() {
                             ))}
                           </select>
                         </label>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={busy}
-                          aria-label={`Remove ${member.label}`}
-                          onClick={() => removeMember(member)}
-                        >
-                          {removingMemberId === member.id ? 'Removing...' : 'Remove'}
-                        </Button>
+                        {confirmingRemoveId === member.id ? (
+                          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span style={{ ...subtleText, fontSize: 13 }}>
+                              They lose access straight away.
+                            </span>
+                            <Button
+                              type="button"
+                              disabled={busy}
+                              aria-label={`Confirm removing ${member.label}`}
+                              onClick={() => removeMember(member)}
+                            >
+                              {removingMemberId === member.id ? 'Removing...' : 'Yes, remove'}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={busy}
+                              onClick={() => setConfirmingRemoveId('')}
+                            >
+                              Keep access
+                            </Button>
+                          </span>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={busy}
+                            aria-label={`Remove ${member.label}`}
+                            onClick={() => setConfirmingRemoveId(member.id)}
+                          >
+                            {removingMemberId === member.id ? 'Removing...' : 'Remove'}
+                          </Button>
+                        )}
                       </div>
                     ) : (
                       <span style={{ ...subtleText, fontSize: 13 }}>
