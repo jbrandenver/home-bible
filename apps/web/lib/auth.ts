@@ -146,18 +146,36 @@ export async function ensureProfileForUser(user: User | null) {
   // denied for table profiles" on every single sign-in. The error was
   // discarded unread, so it surfaced only as a profile row that silently
   // stopped tracking full_name.
-  const { error: profileError } = await supabase.from('profiles').upsert(
-    {
-      id: user.id,
-      full_name: displayName
-    },
-    {
-      onConflict: 'id'
-    }
-  );
+  // NOT an upsert. PostgREST compiles one into
+  //   ON CONFLICT (id) DO UPDATE SET id = excluded.id, ...
+  // and `id` carries no UPDATE grant either, so the statement fails whatever
+  // else is in the payload. Update first, insert only if no row matched —
+  // both need privileges the client actually holds.
+  const { data: updated, error: updateError } = await supabase
+    .from('profiles')
+    .update({ full_name: displayName })
+    .eq('id', user.id)
+    .select('id');
 
-  if (profileError) {
-    console.error('ensureProfileForUser: profile upsert failed', profileError.message);
+  if (updateError) {
+    console.error('ensureProfileForUser: profile update failed', updateError.message);
+    return;
+  }
+
+  if (updated && updated.length > 0) {
+    return;
+  }
+
+  // No row yet. Accounts created before the auth.users sync trigger existed
+  // have no profile row, so this is a real path, not a theoretical one.
+  const { error: insertError } = await supabase
+    .from('profiles')
+    .insert({ id: user.id, full_name: displayName });
+
+  // A concurrent sign-in (or the trigger) may have created it in between;
+  // a duplicate-key race here is success, not failure.
+  if (insertError && insertError.code !== '23505') {
+    console.error('ensureProfileForUser: profile insert failed', insertError.message);
   }
 }
 

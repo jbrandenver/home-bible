@@ -35,8 +35,21 @@ vi.mock('../lib/supabase/client', () => ({
       },
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } })
     },
+    // Mirrors the real write path: UPDATE ... .eq().select(), falling back to
+    // INSERT when no row matched. profiles.id and .email carry no UPDATE grant
+    // (migration 033), so an upsert would fail against the live database —
+    // this mock must not offer one, or the test would pass on a shape that
+    // 403s in production.
     from: () => ({
-      upsert: async () => {
+      update: () => ({
+        eq: () => ({
+          select: async () => {
+            profileUpserts += 1;
+            return { data: [{ id: 'u1' }], error: null };
+          }
+        })
+      }),
+      insert: async () => {
         profileUpserts += 1;
         return { data: null, error: null };
       }
