@@ -3,8 +3,8 @@
  * Job one is installability (Home Screen on iOS/Android, install prompt in
  * Chrome) and a decent offline experience; job two is to never, ever serve a
  * stale app after a deploy. So:
- *   - navigations are network-first (fresh HTML wins), falling back to a
- *     cached copy of that page, then to /offline;
+ *   - navigations always hit the network, falling back only to /offline —
+ *     page HTML is never cached (a stale snapshot is worse than a reload);
  *   - hashed immutable assets (/_next/static) are cache-first — a changed
  *     file gets a new hash, so this can never go stale;
  *   - everything else (Supabase API calls are cross-origin and never touched)
@@ -12,7 +12,7 @@
  * Bump VERSION to invalidate every runtime cache on the next visit.
  */
 
-const VERSION = 'ohf-v1';
+const VERSION = 'ohf-v2';
 const OFFLINE_URL = '/offline';
 const PRECACHE = [OFFLINE_URL, '/icon-192.png', '/favicon.svg'];
 
@@ -64,21 +64,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Page navigations: the network is the source of truth; the cache is the
-  // memory of the last good visit; /offline is the floor.
+  // Page navigations: the network only, with /offline as the floor. v1 also
+  // cached a copy of every visited page and could in principle serve a stale
+  // snapshot; launch QA saw flashes of earlier content, so page HTML is now
+  // never cached — stability beats offline page revisits.
   if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(VERSION).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match(OFFLINE_URL))
-        )
-    );
+    event.respondWith(fetch(request).catch(() => caches.match(OFFLINE_URL)));
   }
 });
