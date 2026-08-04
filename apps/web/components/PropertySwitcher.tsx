@@ -36,9 +36,18 @@ function defaultPropertyId(properties: PropertySummary[], userId: string): strin
   return chosen ? chosen.id : '';
 }
 
-function optionLabel(property: PropertySummary, byId: Map<string, PropertySummary>): string {
+function optionLabel(
+  property: PropertySummary,
+  byId: Map<string, PropertySummary>,
+  viewerId: string
+): string {
+  // Mark homes belonging to somebody else. Without it a shared home reads as
+  // your own, which is both confusing and quietly misleading about what you
+  // are allowed to change.
+  const suffix = viewerId && property.owner_user_id !== viewerId ? ' · shared with me' : '';
+
   if (!property.parent_property_id) {
-    return property.nickname;
+    return property.nickname + suffix;
   }
 
   const parent = byId.get(property.parent_property_id);
@@ -48,12 +57,16 @@ function optionLabel(property: PropertySummary, byId: Map<string, PropertySummar
   }
 
   // Orphan unit (the user cannot see its building): show its own name.
-  return property.nickname;
+  return property.nickname + suffix;
 }
+
+// Sentinel value: an action rather than a home.
+const ADD_HOME = '__add_home__';
 
 export function PropertySwitcher() {
   const [properties, setProperties] = useState<PropertySummary[]>([]);
   const [activeId, setActiveId] = useState('');
+  const [viewerId, setViewerId] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -76,6 +89,7 @@ export function PropertySwitcher() {
         const storedId = getActivePropertyId();
         const stored = storedId ? list.find((property) => property.id === storedId) : undefined;
 
+        setViewerId(user.id);
         setProperties(list);
         setActiveId(stored ? stored.id : defaultPropertyId(list, user.id));
       } catch {
@@ -91,7 +105,11 @@ export function PropertySwitcher() {
     };
   }, []);
 
-  if (properties.length < 2) {
+  // Shown from the first home onward, not the second. Someone whose only home
+  // is one shared with them used to see no control at all — which reads as
+  // "this is your home" and hides both the fact that it is not, and the fact
+  // that they can add their own.
+  if (properties.length === 0) {
     return null;
   }
 
@@ -100,6 +118,10 @@ export function PropertySwitcher() {
   const onChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const nextId = event.target.value;
     if (!nextId || nextId === activeId) {
+      return;
+    }
+    if (nextId === ADD_HOME) {
+      window.location.href = '/create-property';
       return;
     }
     setActivePropertyId(nextId);
@@ -131,9 +153,10 @@ export function PropertySwitcher() {
       >
         {properties.map((property) => (
           <option key={property.id} value={property.id}>
-            {optionLabel(property, byId)}
+            {optionLabel(property, byId, viewerId)}
           </option>
         ))}
+        <option value={ADD_HOME}>+ Add a home of my own</option>
       </select>
     </span>
   );
