@@ -6,9 +6,10 @@
 // only thing persisted is a plate_scans usage row (who scanned, when, ok or
 // failed) so the cap can be enforced server-side, next to the API key.
 //
-// AUTH: `verify_jwt = true` in config.toml — the Supabase gateway validates
-// the caller's JWT signature before this function ever runs, so the handler
-// only needs to *read* the already-verified token to learn who is calling.
+// AUTH: `verify_jwt = true` in config.toml validates the caller's JWT at the
+// gateway, AND the handler independently verifies it via auth.getUser(). The
+// belt-and-braces is deliberate: this function holds an Anthropic key, so it
+// must not depend on a flag stored outside the code to stay authenticated.
 //
 // COST GOVERNANCE (docs/COST_GOVERNANCE.md): exactly ONE model call per scan,
 // on the cheap tier (claude-haiku-4-5), capped at 1024 output tokens, no
@@ -20,8 +21,8 @@
 // like stripe-webhook and send-digest. Turning it on later is one
 // `supabase secrets set ANTHROPIC_API_KEY=...`.
 
-import Anthropic from 'https://esm.sh/@anthropic-ai/sdk';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import Anthropic from '@anthropic-ai/sdk';
+import { createClient } from '@supabase/supabase-js';
 
 const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -64,38 +65,86 @@ const EXTRACTION_INSTRUCTIONS = [
   'notes: one short sentence about anything the user should double-check (glare, cropped edge, ambiguous characters), or null.'
 ].join('\n');
 
-// The gateway has already verified this token's signature (verify_jwt = true),
-// so decoding the payload — without re-verifying — is safe here and is the
-// documented way for an Edge Function to learn the caller's user id.
-function userIdFromVerifiedJwt(authorization: string | null): string | null {
+// Browsers preflight this call because supabase-js sends Authorization and
+// x-client-info. Origins are pinned — never '*' — matching delete-account.
+const ALLOWED_ORIGINS = [
+  Deno.env.get('SITE_URL'),
+  'https://ourhomefolder.com',
+  'https://www.ourhomefolder.com',
+  'http://localhost:3000',
+  'http://localhost:3055'
+].filter((value): value is string => Boolean(value));
+
+function corsHeaders(request: Request): Record<string, string> {
+  const origin = request.headers.get('Origin');
+  if (!origin || !ALLOWED_ORIGINS.includes(origin)) {
+    return {};
+  }
+
+  return {
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400',
+    Vary: 'Origin'
+  };
+}
+
+// Preflight only — deliberately performs no work and touches no data.
+function corsPreflight(request: Request): Response {
+  return new Response(null, { status: 204, headers: corsHeaders(request) });
+}
+
+// Verify the caller's token here rather than decoding it unchecked.
+//
+// The gateway does verify signatures while verify_jwt = true, and decoding
+// alone was correct against that configuration. But this handler holds an
+// Anthropic key: if the flag is ever flipped — one `deploy --no-verify-jwt`,
+// one dashboard toggle, one config drift — an unsigned token with an
+// attacker-chosen `sub` would pass, giving unauthenticated model spend with a
+// fresh quota bucket per request. Verifying here costs one round-trip on a
+// call that already makes an inference request, and removes the dependency on
+// a setting stored somewhere else. Same stance as delete-account.
+async function verifiedUserId(
+  supabaseUrl: string,
+  anonKey: string,
+  authorization: string | null
+): Promise<string | null> {
   if (!authorization || !authorization.startsWith('Bearer ')) {
     return null;
   }
 
-  const parts = authorization.slice('Bearer '.length).split('.');
-  if (parts.length !== 3) {
+  const userClient = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: authorization } }
+  });
+
+  const { data, error } = await userClient.auth.getUser();
+  if (error || !data.user) {
     return null;
   }
 
-  try {
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return typeof payload.sub === 'string' && payload.sub.length > 0 ? payload.sub : null;
-  } catch {
-    return null;
-  }
+  return data.user.id;
 }
 
 Deno.serve(async (request) => {
+  // supabase.functions.invoke sends Authorization + Content-Type, which makes
+  // the browser preflight. Answering OPTIONS with a pinned origin keeps the
+  // scanner working without ever needing a wildcard ACAO.
+  if (request.method === 'OPTIONS') {
+    return corsPreflight(request);
+  }
+
   if (request.method !== 'POST') {
-    return json({ error: 'Method not allowed.' }, 405);
+    return json({ error: 'Method not allowed.' }, 405, corsHeaders(request));
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
 
-  if (!supabaseUrl || !serviceRoleKey) {
+  if (!supabaseUrl || !serviceRoleKey || !anonKey) {
     console.error('analyze-plate: not configured');
-    return json({ error: 'Not configured.' }, 503);
+    return json({ error: 'Not configured.' }, 503, corsHeaders(request));
   }
 
   // Checked separately from the platform env so the message can say what is
@@ -104,12 +153,12 @@ Deno.serve(async (request) => {
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
   if (!anthropicKey) {
     console.error('analyze-plate: ANTHROPIC_API_KEY not set');
-    return json({ error: 'Not configured.', detail: 'Data-plate scanning is not enabled yet.' }, 503);
+    return json({ error: 'Not configured.', detail: 'Data-plate scanning is not enabled yet.' }, 503, corsHeaders(request));
   }
 
-  const userId = userIdFromVerifiedJwt(request.headers.get('Authorization'));
+  const userId = await verifiedUserId(supabaseUrl, anonKey, request.headers.get('Authorization'));
   if (!userId) {
-    return json({ error: 'Not signed in.' }, 401);
+    return json({ error: 'Not signed in.' }, 401, corsHeaders(request));
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
@@ -123,7 +172,7 @@ Deno.serve(async (request) => {
 
   if (countError || count === null) {
     console.error('analyze-plate: could not count scans', { code: countError?.code });
-    return json({ error: 'Could not check your scan allowance. Try again in a moment.' }, 500);
+    return json({ error: 'Could not check your scan allowance. Try again in a moment.' }, 500, corsHeaders(request));
   }
 
   const { data: portfolioEntitlement } = await supabase
@@ -145,7 +194,8 @@ Deno.serve(async (request) => {
           ? 'You have hit the scan safety ceiling. Get in touch and we will raise it.'
           : `You have used all ${FREE_SCAN_CAP} free data-plate scans. The Portfolio plan includes many more.`
       },
-      429
+      429,
+      corsHeaders(request)
     );
   }
 
@@ -153,18 +203,18 @@ Deno.serve(async (request) => {
   try {
     body = await request.json();
   } catch {
-    return json({ error: 'Invalid request body.' }, 400);
+    return json({ error: 'Invalid request body.' }, 400, corsHeaders(request));
   }
 
   const imageBase64 = typeof body.image_base64 === 'string' ? body.image_base64 : '';
   const mediaType = typeof body.media_type === 'string' ? body.media_type : '';
 
   if (!ALLOWED_MEDIA_TYPES.has(mediaType)) {
-    return json({ error: 'Send a JPEG, PNG, or WebP photo.' }, 400);
+    return json({ error: 'Send a JPEG, PNG, or WebP photo.' }, 400, corsHeaders(request));
   }
 
   if (imageBase64.length === 0 || imageBase64.length > MAX_BASE64_LENGTH) {
-    return json({ error: 'Photo is missing or too large. It should be under ~1.5MB after compression.' }, 400);
+    return json({ error: 'Photo is missing or too large. It should be under ~1.5MB after compression.' }, 400, corsHeaders(request));
   }
 
   const anthropic = new Anthropic({ apiKey: anthropicKey });
@@ -215,16 +265,20 @@ Deno.serve(async (request) => {
       console.error('analyze-plate: could not record scan', { code: logError.code });
     }
 
-    return json({
-      brand: parsed.brand ?? null,
-      model_number: parsed.model_number ?? null,
-      serial_number: parsed.serial_number ?? null,
-      manufacture_year: parsed.manufacture_year ?? null,
-      confidence: parsed.confidence ?? 'low',
-      notes: parsed.notes ?? null,
-      scans_used: count + 1,
-      scan_cap: cap
-    });
+    return json(
+      {
+        brand: parsed.brand ?? null,
+        model_number: parsed.model_number ?? null,
+        serial_number: parsed.serial_number ?? null,
+        manufacture_year: parsed.manufacture_year ?? null,
+        confidence: parsed.confidence ?? 'low',
+        notes: parsed.notes ?? null,
+        scans_used: count + 1,
+        scan_cap: cap
+      },
+      200,
+      corsHeaders(request)
+    );
   } catch (apiError) {
     console.error('analyze-plate: vision call failed', {
       message: apiError instanceof Error ? apiError.message : 'unknown'
@@ -232,13 +286,13 @@ Deno.serve(async (request) => {
 
     await supabase.from('plate_scans').insert({ user_id: userId, status: 'failed' });
 
-    return json({ error: 'The scanner had trouble with that photo. Try again in a moment.' }, 502);
+    return json({ error: 'The scanner had trouble with that photo. Try again in a moment.' }, 502, corsHeaders(request));
   }
 });
 
-function json(body: Record<string, unknown>, status = 200) {
+function json(body: Record<string, unknown>, status = 200, extra: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...extra }
   });
 }

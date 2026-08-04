@@ -10,7 +10,7 @@
 // *would* have sent without contacting anyone. That makes it deployable and
 // testable today, and turning it on later is one `supabase secrets set`.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from '@supabase/supabase-js';
 
 type DigestItem = { title: string; days_out: number };
 type DigestPayload = {
@@ -33,6 +33,24 @@ type DueRow = {
 
 const SITE_URL = Deno.env.get('SITE_URL') ?? 'https://ourhomefolder.com';
 const FROM = Deno.env.get('DIGEST_FROM') ?? 'Our Home Folder <reminders@send.ourhomefolder.com>';
+
+/**
+ * Constant-time compare. Both sides are hashed first so the comparison always
+ * runs over 32 equal-length bytes — a plain `!==` on the raw strings returns
+ * early at the first differing byte and leaks length and prefix.
+ */
+async function safeEqual(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(a)),
+    crypto.subtle.digest('SHA-256', encoder.encode(b))
+  ]);
+  const va = new Uint8Array(ha);
+  const vb = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < va.length; i += 1) diff |= va[i] ^ vb[i];
+  return diff === 0;
+}
 // CAN-SPAM requires a physical postal address. Use a PO box or virtual mailbox,
 // never a home address — this goes to every recipient.
 const POSTAL_ADDRESS = Deno.env.get('POSTAL_ADDRESS') ?? '';
@@ -176,12 +194,17 @@ Deno.serve(async (request) => {
   }
 
   // The endpoint is public (cron cannot present a user JWT), so a shared secret
-  // is the only thing standing between the internet and a send loop.
-  if (cronSecret) {
-    const provided = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
-    if (provided !== cronSecret) {
-      return json({ error: 'Unauthorized.' }, 401);
-    }
+  // is the only thing standing between the internet and a send loop. Refuse
+  // when it is unset: an absent secret must not mean "no check", or a rotation
+  // that empties the variable silently opens the send loop to the internet.
+  if (!cronSecret) {
+    console.error('send-digest: DIGEST_CRON_SECRET is not configured; refusing to run');
+    return json({ error: 'Not configured.' }, 503);
+  }
+
+  const provided = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+  if (!provided || !(await safeEqual(provided, cronSecret))) {
+    return json({ error: 'Unauthorized.' }, 401);
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);

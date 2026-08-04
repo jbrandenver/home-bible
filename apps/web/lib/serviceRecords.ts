@@ -77,8 +77,66 @@ type RawServiceRecord = Omit<Partial<ServiceRecordRow>, 'service_title' | 'title
   visibility?: string | null;
 };
 
+// Provider/vendor contacts, costs and free-text are NOT selectable from the
+// base table — migration 033 revoked them so guest-class roles cannot read them
+// with an API client. Full-household roles get them merged back in via the
+// get_service_records_private_fields RPC below.
 const SERVICE_RECORD_SELECT =
-  'id, property_id, room_id, asset_id, utility_id, service_title, service_type, service_date, provider_name, provider_phone, provider_email, cost, summary, notes, next_service_date, title, description, vendor_name, vendor_phone, vendor_email, follow_up_needed, follow_up_date, visibility, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, asset_id, utility_id, service_title, service_type, service_date, provider_name, next_service_date, title, vendor_name, follow_up_needed, follow_up_date, visibility, created_at, updated_at, deleted_at';
+
+type ServiceRecordPrivateFields = {
+  service_record_id: string;
+  description: string | null;
+  cost: number | null;
+  vendor_phone: string | null;
+  vendor_email: string | null;
+  provider_phone: string | null;
+  provider_email: string | null;
+  summary: string | null;
+  notes: string | null;
+};
+
+// Merge the privileged columns back into rows. Guests (and any RPC failure)
+// simply keep nulls — the fields read as "not recorded", never as an error.
+async function mergeServiceRecordPrivateFields<T extends { id: string }>(rows: T[]): Promise<T[]> {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return rows;
+  }
+
+  const { data, error } = await supabase.rpc('get_service_records_private_fields', {
+    p_service_record_ids: rows.map((row) => row.id)
+  });
+
+  if (error || !data) {
+    return rows;
+  }
+
+  const byId = new Map(
+    (data as ServiceRecordPrivateFields[]).map((fields) => [fields.service_record_id, fields])
+  );
+  return rows.map((row) => {
+    const fields = byId.get(row.id);
+    if (!fields) {
+      return row;
+    }
+    return {
+      ...row,
+      description: fields.description,
+      cost: fields.cost,
+      vendor_phone: fields.vendor_phone,
+      vendor_email: fields.vendor_email,
+      provider_phone: fields.provider_phone,
+      provider_email: fields.provider_email,
+      summary: fields.summary,
+      notes: fields.notes
+    };
+  });
+}
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -285,7 +343,10 @@ export async function getServiceRecordsForProperty(propertyId: string) {
     throw new Error(formatServiceRecordError('load service records', error.message));
   }
 
-  return sortServiceRecords(((data ?? []) as RawServiceRecord[]).map(normalizeServiceRecord));
+  const merged = await mergeServiceRecordPrivateFields(
+    (data ?? []) as Array<RawServiceRecord & { id: string }>
+  );
+  return sortServiceRecords(merged.map(normalizeServiceRecord));
 }
 
 export async function getServiceRecordsForContext(context: ServiceRecordDataContext) {
@@ -322,7 +383,10 @@ export async function getServiceRecordsForAsset(context: ServiceRecordDataContex
     throw new Error(formatServiceRecordError('load asset service records', error.message));
   }
 
-  return sortServiceRecords(((data ?? []) as RawServiceRecord[]).map(normalizeServiceRecord));
+  const merged = await mergeServiceRecordPrivateFields(
+    (data ?? []) as Array<RawServiceRecord & { id: string }>
+  );
+  return sortServiceRecords(merged.map(normalizeServiceRecord));
 }
 
 export async function getServiceRecordsForUtility(context: ServiceRecordDataContext, utilityId: string) {
@@ -347,7 +411,10 @@ export async function getServiceRecordsForUtility(context: ServiceRecordDataCont
     throw new Error(formatServiceRecordError('load utility service records', error.message));
   }
 
-  return sortServiceRecords(((data ?? []) as RawServiceRecord[]).map(normalizeServiceRecord));
+  const merged = await mergeServiceRecordPrivateFields(
+    (data ?? []) as Array<RawServiceRecord & { id: string }>
+  );
+  return sortServiceRecords(merged.map(normalizeServiceRecord));
 }
 
 export async function createServiceRecordForContext(
@@ -390,7 +457,8 @@ export async function createServiceRecordForContext(
     throw new Error(formatServiceRecordError('create service record', error?.message));
   }
 
-  return normalizeServiceRecord(data as RawServiceRecord);
+  const [merged] = await mergeServiceRecordPrivateFields([data as RawServiceRecord & { id: string }]);
+  return normalizeServiceRecord(merged);
 }
 
 export async function updateServiceRecordForContext(
@@ -437,7 +505,8 @@ export async function updateServiceRecordForContext(
     throw new Error(formatServiceRecordError('update service record', error?.message));
   }
 
-  return normalizeServiceRecord(data as RawServiceRecord);
+  const [merged] = await mergeServiceRecordPrivateFields([data as RawServiceRecord & { id: string }]);
+  return normalizeServiceRecord(merged);
 }
 
 export async function deleteServiceRecordForContext(

@@ -14,7 +14,7 @@
 // request with a 503, same stance as send-digest's unconfigured mode: inert
 // rather than broken, and switching it on later is one `supabase secrets set`.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from '@supabase/supabase-js';
 
 const CPSC_RECALL_ENDPOINT = 'https://www.saferproducts.gov/RestWebServices/Recall';
 // Politeness cap: a run queries at most this many distinct brands. With a
@@ -22,6 +22,29 @@ const CPSC_RECALL_ENDPOINT = 'https://www.saferproducts.gov/RestWebServices/Reca
 // ordering shifts; the response notes when the cap was hit.
 const MAX_BRANDS_PER_RUN = 30;
 const DELAY_BETWEEN_CALLS_MS = 500;
+// Assets are paged rather than loaded whole: the table grows without bound as
+// households add appliances, and one oversized run would OOM the function and
+// silently stop recall monitoring — a safety feature — for every customer.
+const ASSET_PAGE_SIZE = 1000;
+const MAX_ASSET_PAGES = 50;
+
+/**
+ * Constant-time compare. Both sides are hashed first so the comparison always
+ * runs over 32 equal-length bytes — a plain `!==` on the raw strings returns
+ * early at the first differing byte and leaks length and prefix.
+ */
+async function safeEqual(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(a)),
+    crypto.subtle.digest('SHA-256', encoder.encode(b))
+  ]);
+  const va = new Uint8Array(ha);
+  const vb = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < va.length; i += 1) diff |= va[i] ^ vb[i];
+  return diff === 0;
+}
 
 type AssetRow = {
   id: string;
@@ -132,29 +155,49 @@ Deno.serve(async (request) => {
   }
 
   const provided = request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
-  if (provided !== cronSecret) {
+  if (!provided || !(await safeEqual(provided, cronSecret))) {
     return json({ error: 'Unauthorized.' }, 401);
   }
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-  const { data: assetData, error: assetError } = await supabase
-    .from('assets')
-    .select('id, property_id, brand, model')
-    .is('deleted_at', null)
-    .not('brand', 'is', null)
-    .not('model', 'is', null)
-    .not('property_id', 'is', null);
+  const assetData: AssetRow[] = [];
+  let assetPagesTruncated = false;
 
-  if (assetError) {
-    console.error('check-recalls: could not load assets', {
-      code: assetError.code,
-      message: assetError.message
-    });
-    return json({ error: 'Could not load assets.' }, 500);
+  for (let page = 0; page < MAX_ASSET_PAGES; page += 1) {
+    const from = page * ASSET_PAGE_SIZE;
+    const { data: pageData, error: assetError } = await supabase
+      .from('assets')
+      .select('id, property_id, brand, model')
+      .is('deleted_at', null)
+      .not('brand', 'is', null)
+      .not('model', 'is', null)
+      .not('property_id', 'is', null)
+      .order('id', { ascending: true })
+      .range(from, from + ASSET_PAGE_SIZE - 1);
+
+    if (assetError) {
+      console.error('check-recalls: could not load assets', {
+        code: assetError.code,
+        message: assetError.message,
+        page
+      });
+      return json({ error: 'Could not load assets.' }, 500);
+    }
+
+    const rows = (pageData ?? []) as AssetRow[];
+    assetData.push(...rows);
+    if (rows.length < ASSET_PAGE_SIZE) break;
+    if (page === MAX_ASSET_PAGES - 1) assetPagesTruncated = true;
   }
 
-  const assets = ((assetData ?? []) as AssetRow[]).filter(
+  if (assetPagesTruncated) {
+    console.warn('check-recalls: asset page cap reached; remaining assets deferred to a later run', {
+      loaded: assetData.length
+    });
+  }
+
+  const assets = (assetData as AssetRow[]).filter(
     (asset) =>
       asset.brand.trim().length > 0 &&
       normalizeModelNumber(asset.model).length >= MIN_MODEL_MATCH_LENGTH
@@ -263,12 +306,20 @@ Deno.serve(async (request) => {
   return json({
     ok: true,
     assetsConsidered: assets.length,
+    assetsTruncated: assetPagesTruncated,
     brandsQueried: queriedGroups.length,
     brandsSkipped,
     note:
-      brandsSkipped > 0
-        ? `Brand cap of ${MAX_BRANDS_PER_RUN} reached; ${brandsSkipped} brand(s) deferred to a later run.`
-        : null,
+      [
+        brandsSkipped > 0
+          ? `Brand cap of ${MAX_BRANDS_PER_RUN} reached; ${brandsSkipped} brand(s) deferred to a later run.`
+          : null,
+        assetPagesTruncated
+          ? `Asset cap of ${ASSET_PAGE_SIZE * MAX_ASSET_PAGES} reached; remaining assets deferred to a later run.`
+          : null
+      ]
+        .filter(Boolean)
+        .join(' ') || null,
     brandFetchFailures,
     recallsFetched,
     matchesFound,

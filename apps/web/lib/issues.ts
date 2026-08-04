@@ -70,8 +70,55 @@ type RawIssue = Partial<IssueRow> & {
   shareable_notes?: string | null;
 };
 
+// Descriptions and notes are NOT selectable from the base table — migration 033
+// revoked them so guest-class roles cannot read them with an API client.
+// Full-household roles get them merged back in via the get_issues_private_fields RPC below.
 const ISSUE_SELECT =
-  'id, property_id, room_id, asset_id, utility_id, repair_id, issue_type, title, description, status, severity, first_seen_date, last_seen_date, resolved_date, notes, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, asset_id, utility_id, repair_id, issue_type, title, status, severity, first_seen_date, last_seen_date, resolved_date, created_at, updated_at, deleted_at';
+
+type IssuePrivateFields = {
+  issue_id: string;
+  description: string | null;
+  private_notes: string | null;
+  notes: string | null;
+};
+
+// Merge the privileged columns back into rows. Guests (and any RPC failure)
+// simply keep nulls — the fields read as "not recorded", never as an error.
+async function mergeIssuePrivateFields<T extends { id: string }>(rows: T[]): Promise<T[]> {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return rows;
+  }
+
+  const { data, error } = await supabase.rpc('get_issues_private_fields', {
+    p_issue_ids: rows.map((row) => row.id)
+  });
+
+  if (error || !data) {
+    return rows;
+  }
+
+  const byId = new Map(
+    (data as IssuePrivateFields[]).map((fields) => [fields.issue_id, fields])
+  );
+  return rows.map((row) => {
+    const fields = byId.get(row.id);
+    if (!fields) {
+      return row;
+    }
+    return {
+      ...row,
+      description: fields.description,
+      private_notes: fields.private_notes,
+      notes: fields.notes
+    };
+  });
+}
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
@@ -265,7 +312,8 @@ export async function getIssuesForProperty(propertyId: string) {
     throw new Error(formatIssueError('load issues', error.message));
   }
 
-  return sortIssues(((data ?? []) as RawIssue[]).map(normalizeIssue));
+  const merged = await mergeIssuePrivateFields((data ?? []) as Array<RawIssue & { id: string }>);
+  return sortIssues(merged.map(normalizeIssue));
 }
 
 export async function getIssuesForContext(context: IssueDataContext) {
@@ -306,7 +354,12 @@ export async function getIssueByIdForContext(context: IssueDataContext, issueId:
     throw new Error(formatIssueError('load issue', error.message));
   }
 
-  return data ? normalizeIssue(data as RawIssue) : null;
+  if (!data) {
+    return null;
+  }
+
+  const [merged] = await mergeIssuePrivateFields([data as RawIssue & { id: string }]);
+  return normalizeIssue(merged);
 }
 
 async function getIssuesByColumn(
@@ -337,7 +390,8 @@ async function getIssuesByColumn(
     throw new Error(formatIssueError(errorAction, error.message));
   }
 
-  return sortIssues(((data ?? []) as RawIssue[]).map(normalizeIssue));
+  const merged = await mergeIssuePrivateFields((data ?? []) as Array<RawIssue & { id: string }>);
+  return sortIssues(merged.map(normalizeIssue));
 }
 
 export async function getIssuesForAsset(context: IssueDataContext, assetId: string) {
@@ -407,7 +461,8 @@ export async function createIssueForContext(context: IssueDataContext, input: Is
     throw new Error(formatIssueError('create issue', error?.message));
   }
 
-  return normalizeIssue(data as RawIssue);
+  const [merged] = await mergeIssuePrivateFields([data as RawIssue & { id: string }]);
+  return normalizeIssue(merged);
 }
 
 export async function updateIssueForContext(
@@ -454,7 +509,8 @@ export async function updateIssueForContext(
     throw new Error(formatIssueError('update issue', error?.message));
   }
 
-  return normalizeIssue(data as RawIssue);
+  const [merged] = await mergeIssuePrivateFields([data as RawIssue & { id: string }]);
+  return normalizeIssue(merged);
 }
 
 export async function updateIssueStatusForContext(
@@ -509,7 +565,8 @@ export async function updateIssueStatusForContext(
     throw new Error(formatIssueError('update issue', error?.message));
   }
 
-  return normalizeIssue(data as RawIssue);
+  const [merged] = await mergeIssuePrivateFields([data as RawIssue & { id: string }]);
+  return normalizeIssue(merged);
 }
 
 export async function deleteIssueForContext(context: IssueDataContext, issueId: string) {

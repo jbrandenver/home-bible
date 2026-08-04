@@ -61,37 +61,30 @@ export default function AcceptInvitePage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!router.isReady || !token || authState !== 'signed-in' || status !== 'idle') {
+  // Joining a property is a state change, so it needs a deliberate click.
+  // This used to run automatically on page load, which meant merely visiting
+  // the link joined you to the inviter's property — and mail clients, chat
+  // unfurlers and link scanners all prefetch URLs, so a signed-in person could
+  // be enrolled into a stranger's home without ever seeing this page. That
+  // property then appears in their switcher looking trusted, which is a good
+  // phishing surface. /claim already requires an explicit action; so does this.
+  async function handleAccept() {
+    if (!token || status === 'accepting') {
       return;
     }
 
-    let isMounted = true;
+    setStatus('accepting');
+    setError('');
 
-    async function acceptInvite() {
-      setStatus('accepting');
-      setError('');
-
-      try {
-        const acceptedPropertyId = await acceptPropertyInvitation(token);
-        if (isMounted) {
-          setPropertyId(acceptedPropertyId);
-          setStatus('accepted');
-        }
-      } catch (acceptError) {
-        if (isMounted) {
-          setError(acceptError instanceof Error ? acceptError.message : 'Failed to accept invitation.');
-          setStatus('failed');
-        }
-      }
+    try {
+      const acceptedPropertyId = await acceptPropertyInvitation(token);
+      setPropertyId(acceptedPropertyId);
+      setStatus('accepted');
+    } catch (acceptError) {
+      setError(acceptError instanceof Error ? acceptError.message : 'Failed to accept invitation.');
+      setStatus('failed');
     }
-
-    acceptInvite();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [router.isReady, authState, status, token]);
+  }
 
   const nextParam = encodeURIComponent(router.asPath);
 
@@ -132,7 +125,25 @@ export default function AcceptInvitePage() {
             </p>
           </div>
         ) : status === 'idle' || status === 'accepting' ? (
-          <p style={{ margin: 0 }}>Accepting invitation...</p>
+          <div style={{ display: 'grid', gap: 12 }}>
+            <p style={{ margin: 0 }}>
+              Someone has invited you to their home record. Accepting adds it to your
+              account at the access level they chose, and they will be able to see that
+              you joined.
+            </p>
+            <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>
+              Only accept invitations from people you know. If this is unexpected, close
+              this page — nothing happens until you choose to join.
+            </p>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Button type="button" onClick={handleAccept} disabled={status === 'accepting'}>
+                {status === 'accepting' ? 'Joining…' : 'Accept invitation'}
+              </Button>
+              <ActionLink href="/dashboard" variant="secondary">
+                Not now
+              </ActionLink>
+            </div>
+          </div>
         ) : status === 'accepted' ? (
           <div style={{ display: 'grid', gap: 12 }}>
             <p style={{ margin: 0 }}>Invitation accepted. You now have access to this shared property.</p>
@@ -150,7 +161,7 @@ export default function AcceptInvitePage() {
               than the one that was invited, sign out and use the invited address.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Button type="button" onClick={() => { setStatus('idle'); setError(''); }}>
+              <Button type="button" onClick={handleAccept}>
                 Try again
               </Button>
               <ActionLink href="/dashboard" variant="secondary">Go to dashboard</ActionLink>

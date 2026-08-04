@@ -41,8 +41,51 @@ export type UtilityDataContext = {
   property: PropertySummary | null;
 };
 
+// Emergency notes are NOT selectable from the base table — migration 033
+// revoked them so guest-class roles cannot read them with an API client.
+// Full-household roles get them merged back in via the get_utilities_private_fields RPC below.
 const UTILITY_SELECT =
-  'id, property_id, room_id, device_id, utility_type, name, location_notes, emergency_notes, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, device_id, utility_type, name, location_notes, created_at, updated_at, deleted_at';
+
+type UtilityPrivateFields = {
+  utility_id: string;
+  emergency_notes: string | null;
+};
+
+// Merge the privileged columns back into rows. Guests (and any RPC failure)
+// simply keep nulls — the fields read as "not recorded", never as an error.
+async function mergeUtilityPrivateFields<T extends { id: string }>(rows: T[]): Promise<T[]> {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return rows;
+  }
+
+  const { data, error } = await supabase.rpc('get_utilities_private_fields', {
+    p_utility_ids: rows.map((row) => row.id)
+  });
+
+  if (error || !data) {
+    return rows;
+  }
+
+  const byId = new Map(
+    (data as UtilityPrivateFields[]).map((fields) => [fields.utility_id, fields])
+  );
+  return rows.map((row) => {
+    const fields = byId.get(row.id);
+    if (!fields) {
+      return row;
+    }
+    return {
+      ...row,
+      emergency_notes: fields.emergency_notes
+    };
+  });
+}
 
 function normalizeUtility(raw: Partial<UtilityRow>): UtilityRow {
   const createdAt = raw.created_at || new Date().toISOString();
@@ -127,7 +170,10 @@ export async function getUtilitiesForProperty(propertyId: string) {
     throw new Error(error.message || 'Failed to load utilities.');
   }
 
-  return ((data ?? []) as Partial<UtilityRow>[]).map(normalizeUtility);
+  const merged = await mergeUtilityPrivateFields(
+    (data ?? []) as Array<Partial<UtilityRow> & { id: string }>
+  );
+  return merged.map(normalizeUtility);
 }
 
 export async function getUtilitiesForContext(context: UtilityDataContext) {
@@ -163,7 +209,10 @@ export async function getUtilitiesForRoom(context: UtilityDataContext, roomId: s
     throw new Error(error.message || 'Failed to load room utilities.');
   }
 
-  return ((data ?? []) as Partial<UtilityRow>[]).map(normalizeUtility);
+  const merged = await mergeUtilityPrivateFields(
+    (data ?? []) as Array<Partial<UtilityRow> & { id: string }>
+  );
+  return merged.map(normalizeUtility);
 }
 
 /** The utility record describing a smart home device, if one is linked. */
@@ -189,7 +238,12 @@ export async function getUtilityForDevice(context: UtilityDataContext, deviceId:
     throw new Error(error.message || 'Failed to load the linked utility.');
   }
 
-  return data ? normalizeUtility(data as Partial<UtilityRow>) : null;
+  if (!data) {
+    return null;
+  }
+
+  const [merged] = await mergeUtilityPrivateFields([data as Partial<UtilityRow> & { id: string }]);
+  return normalizeUtility(merged);
 }
 
 export async function getUtilityByIdForContext(context: UtilityDataContext, utilityId: string) {
@@ -218,7 +272,12 @@ export async function getUtilityByIdForContext(context: UtilityDataContext, util
     throw new Error(error.message || 'Failed to load utility.');
   }
 
-  return data ? normalizeUtility(data as Partial<UtilityRow>) : null;
+  if (!data) {
+    return null;
+  }
+
+  const [merged] = await mergeUtilityPrivateFields([data as Partial<UtilityRow> & { id: string }]);
+  return normalizeUtility(merged);
 }
 
 export async function createUtilityForContext(context: UtilityDataContext, input: UtilityInput) {
@@ -271,7 +330,8 @@ export async function createUtilityForContext(context: UtilityDataContext, input
     throw new Error(error?.message || 'Failed to create utility.');
   }
 
-  return normalizeUtility(data as Partial<UtilityRow>);
+  const [merged] = await mergeUtilityPrivateFields([data as Partial<UtilityRow> & { id: string }]);
+  return normalizeUtility(merged);
 }
 
 export async function updateUtilityForContext(
@@ -326,7 +386,8 @@ export async function updateUtilityForContext(
     throw new Error(error?.message || 'Failed to update utility.');
   }
 
-  return normalizeUtility(data as Partial<UtilityRow>);
+  const [merged] = await mergeUtilityPrivateFields([data as Partial<UtilityRow> & { id: string }]);
+  return normalizeUtility(merged);
 }
 
 export async function deleteUtilityForContext(context: UtilityDataContext, utilityId: string) {

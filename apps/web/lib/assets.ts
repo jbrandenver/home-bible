@@ -71,8 +71,56 @@ export type AssetDataContext = {
   property: PropertySummary | null;
 };
 
+// Serial numbers, prices, retailer and notes are NOT selectable from the base
+// table — migration 033 revoked them so guest-class roles cannot read them with
+// an API client. Full-household roles get them merged back in via the
+// get_assets_private_fields RPC below.
 const ASSET_SELECT =
-  'id, property_id, room_id, asset_type, name, brand, model, serial_number, purchase_date, purchase_price, retailer, warranty_length_months, warranty_expires_at, manual_url, support_url, notes, visibility, visibility_contexts, created_by, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, asset_type, name, brand, model, purchase_date, warranty_length_months, warranty_expires_at, manual_url, support_url, visibility, visibility_contexts, created_by, created_at, updated_at, deleted_at';
+
+type AssetPrivateFields = {
+  asset_id: string;
+  serial_number: string | null;
+  purchase_price: number | null;
+  retailer: string | null;
+  notes: string | null;
+};
+
+// Merge the privileged columns back into rows. Guests (and any RPC failure)
+// simply keep nulls — the fields read as "not recorded", never as an error.
+async function mergeAssetPrivateFields<T extends { id: string }>(rows: T[]): Promise<T[]> {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return rows;
+  }
+
+  const { data, error } = await supabase.rpc('get_assets_private_fields', {
+    p_asset_ids: rows.map((row) => row.id)
+  });
+
+  if (error || !data) {
+    return rows;
+  }
+
+  const byId = new Map((data as AssetPrivateFields[]).map((fields) => [fields.asset_id, fields]));
+  return rows.map((row) => {
+    const fields = byId.get(row.id);
+    if (!fields) {
+      return row;
+    }
+    return {
+      ...row,
+      serial_number: fields.serial_number,
+      purchase_price: fields.purchase_price,
+      retailer: fields.retailer,
+      notes: fields.notes
+    };
+  });
+}
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
@@ -242,7 +290,8 @@ export async function getAssetsForProperty(propertyId: string) {
     throw new Error(error.message || 'Failed to load assets.');
   }
 
-  return ((data ?? []) as Partial<AssetRow>[]).map(normalizeAsset);
+  const merged = await mergeAssetPrivateFields((data ?? []) as Array<Partial<AssetRow> & { id: string }>);
+  return merged.map(normalizeAsset);
 }
 
 export async function getAssetsForContext(context: AssetDataContext) {
@@ -278,7 +327,8 @@ export async function getAssetsForRoom(context: AssetDataContext, roomId: string
     throw new Error(error.message || 'Failed to load room assets.');
   }
 
-  return ((data ?? []) as Partial<AssetRow>[]).map(normalizeAsset);
+  const merged = await mergeAssetPrivateFields((data ?? []) as Array<Partial<AssetRow> & { id: string }>);
+  return merged.map(normalizeAsset);
 }
 
 export async function getAssetByIdForContext(context: AssetDataContext, assetId: string) {
@@ -302,7 +352,12 @@ export async function getAssetByIdForContext(context: AssetDataContext, assetId:
     throw new Error(error.message || 'Failed to load asset.');
   }
 
-  return data ? normalizeAsset(data as Partial<AssetRow>) : null;
+  if (!data) {
+    return null;
+  }
+
+  const [merged] = await mergeAssetPrivateFields([data as Partial<AssetRow> & { id: string }]);
+  return normalizeAsset(merged);
 }
 
 export async function createAssetForContext(context: AssetDataContext, input: AssetInput) {
@@ -346,7 +401,8 @@ export async function createAssetForContext(context: AssetDataContext, input: As
     throw new Error(error?.message || 'Failed to create asset.');
   }
 
-  return normalizeAsset(data as Partial<AssetRow>);
+  const [merged] = await mergeAssetPrivateFields([data as Partial<AssetRow> & { id: string }]);
+  return normalizeAsset(merged);
 }
 
 export async function updateAssetForContext(
@@ -393,7 +449,8 @@ export async function updateAssetForContext(
     throw new Error(error?.message || 'Failed to update asset.');
   }
 
-  return normalizeAsset(data as Partial<AssetRow>);
+  const [merged] = await mergeAssetPrivateFields([data as Partial<AssetRow> & { id: string }]);
+  return normalizeAsset(merged);
 }
 
 export async function deleteAssetForContext(context: AssetDataContext, assetId: string) {
