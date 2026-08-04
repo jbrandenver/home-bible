@@ -148,20 +148,53 @@ export async function ensureProfileForUser(user: User | null) {
   );
 }
 
-export async function signUpWithEmail(email: string, password: string): Promise<AuthResult> {
+export type SignUpResult = AuthResult & {
+  /**
+   * True when Supabase created the account but issued no session, which is
+   * what "Confirm email" being enabled looks like from here. The caller must
+   * NOT route into the app: there is no session, so every guarded page would
+   * bounce and the person would never learn they have an email waiting.
+   */
+  needsEmailConfirmation: boolean;
+};
+
+export async function signUpWithEmail(
+  email: string,
+  password: string,
+  // Where the confirmation link should land them. Must be inside the redirect
+  // allowlist in Supabase → Authentication → URL Configuration.
+  confirmRedirectPath = '/welcome'
+): Promise<SignUpResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
-    return { data: null, error: new Error(getSupabaseSetupMessage()) };
+    return { data: null, error: new Error(getSupabaseSetupMessage()), needsEmailConfirmation: false };
   }
 
-  const result = await supabase.auth.signUp({ email, password });
-  if (result.data.user) {
+  const result = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo:
+        typeof window === 'undefined'
+          ? undefined
+          : `${window.location.origin}${confirmRedirectPath}`
+    }
+  });
+
+  // A session is the only proof the account is usable right now. With email
+  // confirmation on, data.user is populated and data.session is null.
+  const hasSession = Boolean(result.data.session);
+
+  // Only touch profiles once there is a session. Without auth.uid() the upsert
+  // is refused by RLS anyway; the row is created on first signed-in load.
+  if (hasSession && result.data.user) {
     await ensureProfileForUser(result.data.user);
   }
 
   return {
     data: result.data,
-    error: result.error
+    error: result.error,
+    needsEmailConfirmation: Boolean(result.data.user) && !hasSession && !result.error
   };
 }
 

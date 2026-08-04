@@ -18,6 +18,7 @@ export default function SignUpPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [confirmationSentTo, setConfirmationSentTo] = useState('');
 
   const setupMissing = !isSupabaseConfigured();
   const oauthProviders = enabledOAuthProviders();
@@ -29,7 +30,12 @@ export default function SignUpPage() {
     setError('');
     setLoading(true);
 
-    const result = await signUpWithEmail(email, password);
+    // Honour a ?next= destination (e.g. a transfer recipient sent here from
+    // /claim keeps their claim code); same open-redirect guard as sign-in.
+    // It doubles as the confirmation link's landing page, so the detour
+    // through the inbox does not cost them their place.
+    const destination = safeRelativePath(router.query.next, '/welcome');
+    const result = await signUpWithEmail(email, password, destination);
 
     setLoading(false);
 
@@ -38,10 +44,42 @@ export default function SignUpPage() {
       return;
     }
 
-    // Honour a ?next= destination (e.g. a transfer recipient sent here from
-    // /claim keeps their claim code); same open-redirect guard as sign-in.
-    router.push(safeRelativePath(router.query.next, '/welcome'));
+    // Email confirmation is on: there is no session yet, so routing into the
+    // app would bounce off the auth guard and strand them with no idea an
+    // email is waiting. Tell them instead.
+    if (result.needsEmailConfirmation) {
+      setConfirmationSentTo(email);
+      return;
+    }
+
+    router.push(destination);
   };
+
+  if (confirmationSentTo) {
+    return (
+      <>
+        <Seo title="Confirm your email — Our Home Folder" path="/sign-up" />
+        <PageHeader
+          title="Check your email"
+          description="One click and your home record is yours."
+        />
+        <Card>
+          <p style={{ marginTop: 0 }}>
+            We sent a confirmation link to <strong>{confirmationSentTo}</strong>.
+            Open it and you will land straight back here, signed in.
+          </p>
+          <p style={{ color: 'var(--text-muted)' }}>
+            Nothing yet? Give it a minute, then check the spam folder — the mail
+            comes from <strong>ourhomefolder.com</strong>. You can close this
+            page; the link keeps working.
+          </p>
+          <p style={{ marginBottom: 0 }}>
+            Already confirmed? <Link href="/sign-in">Sign in</Link>
+          </p>
+        </Card>
+      </>
+    );
+  }
 
   return (
     <>
