@@ -6,6 +6,57 @@ import { ActionLink } from '../components/ActionLink';
 import { getCurrentUser } from '../lib/auth';
 import { acceptPropertyInvitation } from '../lib/sharing';
 
+/**
+ * Say why the invitation was refused, in the words of the actual reason.
+ *
+ * accept_property_invitation raises four distinct errors, and the page used to
+ * print the real one and then follow it with "It may have expired or already
+ * been used" no matter which it was. Somebody signed in as the wrong address
+ * read the second sentence, concluded the link was dead, and asked for a new
+ * one that would fail in exactly the same way.
+ */
+function explainAccept(raw: string): { headline: string; guidance: string } {
+  const message = raw.toLowerCase();
+
+  if (message.includes('different email')) {
+    return {
+      headline: 'This invitation was sent to a different email address.',
+      guidance:
+        'Invitations are tied to the address they were sent to. Sign out, then sign in (or sign up) with the address the invitation was sent to and open this link again. The link itself is still good.'
+    };
+  }
+
+  if (message.includes('sign in required')) {
+    return {
+      headline: 'You need to be signed in to accept this invitation.',
+      guidance:
+        'Sign in with the address the invitation was sent to, and you will come straight back here.'
+    };
+  }
+
+  if (message.includes('no longer grant access')) {
+    return {
+      headline: 'The person who sent this invitation can no longer share this home.',
+      guidance:
+        'Their access changed after the invitation was sent, so it can no longer be accepted. Ask a current owner or co-owner to send a new one.'
+    };
+  }
+
+  if (message.includes('invalid') || message.includes('expired') || message.includes('already used')) {
+    return {
+      headline: 'This invitation is no longer valid.',
+      guidance:
+        'It has expired, been used already, or been withdrawn. Ask the person who invited you to send a fresh link.'
+    };
+  }
+
+  return {
+    headline: raw || 'The invitation could not be accepted.',
+    guidance:
+      'Try again in a moment. If it keeps failing, ask the person who invited you to send a fresh link.'
+  };
+}
+
 export default function AcceptInvitePage() {
   const router = useRouter();
   const queryToken = typeof router.query.token === 'string' ? router.query.token : '';
@@ -154,12 +205,8 @@ export default function AcceptInvitePage() {
           </div>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{error}</p>
-            <p style={{ margin: 0 }}>
-              The invitation could not be accepted. It may have expired or already been used —
-              ask the inviter to send a fresh link. If you signed in with a different email
-              than the one that was invited, sign out and use the invited address.
-            </p>
+            <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{explainAccept(error).headline}</p>
+            <p style={{ margin: 0 }}>{explainAccept(error).guidance}</p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Button type="button" onClick={handleAccept}>
                 Try again
