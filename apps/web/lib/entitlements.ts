@@ -25,6 +25,39 @@ export function hasPortfolioPlan(): Promise<boolean> {
   return hasEntitlement(PORTFOLIO_PRODUCT_KEY);
 }
 
+// Every product key that can produce a paid artifact. A user may hold more
+// than one; the recorder logs against whichever it finds, because any of them
+// is proof the purchase was delivered.
+const RECORDABLE_PRODUCT_KEYS = [PORTFOLIO_PRODUCT_KEY, 'pro_binder', 'additional_home'] as const;
+
+/**
+ * Log that a paid artifact was actually produced for this user.
+ *
+ * This is the evidence Stripe asks for when a digital-goods purchase is
+ * disputed, and it is the one thing here that cannot be reconstructed later —
+ * the day a chargeback arrives is the day it is too late to start collecting.
+ *
+ * Deliberately fire-and-forget and deliberately silent: the caller has already
+ * produced the customer's document by the time this runs, and no logging
+ * failure may ever stand between a paying customer and the thing they bought.
+ * The RPC resolves the entitlement from auth.uid() itself (migration 038), so
+ * a caller cannot log against a purchase it does not hold, and returns false
+ * rather than erroring when the user holds nothing — free users produce no
+ * rows, which is correct.
+ */
+export function recordEntitlementDownload(context: string): void {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return;
+  }
+
+  for (const productKey of RECORDABLE_PRODUCT_KEYS) {
+    void supabase
+      .rpc('record_entitlement_download', { p_product_key: productKey, p_context: context })
+      .then(() => undefined, () => undefined);
+  }
+}
+
 // A homeowner's normal life fits in the free tier: the home plus one more
 // place (a rental, the cabin, a parent's house). The Portfolio plan starts
 // where a portfolio starts — at the third door or the first building.

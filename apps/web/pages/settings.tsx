@@ -25,7 +25,8 @@ import {
 import {
   FREE_PROPERTY_ALLOWANCE,
   getPortfolioCheckoutUrl,
-  hasPortfolioPlan
+  hasPortfolioPlan,
+  recordEntitlementDownload
 } from '../lib/entitlements';
 import { getSupabaseBrowserClient } from '../lib/supabase/client';
 import {
@@ -491,6 +492,8 @@ export default function SettingsPage() {
         });
         setExportProgress('Packaging the archive…');
         downloadBinaryFile(`home-folder-archive-${stamp}.zip`, zip);
+        // Dispute evidence, recorded once the archive is actually in hand.
+        recordEntitlementDownload('account_archive_zip');
         setExportProgress('');
         setExportNote(
           missing.length > 0

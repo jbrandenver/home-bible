@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatCalendarDate, formatEnumLabel, getWarrantyMeta, toLocalDateString } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { recordEntitlementDownload } from '../lib/entitlements';
 import {
   getDefaultHandoverSections,
   getHandoverContext,
@@ -279,6 +280,9 @@ export default function HandoverPage() {
   };
 
   const printReport = () => {
+    // Dispute evidence, recorded at the moment the document is produced.
+    // Fire-and-forget by design — see recordEntitlementDownload.
+    recordEntitlementDownload(`handover_${reportType}_print`);
     window.print();
   };
 
