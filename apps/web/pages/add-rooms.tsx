@@ -10,6 +10,8 @@ import { formatRoomTypeLabel } from '../lib/roomLabels';
 import { CLOSET_PROMPT_TYPES, inferRoomTypeFromName, titleCaseName } from '../lib/roomNameHints';
 import { getDemoActiveProperty, getDemoRooms, setDemoRooms } from '../lib/demoStorage';
 import { ActionLink } from '../components/ActionLink';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 
 // Sentinel for "type a floor that isn't in the dropdown yet". Once a room is
 // saved on that floor, the floor becomes a normal dropdown option.
@@ -24,6 +26,7 @@ type Room = {
 };
 
 export default function AddRoomsPage() {
+  const access = usePropertyAccess();
   const router = useRouter();
 
   // One explicit mode, so the reassurance banner and the write path can never
@@ -331,6 +334,17 @@ export default function AddRoomsPage() {
     }
 
     router.push('/dashboard');
+  }
+
+  // A role that cannot write must not be offered the form. Showing it and
+  // letting the save fail is how a viewer met a raw Postgres error.
+  if (!access.loading && !access.canWrite) {
+    return (
+      <>
+        <PageHeader title="Add rooms" />
+        <ViewOnlyNotice role={access.role} action="add rooms" />
+      </>
+    );
   }
 
   return (

@@ -13,6 +13,8 @@ import {
 import { getDemoRooms } from '../lib/demoStorage';
 import { getRoomsForProperty } from '../lib/rooms';
 import { formatRoomLocation } from '../lib/roomLabels';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 
 type Room = {
   id: string;
@@ -22,6 +24,7 @@ type Room = {
 };
 
 export default function AssetsPage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AssetDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
   const [assets, setAssets] = useState<AssetRow[]>([]);
@@ -183,7 +186,11 @@ export default function AssetsPage() {
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ margin: 0 }}>All Assets ({filteredAssets.length})</h2>
-            <ActionLink href="/add-asset">Add asset</ActionLink>
+            {access.loading || access.canWrite ? (
+              <ActionLink href="/add-asset">Add asset</ActionLink>
+            ) : (
+              <ViewOnlyNotice role={access.role} action="add appliances" inline />
+            )}
           </div>
 
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 16 }}>
@@ -243,7 +250,9 @@ export default function AssetsPage() {
                 title="No assets yet"
                 description="Add the appliances, tools, and systems that belong to this home."
               />
-              <ActionLink href="/add-asset" variant="secondary">Add asset</ActionLink>
+              {access.loading || access.canWrite ? (
+                <ActionLink href="/add-asset" variant="secondary">Add asset</ActionLink>
+              ) : null}
             </div>
           ) : filteredAssets.length === 0 ? (
             <EmptyState

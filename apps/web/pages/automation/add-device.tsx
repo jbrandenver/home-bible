@@ -35,6 +35,8 @@ import {
 } from '../../lib/locationPresets';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { formatRoomLocation } from '../../lib/roomLabels';
+import { usePropertyAccess } from '../../lib/access';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 
 type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
@@ -63,6 +65,7 @@ const EMPTY_FORM = {
 };
 
 export default function AddDevicePage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [hubs, setHubs] = useState<AutomationHubRow[]>([]);
@@ -249,6 +252,17 @@ export default function AddDevicePage() {
       {hint ? <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: 14 }}>{hint}</p> : null}
     </div>
   );
+
+  // A role that cannot write must not be offered the form. Showing it and
+  // letting the save fail is how a viewer met a raw Postgres error.
+  if (!access.loading && !access.canWrite) {
+    return (
+      <>
+        <PageHeader title="Add device" />
+        <ViewOnlyNotice role={access.role} action="add devices" />
+      </>
+    );
+  }
 
   return (
     <>

@@ -19,6 +19,8 @@ import {
   type UtilityDataMode,
   type UtilityRow
 } from '../lib/utilities';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 
 type UtilityTypeFilter = '' | (typeof UTILITY_TYPES)[number] | 'hvac' | 'router_modem' | 'safety_device';
 
@@ -63,6 +65,7 @@ function getUtilityTypeFilterValues(filter: UtilityTypeFilter) {
 }
 
 export default function UtilitiesPage() {
+  const access = usePropertyAccess();
   const router = useRouter();
   const [context, setContext] = useState<UtilityDataContext | null>(null);
   const [dataMode, setDataMode] = useState<UtilityDataMode>('demo');
@@ -290,7 +293,11 @@ export default function UtilitiesPage() {
         description="Where the critical systems live."
       >
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <ActionLink href="/add-utility">Add utility</ActionLink>
+          {access.loading || access.canWrite ? (
+            <ActionLink href="/add-utility">Add utility</ActionLink>
+          ) : (
+            <ViewOnlyNotice role={access.role} action="add utilities" inline />
+          )}
           <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </PageHeader>
@@ -332,7 +339,9 @@ export default function UtilitiesPage() {
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h2 style={{ margin: 0 }}>All Utilities ({filteredUtilities.length})</h2>
-            <ActionLink href="/add-utility">Add utility</ActionLink>
+            {access.loading || access.canWrite ? (
+              <ActionLink href="/add-utility">Add utility</ActionLink>
+            ) : null}
           </div>
 
           <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginBottom: 16 }}>
@@ -389,7 +398,9 @@ export default function UtilitiesPage() {
                 title="No utilities yet"
                 description="Add the shut-offs and systems you'll want to find fast."
               />
-              <ActionLink href="/add-utility" variant="secondary">Add utility</ActionLink>
+              {access.loading || access.canWrite ? (
+                <ActionLink href="/add-utility" variant="secondary">Add utility</ActionLink>
+              ) : null}
             </div>
           ) : filteredUtilities.length === 0 ? (
             <EmptyState

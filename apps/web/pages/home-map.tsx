@@ -15,6 +15,8 @@ import { formatRoomTypeLabel } from '../lib/roomLabels';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 
 type Room = {
   id: string;
@@ -24,6 +26,7 @@ type Room = {
 };
 
 export default function HomeMapPage() {
+  const access = usePropertyAccess();
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   const [hasProperty, setHasProperty] = useState(false);
@@ -440,7 +443,11 @@ export default function HomeMapPage() {
               <p style={{ color: 'var(--text-muted)' }}>
                 Add rooms first so Our Home Folder can build your home map.
               </p>
-              <ActionLink href="/add-rooms">Add rooms</ActionLink>
+              {access.loading || access.canWrite ? (
+                <ActionLink href="/add-rooms">Add rooms</ActionLink>
+              ) : (
+                <ViewOnlyNotice role={access.role} action="add rooms" inline />
+              )}
             </Card>
           ) : (
             floorNames.map((floorName) => (
@@ -463,7 +470,9 @@ export default function HomeMapPage() {
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
-            <ActionLink href="/add-rooms">Add more rooms</ActionLink>
+            {access.loading || access.canWrite ? (
+              <ActionLink href="/add-rooms">Add more rooms</ActionLink>
+            ) : null}
           </div>
         </div>
       </>

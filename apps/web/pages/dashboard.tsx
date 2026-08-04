@@ -27,6 +27,8 @@ import { formatRoomLocation, formatRoomTypeLabel, getRoomSpaceSummary } from '..
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../lib/trendFlags';
 import { getUtilitiesForContext, getUtilityDataContext, type UtilityRow } from '../lib/utilities';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 
 type Room = {
   id: string;
@@ -36,6 +38,7 @@ type Room = {
 };
 
 export default function DashboardPage() {
+  const access = usePropertyAccess();
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   // null = still finding out. Rendering the no-property welcome (with its
@@ -829,7 +832,11 @@ export default function DashboardPage() {
 
             <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <ActionLink href="/home-map" variant="secondary">Home Map</ActionLink>
-              <ActionLink href="/add-rooms" variant="secondary">Add room or space</ActionLink>
+              {access.loading || access.canWrite ? (
+                <ActionLink href="/add-rooms" variant="secondary">Add room or space</ActionLink>
+              ) : (
+                <ViewOnlyNotice role={access.role} action="add rooms" inline />
+              )}
               <ActionLink href="/utilities" variant="secondary">Utilities</ActionLink>
               <ActionLink href="/assets" variant="secondary">Assets</ActionLink>
               <ActionLink href="/maintenance" variant="secondary">Maintenance</ActionLink>
@@ -1049,7 +1056,9 @@ export default function DashboardPage() {
             ) : rooms.length === 0 ? (
               <div>
                 <p style={{ color: 'var(--text-muted)' }}>No rooms yet — let’s map the house.</p>
-                <ActionLink href="/add-rooms" variant="secondary">Add rooms & spaces</ActionLink>
+                {access.loading || access.canWrite ? (
+                  <ActionLink href="/add-rooms" variant="secondary">Add rooms & spaces</ActionLink>
+                ) : null}
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>

@@ -13,6 +13,8 @@ import { getDocumentDataContext, type DocumentDataContext } from '../lib/documen
 import { getDemoRooms } from '../lib/demoStorage';
 import { getRoomsForProperty } from '../lib/rooms';
 import { formatRoomLocation } from '../lib/roomLabels';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 
 type Room = {
   id: string;
@@ -33,6 +35,7 @@ function csvEscape(value: string | number | null | undefined) {
 }
 
 export default function InventoryPage() {
+  const access = usePropertyAccess();
   const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
   const [propertyNickname, setPropertyNickname] = useState('Your home');
   const [assets, setAssets] = useState<AssetRow[]>([]);
@@ -256,7 +259,11 @@ export default function InventoryPage() {
               <Button variant="secondary" onClick={handleExportCsv}>
                 Export CSV
               </Button>
-              <ActionLink href="/add-asset">Add an item</ActionLink>
+              {access.loading || access.canWrite ? (
+                <ActionLink href="/add-asset">Add an item</ActionLink>
+              ) : (
+                <ViewOnlyNotice role={access.role} action="add appliances" inline />
+              )}
             </div>
           </div>
           {walkMode ? (

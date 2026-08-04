@@ -15,6 +15,8 @@ import {
   type AutomationRoutineRow
 } from '../../lib/automation';
 import { computeAutomationOverview, type AutomationOverview } from '../../lib/automationOverview';
+import { usePropertyAccess } from '../../lib/access';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 
 function StatTile({ label, value, tone }: { label: string; value: number; tone?: 'urgent' | 'attention' | 'good' }) {
   const color =
@@ -28,6 +30,7 @@ function StatTile({ label, value, tone }: { label: string; value: number; tone?:
 }
 
 export default function AutomationOverviewPage() {
+  const access = usePropertyAccess();
   const [dataMode, setDataMode] = useState<AutomationDataMode>('demo');
   const [devices, setDevices] = useState<AutomationDeviceRow[]>([]);
   const [hubs, setHubs] = useState<AutomationHubRow[]>([]);
@@ -97,7 +100,11 @@ export default function AutomationOverviewPage() {
         description="Every connected device, how it communicates, what it depends on, and what to do when something fails."
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <ActionLink href="/automation/add-device">Add device</ActionLink>
+          {access.loading || access.canWrite ? (
+            <ActionLink href="/automation/add-device">Add device</ActionLink>
+          ) : (
+            <ViewOnlyNotice role={access.role} action="add devices" inline />
+          )}
           <ActionLink href="/automation/devices" variant="secondary">All devices</ActionLink>
           <ActionLink href="/automation/hubs" variant="secondary">Hubs</ActionLink>
           <ActionLink href="/automation/networks" variant="secondary">Networks</ActionLink>

@@ -14,6 +14,8 @@ import { scanPlatePhoto, type PlateScanResult } from '../lib/plateScan';
 import { createReminderForContext, getReminderDataContext } from '../lib/reminders';
 import { getRoomsForProperty } from '../lib/rooms';
 import { formatRoomLocation } from '../lib/roomLabels';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 
 type Room = {
   id: string;
@@ -41,6 +43,7 @@ type AssetFormData = {
 };
 
 export default function AddAssetPage() {
+  const access = usePropertyAccess();
   const router = useRouter();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [context, setContext] = useState<AssetDataContext | null>(null);
@@ -243,6 +246,17 @@ export default function AddAssetPage() {
       fontSize: '0.875rem'
     }
   };
+
+  // A role that cannot write must not be offered the form. Showing it and
+  // letting the save fail is how a viewer met a raw Postgres error.
+  if (!access.loading && !access.canWrite) {
+    return (
+      <>
+        <PageHeader title="Add appliance" />
+        <ViewOnlyNotice role={access.role} action="add appliances" />
+      </>
+    );
+  }
 
   return (
     <>

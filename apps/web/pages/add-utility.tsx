@@ -19,6 +19,8 @@ import {
   type UtilityDataMode
 } from '../lib/utilities';
 import { formatRoomLocation } from '../lib/roomLabels';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 
 type Room = {
   id: string;
@@ -32,6 +34,7 @@ function queryValue(value: string | string[] | undefined) {
 }
 
 export default function AddUtilityPage() {
+  const access = usePropertyAccess();
   const router = useRouter();
   const [name, setName] = useState('');
   const [utilityType, setUtilityType] = useState<(typeof UTILITY_TYPES)[number]>('main_water_shutoff');
@@ -208,6 +211,17 @@ export default function AddUtilityPage() {
       setError(submitError instanceof Error ? submitError.message : 'Failed to save utility.');
       setSaving(false);
     }
+  }
+
+  // A role that cannot write must not be offered the form. Showing it and
+  // letting the save fail is how a viewer met a raw Postgres error.
+  if (!access.loading && !access.canWrite) {
+    return (
+      <>
+        <PageHeader title="Add utility" />
+        <ViewOnlyNotice role={access.role} action="add utilities" />
+      </>
+    );
   }
 
   return (
