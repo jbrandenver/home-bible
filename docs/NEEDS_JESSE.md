@@ -4,7 +4,14 @@ Things I could not do for you, either because they need your credentials, your
 judgement, or an account/plan you control. Kept here so nothing gets lost
 between sessions.
 
-Last updated: 2026-07-30
+Last updated: 2026-08-04
+
+**Read `docs/LAUNCH_CHECKLIST.md` first** — it is the live list and is kept
+current. This file holds the long-form reasoning behind each ask. As of
+2026-08-04 the site is launched, money is live, and what is left here is:
+auth hardening in the Supabase dashboard (the top one — email confirmation
+is OFF), the remaining manual QA pass, the plate-scanner API key, the CPA
+tax question, a Cloudflare CSP trade-off, and submitting the sitemap.
 
 ---
 
@@ -114,7 +121,12 @@ create it.
 rm "/Users/jessebranson/home Bible 1/home-bible/.env.local"
 ```
 
-### 4. Install ripgrep locally
+### 4. ~~Install ripgrep locally~~ — DONE 2026-08-03
+`pnpm security:audit` now genuinely runs: PASS 9 / WARNING 16 / FAIL 0.
+
+Original item:
+
+### 4-old. Install ripgrep locally
 `pnpm security:audit` now refuses to run without it, instead of reporting a
 pass having scanned nothing (which is what it was doing — PASS 5 / WARNING 20 /
 FAIL 0 with all 13 checks skipped). CI installs it automatically; your machine
@@ -128,12 +140,17 @@ brew install ripgrep
 
 ## Known, deliberate, not a problem
 
-### 5. "Leaked Password Protection Disabled" in the Security Advisor
-**Ignore this on the Free plan.** It is a Pro-and-above feature, which is why
-the toggle is nowhere to be found in the dashboard. The advisor still flags it
-and the warning cannot be dismissed — a known Supabase catch-22.
+### 5. ~~"Leaked Password Protection Disabled" — ignore on Free~~ — NO LONGER TRUE
+**This is now actionable and should be turned on.** The project moved to
+**Pro on 2026-08-03**, so the toggle exists. The advisor still reports it
+disabled as of 2026-08-04. Instructions below stand.
 
-If you upgrade: **Authentication → Sign In / Providers → Email**. Enabling it
+Original item, for the record — **Ignore this on the Free plan.** It is a
+Pro-and-above feature, which is why the toggle is nowhere to be found in the
+dashboard. The advisor still flags it and the warning cannot be dismissed — a
+known Supabase catch-22.
+
+Enabling it: **Authentication → Sign In / Providers → Email**. Enabling it
 is safe — the check blocks signup and password *changes*, but sign-in is
 explicitly non-blocking, so it **cannot lock out existing users** whose password
 happens to be in the breach corpus; they just get an advisory flag. The only

@@ -1,7 +1,27 @@
 # Session handoff — Our Home Folder
 
-Written 2026-07-30 at the end of a long working session. Read this first in a
-new session; it is the map to everything else.
+> **⚠️ SUPERSEDED — this document describes the world of 2026-07-30, before
+> launch.** It is kept because its narrative of *how* things broke (the
+> duplicate migration `010`, the proven privilege escalation, the reasoning
+> behind the digest cadence) is still the best explanation of why the code
+> looks the way it does. **Do not read its "WHAT IS LEFT" section as current.**
+>
+> For current state, read in this order:
+> 1. `docs/LAUNCH_CHECKLIST.md` — the live open-items list.
+> 2. `docs/SECURITY.md` — the security posture and the dashboard-only settings.
+> 3. `docs/NEEDS_JESSE.md` — long-form reasoning behind what needs the founder.
+>
+> **What changed since this was written:** the site launched on
+> `ourhomefolder.com` (Cloudflare Workers Builds from `main`); Supabase is on
+> **Pro**, not Free; Stripe is **live** with three Payment Links and a
+> signature-verifying webhook; reminder emails are **live** through Resend on
+> `send.ourhomefolder.com`; the PWA layer shipped; the marketing landing page
+> and `/pricing` shipped; guest-role column filtering is **DB-enforced** now,
+> not client-side (migrations 031/033); the paid property boundary is enforced
+> by a Postgres trigger (035); an audit trail and a daily security digest are
+> running (035); and the CSP is **enforcing**. Migrations run to **037**.
+
+Written 2026-07-30 at the end of a long working session.
 
 ---
 

@@ -65,6 +65,24 @@ when. Check them off in this file.
 - [x] **Cloudflare: turn on "Always Use HTTPS"** — verified done 2026-08-03:
       plain http:// now 301s to https://, HSTS header present. (Was the one
       remaining HIGH item.)
+- [ ] **Turn on "Confirm email"** (Authentication → Sign In / Providers →
+      Email). It is currently **OFF in production**, which means no address
+      in `auth.users` has ever been proven and anyone can sign up as
+      someone else's email. This is the highest-value open item on the
+      whole list. Migration 035 already stops an unverified address
+      claiming someone else's Stripe purchase (`resolve_user_id_by_
+      verified_email` requires `email_confirmed_at`) — turning this on is
+      what restores that path to usefulness instead of dumping every
+      purchase into `unmatched_purchases`. Full table in docs/SECURITY.md.
+- [ ] **Leaked password protection ON** — the advisor still reports it
+      disabled. It was Pro-only, and the project is on Pro as of
+      2026-08-03, so the blocker is gone. Safe: it blocks signup and
+      password *changes* only; sign-in is explicitly non-blocking, so it
+      cannot lock out an existing user.
+- [ ] **Secure password change ON**, password requirements = letters +
+      digits / min 8, and enable **TOTP MFA** (opt-in per user).
+      Do **not** enable CAPTCHA without a matching CSP change — the CSP is
+      now enforcing and would block the Turnstile script.
 - [ ] **Verify Supabase auth URLs** (Authentication → URL Configuration):
       Site URL `https://ourhomefolder.com`, redirects
       `https://ourhomefolder.com/**`. (Sign-in worked in your QA pass, so
@@ -102,6 +120,9 @@ when. Check them off in this file.
 - [x] **Supabase Pro** — verified active 2026-08-03 (org plan reads
       "pro" via the management API). The digest cron can be relied on.
 - [ ] CPA's view on state digital-goods tax before the first dollar.
+      **This is the last money item still open.** Sell US-only until it is
+      answered; that avoids EU/UK VAT entirely (no de-minimis threshold for
+      digital goods).
 - [x] Webhook registered (Jesse, dashboard, 2026-08-03), secrets set
       (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SIGNING_SECRET), stripe-webhook
       redeployed with additional_home in SUBSCRIPTION_PRODUCT_KEYS.
@@ -113,10 +134,17 @@ when. Check them off in this file.
       cleaned. Still to watch: unmatched_purchases in the first weeks;
       subscription lifecycle (invoice.paid roll-forward) will prove out
       on the first real renewal.
-- [ ] Fee-ladder gating code for additional_home (homes 2–3 vs Portfolio
-      from the 4th) — entitlements are RECORDED correctly today; the app
-      still allows 2 free homes and gates beyond only via the Portfolio
-      offer. Engineering item, not a launch blocker.
+- [x] Fee-ladder gating code for additional_home — **DONE 2026-08-04**
+      (migration 035). Enforced in Postgres by a BEFORE INSERT trigger on
+      `properties`, not just in JavaScript: free = 2 top-level homes, +1 per
+      active `additional_home` subscription, unlimited on `portfolio_plan`,
+      with grandfathering for accounts already over the line. Units under a
+      building do not consume allowance. Verified live: a 3rd home is
+      blocked, the add-on grants exactly one more, and an existing 3-home
+      free account was left untouched. Also fixed the bug where
+      `additional_home` unlocked *everything* — the webhook never stamped
+      `property_id` and `has_entitlement` treated null as covering every
+      home, so one $4.99 purchase would have covered a whole portfolio.
 
 ## Jesse — feature switches (independent of money)
 
@@ -137,12 +165,25 @@ when. Check them off in this file.
 
 ## Engineering — post-launch (tracked, not blocking)
 
-- [ ] CSP rollout: report-only header first, enforce after a quiet week
-      (deliberately excluded from the launch header set — a wrong CSP
-      breaks silently).
-- [ ] Reserved-but-unwritten DB tables (`systems`, `audit_events`, 5
-      automation event tables, `entitlement_downloads`): comment as
-      reserved in a housekeeping migration, or drop.
+- [x] CSP rollout — **ENFORCING as of 2026-08-04.** Went report-only first,
+      then enforcing. `script-src` still carries `'unsafe-inline'` and that
+      is now a Cloudflare decision, not a code one: the only executable
+      inline script in any response is Cloudflare's own
+      `window.__CF$cv$params`, whose per-request ray id makes it unhashable,
+      and these pages are statically prerendered so there is no server
+      render in which to mint a nonce. `pnpm --filter @home-folder/web
+      verify:csp` proves app code adds zero inline scripts. Dropping
+      `'unsafe-inline'` is one zone toggle away — see "Jesse — Cloudflare"
+      below and docs/SECURITY.md.
+- [x] Reserved-but-unwritten DB tables — **DONE 2026-08-04** (migration
+      037). Seven of them (`systems`, `entitlement_downloads`, and five
+      automation history/link tables) are now commented as RESERVED, with
+      the reason and the date. Commented rather than dropped: each belongs
+      to a planned feature, and dropping one is a roadmap call. Note
+      `audit_events` came off this list — 035 writes it.
+      **Follow-up worth doing:** `entitlement_downloads` is the dispute
+      evidence Stripe asks for on digital goods, and it cannot be
+      reconstructed after the fact. Wire it before the first chargeback.
 - [x] Guest-role column filtering — **DB-enforced 2026-08-03** (migration
       031): table-level SELECT on repairs revoked and re-granted column-by-
       column excluding contractor contacts/costs; full-household roles
@@ -152,9 +193,15 @@ when. Check them off in this file.
       RPC → 0 rows; owner RPC → fields returned. (Found and fixed the
       Postgres gotcha that column REVOKE is a no-op under a table-level
       grant.)
-- [ ] $4.99/home entitlement enforcement once the Stripe product exists
-      (tighten `FREE_PROPERTY_ALLOWANCE`, add the per-home product key).
+- [x] $4.99/home entitlement enforcement — **DONE 2026-08-04**, same
+      migration 035 as the fee-ladder item above.
 - [ ] Per-unit Portfolio pricing when real 20+ door portfolios appear.
+- [ ] Wire `entitlement_downloads` (see the reserved-tables item above).
+- [ ] Audit trail records successful sensitive actions but **not blocked
+      escalation attempts** — the guard triggers `raise`, which rolls back
+      any audit row written in the same transaction. Closing this needs an
+      out-of-transaction write path (dblink self-connection or a queue), so
+      it is real work, not a one-liner.
 - [ ] Marketing: submit the sitemap in Google Search Console; moment-based
       content (disaster season, closing season) per THREAT_MITIGATION.
 
