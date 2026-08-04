@@ -11,6 +11,7 @@ import {
   removePropertyMember,
   revokePropertyInvitation,
   SHARING_ROLES,
+  invitationStatusLabel,
   sharingSectionLabel,
   updatePropertyMemberRole,
   type InvitationRole,
@@ -358,6 +359,8 @@ export default function SharingPage() {
       await removePropertyMember(member.id);
       setMemberNotice(`${member.label} no longer has access.`);
       await reloadMembers();
+      // Their invitation was just marked revoked; show that too.
+      setInvitations(await listPropertyInvitations());
     } catch (removeError) {
       setMemberError(removeError instanceof Error ? removeError.message : 'Failed to remove this person.');
       // Reload so the list reflects what the database actually holds.
@@ -712,13 +715,7 @@ export default function SharingPage() {
           <div style={{ display: 'grid', gap: 12 }}>
             {invitations.map((invitation) => {
               const isExpired = new Date(invitation.expires_at).getTime() < Date.now();
-              const status = invitation.accepted_at
-                ? 'Accepted'
-                : invitation.revoked_at
-                  ? 'Revoked'
-                  : isExpired
-                    ? 'Expired'
-                    : 'Active';
+              const status = invitationStatusLabel(invitation);
 
               return (
                 <div

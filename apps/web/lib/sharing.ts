@@ -968,7 +968,7 @@ export async function removePropertyMember(memberId: string) {
     .delete()
     .eq('id', memberId)
     .eq('property_id', context.property.id)
-    .select('id');
+    .select('id, user_id');
 
   if (error) {
     throw new Error(formatDataError('remove this person', error.message || ''));
@@ -979,6 +979,37 @@ export async function removePropertyMember(memberId: string) {
       'This person was not removed — they still have access. Their membership may have changed since this page loaded; refresh and try again.'
     );
   }
+
+  // Close out the invitation that granted this access. Without this the
+  // invitations list says "Accepted" forever, which reads as still-open after
+  // the access it granted is gone. Best-effort bookkeeping: the removal above
+  // already succeeded, and RLS enforces either way.
+  const removedUserId = (data[0] as { user_id?: string }).user_id;
+  if (removedUserId) {
+    await supabase
+      .from('property_invitations')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('property_id', context.property.id)
+      .eq('accepted_by', removedUserId)
+      .is('revoked_at', null)
+      .is('deleted_at', null);
+  }
+}
+
+/** What an invitation row should say about itself. Revocation wins over
+ * acceptance: an accepted invitation whose access was later removed must not
+ * keep reading as open. Pure, so it is testable. */
+export function invitationStatusLabel(
+  invitation: Pick<PropertyInvitation, 'accepted_at' | 'revoked_at' | 'expires_at'>,
+  now: Date = new Date()
+): 'Access removed' | 'Revoked' | 'Accepted' | 'Expired' | 'Active' {
+  if (invitation.revoked_at) {
+    return invitation.accepted_at ? 'Access removed' : 'Revoked';
+  }
+  if (invitation.accepted_at) {
+    return 'Accepted';
+  }
+  return new Date(invitation.expires_at).getTime() < now.getTime() ? 'Expired' : 'Active';
 }
 
 export async function acceptPropertyInvitation(inviteToken: string) {
