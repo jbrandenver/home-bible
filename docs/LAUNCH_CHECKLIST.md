@@ -219,6 +219,32 @@ when. Check them off in this file.
 - [ ] Marketing: submit the sitemap in Google Search Console; moment-based
       content (disaster season, closing season) per THREAT_MITIGATION.
 
+## Fixed 2026-08-04 (post-launch, found by founder QA)
+
+- [x] **Sign-in wrote no profile.** `ensureProfileForUser` upserted `email`,
+      whose UPDATE grant 033 revoked. PostgREST compiles `.upsert()` into
+      `ON CONFLICT (id) DO UPDATE SET id = excluded.id, …`, so the conflict
+      target lands in the SET list too — **no upsert can work on `profiles`**.
+      Now UPDATE-then-INSERT.
+- [x] **An unresolved session read as "signed out".** supabase-js resolves the
+      token per request and falls back to the publishable key when
+      `getSession()` is null, so reads during a sign-out→sign-in switch ran as
+      `anon` — which 031/033 had revoked, turning a quiet empty result into
+      `permission denied for table utilities` shown to the user. Reads now go
+      through `guardedRead` (re-check session, retry once, never leak the
+      Postgres text); demo-storage branches confirm signed-out state uncached
+      before writing a home to the browser instead of the account.
+- [x] **Demo import was unusable for the people it exists for.** It required
+      an existing property; a fresh signup has none. Now creates the home from
+      the demo copy, and `/welcome` opens on import-or-discard rather than
+      dropping them into a wizard that ignores their work.
+- [x] **Audit tooling:** `grantaudit.py` resolves every select-list constant
+      and diffs it against the live grant model — 54 sites, 7 restricted
+      tables, zero mismatches. **Re-run after any column-grant migration.**
+      The original 033 verification used impersonated transactions at the data
+      layer, which structurally cannot catch a client sending the wrong column
+      list or statement shape.
+
 ## Launch-day smoke script (5 minutes, any browser)
 
 1. https://ourhomefolder.com loads, styled, no console errors.
