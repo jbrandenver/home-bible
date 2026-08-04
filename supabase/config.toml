@@ -434,6 +434,12 @@ verify_jwt = false
 [functions.analyze-plate]
 verify_jwt = true
 
+# Signed-in users only: the gateway validates the JWT before the handler runs.
+# Inside, the caller must also prove possession of the raw invite token (hash
+# compare) and still manage the property; refuses 503 until RESEND_API_KEY set.
+[functions.send-invitation]
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327

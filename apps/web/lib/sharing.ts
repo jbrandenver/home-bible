@@ -58,10 +58,13 @@ export type PropertyInvitation = {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  /** Last time the send-invitation Edge Function emailed it (migration 041). */
+  email_sent_at: string | null;
 };
 
 export type CreatedPropertyInvitation = {
   invitation: PropertyInvitation | null;
+  invitationId: string;
   inviteToken: string;
   inviteUrl: string;
   expiresAt: string;
@@ -581,7 +584,8 @@ function normalizeInvitation(raw: Partial<PropertyInvitation>): PropertyInvitati
     revoked_at: raw.revoked_at || null,
     created_at: createdAt,
     updated_at: raw.updated_at || createdAt,
-    deleted_at: raw.deleted_at || null
+    deleted_at: raw.deleted_at || null,
+    email_sent_at: raw.email_sent_at || null
   };
 }
 
@@ -607,7 +611,7 @@ export async function listPropertyInvitations() {
 
   const { data, error } = await supabase
     .from('property_invitations')
-    .select('id, property_id, inviter_user_id, invited_email, role, expires_at, accepted_at, accepted_by, revoked_at, created_at, updated_at, deleted_at')
+    .select('id, property_id, inviter_user_id, invited_email, role, expires_at, accepted_at, accepted_by, revoked_at, created_at, updated_at, deleted_at, email_sent_at')
     .eq('property_id', context.property.id)
     .is('deleted_at', null)
     .order('created_at', { ascending: false });
@@ -657,6 +661,7 @@ export async function createPropertyInvitation(input: {
 
   return {
     invitation,
+    invitationId: String(result?.invitation_id || invitation?.id || ''),
     inviteToken,
     inviteUrl: buildInviteUrl(inviteToken),
     expiresAt: String(result?.expires_at || invitation?.expires_at || '')
@@ -695,6 +700,59 @@ export function describeInvitationRevokeMiss(invitation: Pick<
   }
 
   return 'This invitation could not be revoked — it may have changed since this page loaded. Refresh and try again.';
+}
+
+// functions.invoke reports a generic "non-2xx status" message; the useful text
+// and status live on the Response it attaches as `context` (same pattern as
+// plateScan.ts and the delete-account call in settings.tsx).
+async function describeInvitationEmailError(error: unknown): Promise<string> {
+  let status: number | null = null;
+  let bodyError: string | null = null;
+
+  const context: unknown = (error as { context?: unknown })?.context;
+  if (context instanceof Response) {
+    status = context.status;
+    try {
+      const body = await context.json();
+      if (body && typeof body.error === 'string') {
+        bodyError = body.error;
+      }
+    } catch {
+      /* body was not JSON — fall through to the generic messages */
+    }
+  }
+
+  if (status === 503) {
+    return 'Invitation email is not enabled yet — copy the link and send it yourself.';
+  }
+  if (bodyError) {
+    return bodyError;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return 'The email could not be sent — copy the link and send it yourself.';
+}
+
+/**
+ * Email a just-minted invitation to its recipient. Requires the raw invite
+ * token (only the minting session holds it — the database stores a hash), so
+ * this can only be called right after createPropertyInvitation. Throws with a
+ * copy-the-link fallback message; the invitation itself is always still valid.
+ */
+export async function sendInvitationEmail(invitationId: string, inviteToken: string): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { error } = await supabase.functions.invoke('send-invitation', {
+    body: { invitation_id: invitationId, invite_token: inviteToken }
+  });
+
+  if (error) {
+    throw new Error(await describeInvitationEmailError(error));
+  }
 }
 
 export async function revokePropertyInvitation(invitationId: string) {

@@ -5,6 +5,7 @@ import {
   assignableRolesFor,
   canEditMember,
   createPropertyInvitation,
+  sendInvitationEmail,
   listPropertyInvitations,
   listPropertyMembers,
   loadSharingPreview,
@@ -446,12 +447,30 @@ export default function SharingPage() {
         invitedEmail: inviteEmail || null
       });
       setInviteUrl(created.inviteUrl);
-      setInviteNotice(
-        // Say plainly that nothing was emailed. "Send an invitation" that sends
-        // nothing is a fair thing to misread, and the recipient waiting on an
-        // email that will never arrive is the failure it causes.
-        'Invitation link created. We do not email it — copy the link and send it yourself. If you set a recipient email, they can also just sign in with that address and accept from their dashboard.'
-      );
+
+      if (inviteEmail && created.invitationId && created.inviteToken) {
+        // Email the recipient. If the send fails the invitation is still
+        // valid — fall back to the copy-the-link wording, never pretend.
+        try {
+          await sendInvitationEmail(created.invitationId, created.inviteToken);
+          setInviteNotice(
+            `Invitation emailed to ${inviteEmail}. You can also copy the link below, and they can accept from their dashboard after signing in with that address.`
+          );
+        } catch (emailError) {
+          setInviteNotice(
+            `Invitation link created, but the email did not go out — ${
+              emailError instanceof Error ? emailError.message : 'copy the link and send it yourself.'
+            }`
+          );
+        }
+      } else {
+        setInviteNotice(
+          // An open link names nobody to email. Say plainly that nothing was
+          // sent — a recipient waiting on an email that will never arrive is
+          // the failure this wording prevents.
+          'Invitation link created. Nothing is emailed for an open link — copy it and send it yourself.'
+        );
+      }
       setInvitations(await listPropertyInvitations());
     } catch (createError) {
       setInviteError(createError instanceof Error ? createError.message : 'Failed to create invitation.');
@@ -733,7 +752,10 @@ export default function SharingPage() {
                   <div>
                     <strong>{roleLabel(invitation.role)}</strong>
                     <div style={subtleText}>
-                      {invitation.invited_email || 'Anyone with the link'} · {status} · Expires {formatDate(invitation.expires_at)}
+                      {invitation.invited_email || 'Anyone with the link'} · {status}
+                      {invitation.email_sent_at && !invitation.accepted_at && !invitation.revoked_at ? ' · Emailed' : ''}
+                      {' · Expires '}
+                      {formatDate(invitation.expires_at)}
                     </div>
                   </div>
                   {!invitation.accepted_at && !invitation.revoked_at && !isExpired ? (
