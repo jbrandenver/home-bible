@@ -256,6 +256,20 @@ export default function AddRoomsPage() {
       }
     }
 
+    // Only demo mode may write to browser storage. Falling through to it in
+    // any other mode cleared the form as though the room had been saved, while
+    // the room existed nowhere but this browser -- which is worse than an
+    // error, because nothing tells the person their work is gone.
+    if (dataMode !== 'demo') {
+      setError(
+        dataMode === 'needs-property'
+          ? 'Create a home before adding rooms — there is nowhere to save them yet.'
+          : 'We could not save that room to your account. Reload the page and try again.'
+      );
+      setIsSubmitting(false);
+      return;
+    }
+
     const nextRooms = [
       ...rooms,
       ...entries.map((entry) => ({
@@ -396,6 +410,7 @@ export default function AddRoomsPage() {
           </Card>
         )}
 
+        {dataMode === 'needs-property' || dataMode === 'error' || dataMode === 'loading' ? null : (
         <div style={{ display: 'grid', gap: 24 }}>
           <Card>
             <form onSubmit={handleAddRoom} style={{ display: 'grid', gap: 20 }}>
@@ -607,6 +622,7 @@ export default function AddRoomsPage() {
             )}
           </Card>
         </div>
+        )}
       </>
     );
   }
