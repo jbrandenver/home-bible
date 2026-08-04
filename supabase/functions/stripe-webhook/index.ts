@@ -28,7 +28,9 @@ const PRODUCT_KEYS = new Set(['handover_pack', 'insurance_evidence_pack', 'pro_b
 // invoice, cut off by subscription deletion. has_entitlement() already honours
 // expires_at, so a missed cancellation webhook fails SAFE — access lapses at
 // the end of the last paid period plus grace, rather than living forever.
-const SUBSCRIPTION_PRODUCT_KEYS = new Set(['portfolio_plan']);
+// 'additional_home' is the $4.99/mo per-additional-home subscription from the
+// 2026-07-31 fee ladder (Payment Link created 2026-08-03).
+const SUBSCRIPTION_PRODUCT_KEYS = new Set(['portfolio_plan', 'additional_home']);
 
 // Grace beyond the paid period, covering invoice-retry windows and webhook
 // delivery lag so a paying customer never sees a flicker of lost access.
