@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { Button, Card, PageHeader } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
-import { getCurrentUser } from '../lib/auth';
+import { getCurrentUser, signOut } from '../lib/auth';
 import { acceptPropertyInvitation } from '../lib/sharing';
 
 /**
@@ -80,6 +80,13 @@ export default function AcceptInvitePage() {
   const [status, setStatus] = useState<'idle' | 'accepting' | 'accepted' | 'failed'>('idle');
   const [propertyId, setPropertyId] = useState('');
   const [error, setError] = useState('');
+  // Shown before accepting. Invitations are address-locked server-side, so a
+  // wrong-account click is refused either way — but the founder clicked an
+  // emailed link while signed in as the OWNER, saw nothing about which account
+  // was active, and reasonably read the resulting bounce to his own dashboard
+  // as a security hole. Name the account first; offer the switch up front.
+  const [signedInEmail, setSignedInEmail] = useState('');
+  const [switching, setSwitching] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -98,6 +105,7 @@ export default function AcceptInvitePage() {
       .then((user) => {
         if (isMounted) {
           setAuthState(user ? 'signed-in' : 'signed-out');
+          setSignedInEmail(user?.email || '');
         }
       })
       .catch(() => {
@@ -138,6 +146,19 @@ export default function AcceptInvitePage() {
   }
 
   const nextParam = encodeURIComponent(router.asPath);
+
+  // Sign out and go to sign-in with this link as the destination, so whoever
+  // the invitation is actually for can come straight back and accept.
+  async function switchAccount() {
+    if (switching) return;
+    setSwitching(true);
+    try {
+      await signOut();
+    } catch {
+      // Even if sign-out fails, the sign-in page lets them switch accounts.
+    }
+    router.push(`/sign-in?next=${nextParam}`);
+  }
 
   return (
     <>
@@ -182,13 +203,23 @@ export default function AcceptInvitePage() {
               account at the access level they chose, and they will be able to see that
               you joined.
             </p>
+            {signedInEmail ? (
+              <p style={{ margin: 0, fontWeight: 600 }}>
+                You are signed in as {signedInEmail}. Invitations only work for the
+                address they were emailed to — if that isn&rsquo;t this account, switch
+                first.
+              </p>
+            ) : null}
             <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: 14 }}>
               Only accept invitations from people you know. If this is unexpected, close
               this page — nothing happens until you choose to join.
             </p>
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
               <Button type="button" onClick={handleAccept} disabled={status === 'accepting'}>
-                {status === 'accepting' ? 'Joining…' : 'Accept invitation'}
+                {status === 'accepting' ? 'Joining…' : signedInEmail ? `Accept as ${signedInEmail}` : 'Accept invitation'}
+              </Button>
+              <Button type="button" variant="secondary" onClick={switchAccount} disabled={switching || status === 'accepting'}>
+                {switching ? 'Signing out…' : 'Use a different account'}
               </Button>
               <ActionLink href="/dashboard" variant="secondary">
                 Not now
@@ -207,10 +238,21 @@ export default function AcceptInvitePage() {
           <div style={{ display: 'grid', gap: 12 }}>
             <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{explainAccept(error).headline}</p>
             <p style={{ margin: 0 }}>{explainAccept(error).guidance}</p>
+            {signedInEmail && error.toLowerCase().includes('different email') ? (
+              <p style={{ margin: 0, fontWeight: 600 }}>
+                You are currently signed in as {signedInEmail}.
+              </p>
+            ) : null}
             <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <Button type="button" onClick={handleAccept}>
-                Try again
-              </Button>
+              {error.toLowerCase().includes('different email') ? (
+                <Button type="button" onClick={switchAccount} disabled={switching}>
+                  {switching ? 'Signing out…' : 'Switch to the invited account'}
+                </Button>
+              ) : (
+                <Button type="button" onClick={handleAccept}>
+                  Try again
+                </Button>
+              )}
               <ActionLink href="/dashboard" variant="secondary">Go to dashboard</ActionLink>
             </div>
           </div>
