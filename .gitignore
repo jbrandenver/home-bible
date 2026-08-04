@@ -7,10 +7,12 @@ build
 .env
 .env.local
 .env.*.local
-# .env.production is currently tracked on purpose — it holds only public
-# Stripe Payment Link URLs. These entries cover the neighbouring filenames a
-# real secret would otherwise land in silently: .dev.vars is where wrangler
-# reads local Worker secrets, and .wrangler/ caches local state.
+# The public Stripe Payment Link URLs live in apps/web/next.config.js — the
+# security audit forbids tracked non-example env files, so .env.production is
+# no longer tracked. These entries cover the neighbouring filenames a real
+# secret would otherwise land in silently: .dev.vars is where wrangler reads
+# local Worker secrets, and .wrangler/ caches local state.
+.env.production
 .env.development
 .dev.vars
 .dev.vars.*
