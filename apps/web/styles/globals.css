@@ -148,6 +148,22 @@ input,select,textarea{
 /* Example text must never be mistaken for an entry: lighter and italic,
    while typed values keep full-strength ink (launch QA 2026-08-03). */
 input::placeholder,textarea::placeholder{color:var(--text-muted);opacity:0.55;font-style:italic}
+
+/* Route-transition rule: the outgoing page is leaving, not glitching.
+   Compositor-only animation; reduced-motion gets a steady rule instead. */
+.route-progress{
+  position:fixed;top:0;left:0;right:0;height:3px;z-index:60;
+  background:linear-gradient(90deg,transparent 0%,var(--accent-strong) 30%,var(--color-brass-pale) 50%,var(--accent-strong) 70%,transparent 100%);
+  background-size:200% 100%;
+  animation:route-progress-slide 1s linear infinite;
+}
+@keyframes route-progress-slide{
+  from{background-position:200% 0}
+  to{background-position:-200% 0}
+}
+@media (prefers-reduced-motion: reduce){
+  .route-progress{animation:none;background:var(--accent-strong)}
+}
 /* Checked controls take the document's ink-green, not the browser's blue. */
 input[type="checkbox"],input[type="radio"]{accent-color:var(--color-green-deep)}
 input:hover,select:hover,textarea:hover{border-color:var(--border-strong)}

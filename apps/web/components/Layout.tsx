@@ -32,6 +32,11 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  // Route transitions keep the outgoing page mounted until the incoming
+  // page's code and data arrive — without a signal, the old content reads as
+  // a glitchy flash of "previous items" (launch QA 2026-08-03). The gilt
+  // progress rule appears the instant a navigation starts.
+  const [navigating, setNavigating] = useState(false);
   const menuTriggerRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   // On the public marketing/legal surface a signed-out visitor gets a clean
@@ -81,6 +86,24 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
   useEffect(() => {
     setOpenMenu(null);
   }, [router.asPath]);
+
+  useEffect(() => {
+    const start = (_url: string, { shallow }: { shallow: boolean }) => {
+      if (!shallow) {
+        setNavigating(true);
+      }
+    };
+    const done = () => setNavigating(false);
+
+    router.events.on('routeChangeStart', start);
+    router.events.on('routeChangeComplete', done);
+    router.events.on('routeChangeError', done);
+    return () => {
+      router.events.off('routeChangeStart', start);
+      router.events.off('routeChangeComplete', done);
+      router.events.off('routeChangeError', done);
+    };
+  }, [router.events]);
 
   // Section anchors live inside cards that only render after their page's data
   // has loaded, so arriving from another page with a #hash scrolled to nothing.
@@ -203,6 +226,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
       <a href="#main-content" className="skip-link">Skip to main content</a>
       {/* gilt page edge */}
       <div className="app-gilt" aria-hidden="true" />
+      {/* route-transition indicator: the page is leaving, not glitching */}
+      {navigating ? <div className="route-progress" role="progressbar" aria-label="Loading page" /> : null}
       {/* Navigation header */}
       <nav className="app-header shadow-sm">
         <div className="max-w-6xl mx-auto px-6 py-4">
