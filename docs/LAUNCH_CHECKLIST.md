@@ -94,8 +94,8 @@ when. Check them off in this file.
       `NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK`, and (new 2026-08-03)
       `NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK` — the pricing page's
       checkout buttons light up automatically once these are set.
-- [ ] **Supabase Pro ($25/mo) the same day** — free projects pause when
-      idle; a paused project takes money and delivers nothing.
+- [x] **Supabase Pro** — verified active 2026-08-03 (org plan reads
+      "pro" via the management API). The digest cron can be relied on.
 - [ ] CPA's view on state digital-goods tax before the first dollar.
 - [ ] Run the webhook tests in runbook §B (replay, unmatched, bad
       signature, browser insert) + the subscription lifecycle tests.
@@ -111,8 +111,9 @@ when. Check them off in this file.
       monthly `purge-cron-history` scheduled via vault secret. Smoke
       tests: manual invoke returned ok/dryRun:false/considered:0 (correct
       off-hour), wrong secret → 401. First real sends: next local 8am for
-      any user with something due. Remaining nicety: apex DMARC record
-      (p=none, tighten after a month of reports).
+      any user with something due. Apex DMARC record added by Jesse and
+      verified resolving 2026-08-03 (p=none; tighten to quarantine after a
+      month of reports). Nothing remains on this item.
 - [ ] Data-plate scanner: `supabase secrets set ANTHROPIC_API_KEY=…`
       (runbook §D). ~$3–5 per 1,000 scans, capped server-side.
 
