@@ -179,6 +179,13 @@ Deno.serve(async (request) => {
           raw_reference: reference || null
         });
         console.error('stripe-webhook: unmatched purchase', { session: session.id });
+        // Money taken with nobody to credit is the one billing event that
+        // always needs a human, so it goes on the alert channel too.
+        await supabase.rpc('log_audit_event', {
+          p_event_type: 'purchase.unmatched',
+          p_payload: { checkout_id: session.id, product_key: productKey || null },
+          p_severity: 'alert'
+        });
         return json({ ok: true, unmatched: true });
       }
 
@@ -221,6 +228,15 @@ Deno.serve(async (request) => {
       if (grantError && grantError.code !== '23505') {
         console.error('stripe-webhook: grant failed', { code: grantError.code });
         return json({ error: 'Could not grant entitlement.' }, 500);
+      }
+
+      if (!grantError) {
+        await supabase.rpc('log_audit_event', {
+          p_event_type: 'entitlement.granted',
+          p_payload: { product_key: productKey, checkout_id: session.id },
+          p_severity: 'notice',
+          p_actor: userId
+        });
       }
 
       return json({ ok: true, granted: productKey });

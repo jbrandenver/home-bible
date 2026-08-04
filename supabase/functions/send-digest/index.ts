@@ -210,6 +210,70 @@ Deno.serve(async (request) => {
   const supabase = createClient(supabaseUrl, serviceRoleKey);
   const dryRun = !resendKey;
 
+  // ?mode=security — the operator's daily security digest, not a customer one.
+  //
+  // Silence means healthy: nothing is sent unless security_digest_report()
+  // returns a row, so a delivered email always means something needs a human.
+  // Runs on the pg_cron + pg_net + Resend that already exist; no new service,
+  // no usage billing, nothing to monitor the monitor with.
+  if (new URL(request.url).searchParams.get('mode') === 'security') {
+    const { data: findings, error: reportError } = await supabase.rpc('security_digest_report');
+    if (reportError) {
+      console.error('send-digest[security]: report failed', {
+        code: reportError.code,
+        message: reportError.message
+      });
+      return json({ error: 'Could not build the security report.' }, 500);
+    }
+
+    const rows = (findings ?? []) as Array<{ category: string; detail: string; occurred_at: string }>;
+    if (rows.length === 0) {
+      return json({ ok: true, mode: 'security', findings: 0, sent: false });
+    }
+
+    const to = Deno.env.get('SECURITY_ALERT_EMAIL') ?? 'contact@ourhomefolder.com';
+    if (dryRun) {
+      console.log(`send-digest[security][dry-run]: ${rows.length} finding(s) would be emailed to ${to}`);
+      return json({ ok: true, mode: 'security', findings: rows.length, sent: false, dryRun: true });
+    }
+
+    const body = rows
+      .map((r) => `<li style="margin-bottom:6px"><strong>${escapeHtml(r.category)}</strong> — ${escapeHtml(r.detail)} <span style="color:#6A5E4D">(${escapeHtml(r.occurred_at)})</span></li>`)
+      .join('');
+
+    try {
+      const response = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          from: FROM,
+          to,
+          subject: `Our Home Folder — ${rows.length} thing(s) to look at`,
+          html: `<!doctype html><html><body style="font:15px/1.6 Georgia,serif;color:#211C15">
+            <h1 style="font:600 20px/1.2 Georgia,serif">Security digest</h1>
+            <p>These came up in the last 24 hours. Nothing is sent when there is nothing to report.</p>
+            <ul>${body}</ul></body></html>`,
+          text: rows.map((r) => `${r.category}: ${r.detail} (${r.occurred_at})`).join('\n')
+        })
+      });
+
+      if (!response.ok) {
+        console.error('send-digest[security]: resend rejected', { status: response.status });
+        return json({ error: 'Could not send the security digest.' }, 502);
+      }
+    } catch (sendError) {
+      console.error('send-digest[security]: send failed', {
+        message: sendError instanceof Error ? sendError.message : 'unknown'
+      });
+      return json({ error: 'Could not send the security digest.' }, 502);
+    }
+
+    return json({ ok: true, mode: 'security', findings: rows.length, sent: true });
+  }
+
   const { data, error } = await supabase.rpc('users_due_for_digest', { send_hour: 8 });
   if (error) {
     console.error('send-digest: could not list due users', { code: error.code, message: error.message });

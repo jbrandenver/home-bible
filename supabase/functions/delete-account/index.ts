@@ -93,6 +93,18 @@ Deno.serve(async (request) => {
     return json({ error: 'Could not delete your account. Please try again.' }, 500, cors);
   }
 
+  // Record the deletion before the login goes, and keep the user id in the
+  // payload as well as the actor column: audit_events.actor_user_id is
+  // ON DELETE SET NULL, so after deleteUser the column would be null and the
+  // trail would no longer say who this was. Support needs that id to answer
+  // "did my account actually get deleted, and when".
+  await serviceClient.rpc('log_audit_event', {
+    p_event_type: 'account.deleted',
+    p_payload: { user_id: userId, ...(summary ?? {}) },
+    p_severity: 'alert',
+    p_actor: userId
+  });
+
   // Only now is it safe to remove the login — everything it pointed at is gone.
   const { error: deleteError } = await serviceClient.auth.admin.deleteUser(userId);
   if (deleteError) {

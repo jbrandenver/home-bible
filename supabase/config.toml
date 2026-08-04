@@ -148,6 +148,18 @@ max_indexes = 5
 # [storage.vector.buckets.documents-openai]
 
 [auth]
+# ---------------------------------------------------------------------------
+# LOCAL DEVELOPMENT CONFIG. Do NOT run `supabase config push` with this file
+# as-is: site_url and additional_redirect_urls below point at 127.0.0.1, and
+# pushing them would repoint production password-reset and OAuth callbacks at
+# localhost — breaking sign-in for real users.
+#
+# The hosted project's auth settings are managed in the Supabase dashboard.
+# The hardening flags in this file (secure_password_change, MFA, password
+# requirements) are set here so local dev matches the intended production
+# posture; they still have to be turned on in the dashboard to take effect.
+# See docs/SECURITY.md "Hosted auth settings" for the checklist.
+# ---------------------------------------------------------------------------
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
@@ -175,7 +187,10 @@ enable_manual_linking = false
 minimum_password_length = 8
 # Passwords that do not meet the following requirements will be rejected as weak. Supported values
 # are: `letters_digits`, `lower_upper_letters_digits`, `lower_upper_letters_digits_symbols`
-password_requirements = ""
+# A record holding deeds, insurance documents and tenant PII deserves more than
+# a length check. Paired with leaked-password protection (dashboard) this stops
+# both the trivially guessable and the already-breached.
+password_requirements = "lower_upper_letters_digits"
 
 # Configure passkey sign-ins.
 # [auth.passkey]
@@ -218,7 +233,10 @@ double_confirm_changes = true
 # If enabled, users need to confirm their email address before signing in.
 enable_confirmations = true
 # If enabled, users will need to reauthenticate or have logged in recently to change their password.
-secure_password_change = false
+# On: a lifted session left open on a shared machine must not be able to
+# change the password and lock the real owner out. delete-account already
+# enforces a 30-minute re-auth window; a password change is just as terminal.
+secure_password_change = true
 # Controls the minimum amount of time that must pass before sending another signup confirmation or password reset email.
 max_frequency = "1s"
 # Number of characters used in the email OTP.
@@ -292,9 +310,12 @@ auth_token = "env(SUPABASE_AUTH_SMS_TWILIO_AUTH_TOKEN)"
 max_enrolled_factors = 10
 
 # Control MFA via App Authenticator (TOTP)
+# Enrolment is opt-in per user — turning this on offers a second factor to
+# people who want one; it forces nothing on anyone. Included in the Supabase
+# plan already being paid for, so this costs nothing.
 [auth.mfa.totp]
-enroll_enabled = false
-verify_enabled = false
+enroll_enabled = true
+verify_enabled = true
 
 # Configure MFA via Phone Messaging
 [auth.mfa.phone]

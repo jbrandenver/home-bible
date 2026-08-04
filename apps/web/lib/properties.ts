@@ -40,6 +40,14 @@ function formatPropertySetupError(step: string, message?: string) {
   }
 
   const lowerMessage = message.toLowerCase();
+
+  // The home allowance is enforced by a trigger (migration 035), so hitting it
+  // arrives here as a database error. It is a billing outcome, not a fault:
+  // surface the server's own sentence rather than wrapping it in "failed to
+  // create property" and a migration hint meant for schema problems.
+  if (lowerMessage.includes('homes. add another home on the portfolio plan')) {
+    return message;
+  }
   const looksLikeSchemaOrRls =
     lowerMessage.includes('row-level security') ||
     lowerMessage.includes('violates row-level security') ||

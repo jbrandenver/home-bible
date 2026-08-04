@@ -249,6 +249,20 @@ export async function updatePassword(password: string): Promise<AuthResult> {
     'updating your password'
   );
 
+  // Changing a password is how someone takes an account back after a session
+  // was left open on a shared machine — so it has to end the other sessions.
+  // Without this, the person who lifted the session keeps a valid refresh
+  // token and the password change achieves nothing. 'others' keeps the
+  // current tab signed in.
+  if (!result.error) {
+    try {
+      await supabase.auth.signOut({ scope: 'others' });
+    } catch {
+      // Best effort: the password did change, and reporting a sign-out
+      // failure here would wrongly read as "your password was not updated".
+    }
+  }
+
   return { data: result.data, error: result.error };
 }
 

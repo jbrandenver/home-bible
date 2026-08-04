@@ -32,6 +32,71 @@ order by tablename, policyname;
 
 Apply `010_security_privacy_sharing.sql` to drop legacy policies, enforce role hierarchy, add invitation-backed sharing, and enforce visibility-aware RLS.
 
+## Hosted auth settings (dashboard only)
+
+These live in the Supabase dashboard, not in this repo. `supabase/config.toml`
+is the **local** stack's config — it carries the same hardening flags so local
+dev matches intent, but do **not** run `supabase config push` with it: its
+`site_url` and `additional_redirect_urls` point at `127.0.0.1`, and pushing
+them would repoint production password-reset and OAuth callbacks at localhost.
+
+Checklist (Authentication → Sign In / Providers, and → Attack Protection).
+None of these cost anything — all are included in the plan already being paid
+for:
+
+| Setting | Target | Why |
+|---|---|---|
+| **Confirm email** (`mailer_autoconfirm` off) | **ON** | Currently OFF in production, so an address in `auth.users` has never been proven. Anyone can sign up as someone else's address. This is the highest-value one. |
+| Leaked password protection (HaveIBeenPwned) | ON | Blocks passwords already known to be breached — the single cheapest defence against credential stuffing. |
+| MFA — TOTP (app authenticator) | Enrol + verify ON | Opt-in per user; forces nothing on anyone. |
+| Secure password change (require recent login) | ON | A lifted session must not be able to change the password and lock the owner out. |
+| Password requirements | Letters + digits, min 8 | Matches `config.toml`. |
+| CAPTCHA (Turnstile) | Consider | Free from Cloudflare, but adds a third-party script to the auth pages — it needs a matching `script-src`/`frame-src` entry in the CSP in `apps/web/next.config.js`, which is now **enforcing**. Do the CSP edit in the same change or sign-in will break. |
+
+**Why `mailer_autoconfirm` matters beyond sign-up:** the Stripe webhook resolves
+an unattributed purchase by email. Migration 035 requires
+`email_confirmed_at is not null` before it will credit anyone, so an unverified
+address can no longer claim someone else's payment — the purchase lands in
+`unmatched_purchases` for a human instead. Turning email confirmation on
+restores that fallback to full usefulness.
+
+## CSP: why `script-src` still allows `'unsafe-inline'`
+
+The CSP in `apps/web/next.config.js` is **enforcing** as of 2026-08-04. It
+still carries `'unsafe-inline'` in `script-src`, and that is not laziness —
+it was investigated and is currently unavoidable:
+
+Every HTML response contains exactly one executable inline script, and it is
+injected by **Cloudflare**, not by Next.js:
+
+```
+window.__CF$cv$params={r:'a25c0e0c8fba7b20',t:'...'}
+```
+
+The `r` value is a per-request ray ID, so the script body differs on every
+response. A hash cannot cover it (the body changes), and a nonce cannot either
+(these pages are statically prerendered, so there is no per-request server
+render in which to mint one). Next's own inline output is `__NEXT_DATA__` with
+`type="application/json"` and the JSON-LD block with
+`type="application/ld+json"` — neither is executable, so neither needs a
+`script-src` allowance.
+
+**To actually drop `'unsafe-inline'`,** turn off whichever Cloudflare feature
+injects that script (Bot Fight Mode / Challenge Platform, or Rocket Loader) for
+this zone, then re-run `pnpm --filter @home-folder/web verify:csp`, which fails
+if any un-hashed executable inline script is present. That is a real trade-off:
+the injected script is bot protection, and the app has no rate limiting of its
+own on the auth endpoints beyond Supabase's per-IP limits. Decide deliberately.
+
+**Residual risk while it stays:** an injected inline script is not blocked by
+CSP, and Supabase sessions live in `localStorage`, so an XSS is account
+takeover. The compensating controls are that the app has exactly one HTML sink
+(`lib/json-ld.ts`, which escapes `< > & U+2028 U+2029` and is fed only
+developer-controlled data) and that the storage bucket's MIME allowlist
+excludes `image/svg+xml` and `text/html`. `style-src 'unsafe-inline'` stays
+regardless — the app uses inline style attributes throughout, and style
+injection is the far weaker of the two risks.
+
 ## Private data rules
 
 The application must not store sensitive home-access secrets in user data fields, including:

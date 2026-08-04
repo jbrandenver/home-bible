@@ -166,10 +166,15 @@ export default function PortfolioPage() {
     const hasPlan = await hasPortfolioPlan();
     // Billing counts archived homes too: archiving sets a record aside, it
     // does not downgrade. Only deletion changes the count.
+    //
+    // Units are part of their building and do not consume the allowance, so
+    // only top-level homes are counted — this must match the rule the database
+    // enforces in enforce_property_allowance() (migration 035), or the UI would
+    // block at a different point than the server does.
     const nextAccess = evaluatePortfolioAccess({
       hasPlan,
       paymentsConfigured,
-      propertyCount: fullList.length
+      propertyCount: fullList.filter((property) => !property.parent_property_id).length
     });
 
     let nextOverview: PortfolioOverview | null = null;
