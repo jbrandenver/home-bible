@@ -3,6 +3,20 @@
 # by construction — a changed file gets a new hash — so browsers may cache
 # them for a year instead of revalidating every chunk on every visit
 # (launch review 2026-07-31).
+
+# Security headers, added 2026-08-04. next.config.js headers() only decorate
+# responses the OpenNext worker renders; Workers Assets serves these files
+# ahead of the worker, so they previously shipped with no HSTS, no nosniff and
+# no framing rules. /sw.js was the sharpest edge — a service worker is the most
+# powerful script on the origin and it was the one response with neither MIME
+# enforcement nor transport pinning. Rules cascade, so the per-path
+# Cache-Control blocks below still apply.
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable
 

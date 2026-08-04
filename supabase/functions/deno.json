@@ -1,0 +1,26 @@
+{
+  "//": [
+    "Pinned dependency versions for every Edge Function.",
+    "",
+    "These handlers run with SUPABASE_SERVICE_ROLE_KEY, STRIPE_SECRET_KEY and",
+    "ANTHROPIC_API_KEY in scope, so a malicious release in any of these",
+    "packages — or a compromise of the CDN serving them — executes with full",
+    "database access and live payment credentials. Floating specifiers",
+    "('@2', '@14', or no version at all) re-resolve on every deploy, which",
+    "means the code that ships is whatever the registry served that morning.",
+    "",
+    "Versions are exact. stripe stays on 14.x deliberately: the handler is",
+    "written against that major's API surface. Bump these consciously, and",
+    "re-run `deno check` against each function afterwards."
+  ],
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.112.0",
+    "stripe": "npm:stripe@14.25.0",
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@0.115.0"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  }
+}

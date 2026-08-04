@@ -12,9 +12,12 @@ import type {
 
 export type ExportOptions = { includeCredentialReferences: boolean };
 
+// Leading =, +, -, @, tab or CR is a formula to Excel and Sheets, not text.
+// Device and routine names are user-supplied, so neutralise before quoting.
 function csvEscape(value: string | number | boolean | null | undefined): string {
   const text = value === null || value === undefined ? '' : String(value);
-  return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const neutralized = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[",\n\r]/.test(neutralized) ? `"${neutralized.replace(/"/g, '""')}"` : neutralized;
 }
 
 function credentialField(value: string | null, options: ExportOptions): string {

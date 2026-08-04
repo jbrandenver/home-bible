@@ -255,10 +255,36 @@ export async function updatePassword(password: string): Promise<AuthResult> {
 export async function signOut() {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
+    clearLocalHomeData();
     return;
   }
 
   await supabase.auth.signOut();
+
+  // Supabase clears its own session, but the app's locally cached home data
+  // survived sign-out — on a shared or library machine the next person saw the
+  // previous user's rooms and active property. Signing out should leave nothing
+  // of the household behind.
+  clearLocalHomeData();
+}
+
+/** Remove every app-owned localStorage key. Session keys are Supabase's job. */
+function clearLocalHomeData() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const appKeys = Object.keys(window.localStorage).filter((key) =>
+      key.startsWith('homeFolder.')
+    );
+    for (const key of appKeys) {
+      window.localStorage.removeItem(key);
+    }
+  } catch {
+    // Storage can be unavailable (private mode, quota, disabled). Sign-out must
+    // still complete — the session is already gone at this point.
+  }
 }
 
 export function onAuthStateChange(callback: (user: User | null) => void) {

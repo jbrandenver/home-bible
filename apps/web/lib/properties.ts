@@ -313,31 +313,17 @@ export async function archivePropertyForOwner(propertyId: string, ownerUserId: s
     throw new Error('Supabase is not configured');
   }
 
-  const archivedAt = new Date().toISOString();
-
-  const { error: unitsError } = await supabase
-    .from('properties')
-    .update({ archived_at: archivedAt })
-    .eq('parent_property_id', propertyId)
-    .eq('owner_user_id', ownerUserId)
-    .is('deleted_at', null);
-
-  if (unitsError) {
-    throw new Error(formatPropertySetupError('archive this home', unitsError.message));
-  }
-
-  const { error, count } = await supabase
-    .from('properties')
-    .update({ archived_at: archivedAt }, { count: 'exact' })
-    .eq('id', propertyId)
-    .eq('owner_user_id', ownerUserId)
-    .is('deleted_at', null);
+  // Ownership is proved inside the RPC from auth.uid(). It used to be an
+  // owner_user_id filter on the update, but RLS admits any editor, so an
+  // editor could archive the owner's home by dropping that filter — and the
+  // owner's own session would later purge it. The RPC archives the building's
+  // units with it.
+  const { error } = await supabase.rpc('archive_property_as_owner', {
+    p_property_id: propertyId
+  });
 
   if (error) {
     throw new Error(formatPropertySetupError('archive this home', error.message));
-  }
-  if (count === 0) {
-    throw new Error('Only the person who created this home can archive it.');
   }
 
   if (getActivePropertyId() === propertyId) {
@@ -352,23 +338,10 @@ export async function restorePropertyForOwner(propertyId: string, ownerUserId: s
     throw new Error('Supabase is not configured');
   }
 
-  const { error: unitsError } = await supabase
-    .from('properties')
-    .update({ archived_at: null })
-    .eq('parent_property_id', propertyId)
-    .eq('owner_user_id', ownerUserId)
-    .is('deleted_at', null);
-
-  if (unitsError) {
-    throw new Error(formatPropertySetupError('restore this home', unitsError.message));
-  }
-
-  const { error } = await supabase
-    .from('properties')
-    .update({ archived_at: null })
-    .eq('id', propertyId)
-    .eq('owner_user_id', ownerUserId)
-    .is('deleted_at', null);
+  // Ownership is proved inside the RPC from auth.uid(); see archive above.
+  const { error } = await supabase.rpc('restore_property_as_owner', {
+    p_property_id: propertyId
+  });
 
   if (error) {
     throw new Error(formatPropertySetupError('restore this home', error.message));

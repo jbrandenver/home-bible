@@ -16,8 +16,8 @@
 // SAFE BEFORE STRIPE EXISTS: with no STRIPE_WEBHOOK_SIGNING_SECRET configured
 // the function refuses every request rather than half-working.
 
-import Stripe from 'https://esm.sh/stripe@14?target=deno';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import Stripe from 'stripe';
+import { createClient } from '@supabase/supabase-js';
 
 // 'pro_binder' is the one-time per-binder purchase for the pro channel
 // (inspector/agent provisioning — see docs/THREAT_MITIGATION.md T6).
@@ -66,7 +66,14 @@ Deno.serve(async (request) => {
     return json({ error: 'Missing signature.' }, 400);
   }
 
-  const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
+  // The pinned stripe@14 typings only know '2023-10-16', but this endpoint has
+  // been running against '2024-06-20' in production and the API version changes
+  // response shapes — silently downgrading it inside a security fix would be a
+  // behaviour change, not a type fix. Cast, keep the runtime version, and
+  // revisit when the SDK major is upgraded deliberately.
+  const stripe = new Stripe(stripeKey, {
+    apiVersion: '2024-06-20' as unknown as Stripe.LatestApiVersion
+  });
   const cryptoProvider = Stripe.createSubtleCryptoProvider();
   const rawBody = await request.text();
 
@@ -136,14 +143,26 @@ Deno.serve(async (request) => {
         userId = user?.id ?? null;
       }
 
-      // Fall back to the email Stripe collected before giving up.
+      // Fall back to the email Stripe collected before giving up. This must
+      // resolve against auth.users, which Supabase controls, and NOT against
+      // profiles.email — that column used to be client-writable, so an
+      // attacker could claim a victim's address and be credited with the
+      // victim's purchase. Migration 033 locks the column and syncs it from
+      // auth.users; resolving here from the verified source keeps the grant
+      // correct even if that sync ever lags.
       if (!userId && session.customer_details?.email) {
-        const { data: byEmail } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('email', session.customer_details.email.toLowerCase())
-          .maybeSingle();
-        userId = byEmail?.id ?? null;
+        const { data: resolved, error: authLookupError } = await supabase.rpc(
+          'resolve_user_id_by_verified_email',
+          { p_email: session.customer_details.email }
+        );
+        if (authLookupError) {
+          console.error('stripe-webhook: could not resolve buyer by email', {
+            code: authLookupError.code,
+            message: authLookupError.message
+          });
+        } else {
+          userId = (resolved as string | null) ?? null;
+        }
       }
 
       const isSubscription = SUBSCRIPTION_PRODUCT_KEYS.has(productKey);
@@ -259,6 +278,37 @@ Deno.serve(async (request) => {
           .from('entitlements')
           .update({ status: 'refunded', revoked_at: new Date().toISOString() })
           .eq('provider_payment_intent_id', paymentIntent);
+      }
+
+      // A subscription checkout stores no payment_intent — Stripe puts an
+      // invoice on the session instead — so the match above silently misses
+      // every recurring plan, leaving a refunded subscriber with access until
+      // period end plus grace (~33 days). Resolve the charge back to its
+      // subscription and revoke that too.
+      const chargeInvoice = (charge as Stripe.Charge).invoice;
+      const invoiceId =
+        typeof chargeInvoice === 'string' ? chargeInvoice : (chargeInvoice?.id ?? null);
+
+      if (invoiceId) {
+        try {
+          const invoice = await stripe.invoices.retrieve(invoiceId);
+          const subscriptionRef = (invoice as Stripe.Invoice).subscription;
+          const subscriptionId =
+            typeof subscriptionRef === 'string' ? subscriptionRef : (subscriptionRef?.id ?? null);
+
+          if (subscriptionId) {
+            await supabase
+              .from('entitlements')
+              .update({ status: 'refunded', revoked_at: new Date().toISOString() })
+              .eq('provider_subscription_id', subscriptionId)
+              .eq('status', 'active');
+          }
+        } catch (invoiceError) {
+          console.error('stripe-webhook: could not resolve refunded subscription', {
+            invoiceId,
+            message: invoiceError instanceof Error ? invoiceError.message : 'unknown'
+          });
+        }
       }
 
       return json({ ok: true, revoked: true });

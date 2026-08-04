@@ -70,8 +70,53 @@ export type ReminderDataContext = {
   property: PropertySummary | null;
 };
 
+// Descriptions and repeat rules are NOT selectable from the base table — migration 033
+// revoked them so guest-class roles cannot read them with an API client.
+// Full-household roles get them merged back in via the get_reminders_private_fields RPC below.
 const REMINDER_SELECT =
-  'id, property_id, room_id, asset_id, utility_id, title, description, reminder_type, due_date, frequency, status, priority, source, linked_type, linked_id, repeat_rule, visibility, created_at, updated_at, deleted_at';
+  'id, property_id, room_id, asset_id, utility_id, title, reminder_type, due_date, frequency, status, priority, source, linked_type, linked_id, visibility, created_at, updated_at, deleted_at';
+
+type ReminderPrivateFields = {
+  reminder_id: string;
+  description: string | null;
+  repeat_rule: string | null;
+};
+
+// Merge the privileged columns back into rows. Guests (and any RPC failure)
+// simply keep nulls — the fields read as "not recorded", never as an error.
+async function mergeReminderPrivateFields<T extends { id: string }>(rows: T[]): Promise<T[]> {
+  if (rows.length === 0) {
+    return rows;
+  }
+
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return rows;
+  }
+
+  const { data, error } = await supabase.rpc('get_reminders_private_fields', {
+    p_reminder_ids: rows.map((row) => row.id)
+  });
+
+  if (error || !data) {
+    return rows;
+  }
+
+  const byId = new Map(
+    (data as ReminderPrivateFields[]).map((fields) => [fields.reminder_id, fields])
+  );
+  return rows.map((row) => {
+    const fields = byId.get(row.id);
+    if (!fields) {
+      return row;
+    }
+    return {
+      ...row,
+      description: fields.description,
+      repeat_rule: fields.repeat_rule
+    };
+  });
+}
 
 function nullableString(value: unknown) {
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
@@ -384,7 +429,10 @@ export async function getRemindersForProperty(propertyId: string) {
     throw new Error(formatReminderError('load reminders', error.message));
   }
 
-  return sortReminders(((data ?? []) as Partial<ReminderRow>[]).map(normalizeReminder));
+  const merged = await mergeReminderPrivateFields(
+    (data ?? []) as Array<Partial<ReminderRow> & { id: string }>
+  );
+  return sortReminders(merged.map(normalizeReminder));
 }
 
 export async function getRemindersForContext(context: ReminderDataContext) {
@@ -463,7 +511,8 @@ export async function createReminderForContext(context: ReminderDataContext, inp
     throw new Error(formatReminderError('create reminder', error?.message));
   }
 
-  return normalizeReminder(data as Partial<ReminderRow>);
+  const [merged] = await mergeReminderPrivateFields([data as Partial<ReminderRow> & { id: string }]);
+  return normalizeReminder(merged);
 }
 
 /**
@@ -607,7 +656,8 @@ export async function updateReminderForContext(
     throw new Error(formatReminderError('update reminder', error?.message));
   }
 
-  return normalizeReminder(data as Partial<ReminderRow>);
+  const [merged] = await mergeReminderPrivateFields([data as Partial<ReminderRow> & { id: string }]);
+  return normalizeReminder(merged);
 }
 
 export async function updateReminderStatusForContext(
@@ -652,7 +702,8 @@ export async function updateReminderStatusForContext(
     throw new Error(formatReminderError('update reminder', error?.message));
   }
 
-  return normalizeReminder(data as Partial<ReminderRow>);
+  const [merged] = await mergeReminderPrivateFields([data as Partial<ReminderRow> & { id: string }]);
+  return normalizeReminder(merged);
 }
 
 export async function deleteReminderForContext(context: ReminderDataContext, reminderId: string) {
