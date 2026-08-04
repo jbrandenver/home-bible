@@ -83,13 +83,19 @@ when. Check them off in this file.
 
 ## Jesse — money switches (when you decide to charge)
 
-- [ ] Stripe account → three Payment Links (runbook §B): Portfolio $29/mo
-      (`portfolio_plan`), packs $49 one-time, pro binder $9.99 one-time
-      (`pro_binder`) — plus the **new $4.99/mo per-additional-home price**
-      from the 2026-07-31 fee ladder (needs a Stripe product *and* an
-      entitlement product key + gating code; see PRICING_AND_PLANS.md
-      "Enforcement lag" note — the code still allows 2 free homes on
-      purpose until this exists).
+- [x] Stripe catalog + Payment Links — **DONE 2026-08-03** via the Zapier
+      Stripe connection (live mode; account verified fully activated:
+      charges + payouts enabled, no requirements outstanding):
+      - Portfolio $29/mo → buy.stripe.com/7sY28s9L2dFM0G331b6Zy00
+        (product_key=portfolio_plan, pre-existing)
+      - Additional Home $4.99/mo → buy.stripe.com/4gMeVee1i59gbkH1X76Zy01
+        (product_key=additional_home, created)
+      - Pro Binder $9.99 one-time → buy.stripe.com/5kQcN62iAfNUewTdFP6Zy02
+        (product_key=pro_binder, created)
+      All links carry product_key metadata (link + subscription/payment
+      intent), billing address collection, and post-purchase redirects into
+      the app. $49 packs deliberately skipped (no env var references them).
+      Entitlement gating code for additional_home still to write.
 - [ ] Env vars on the Worker build: `NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK`,
       `NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK`, and (new 2026-08-03)
       `NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK` — the pricing page's
@@ -97,6 +103,16 @@ when. Check them off in this file.
 - [x] **Supabase Pro** — verified active 2026-08-03 (org plan reads
       "pro" via the management API). The digest cron can be relied on.
 - [ ] CPA's view on state digital-goods tax before the first dollar.
+- [ ] **NEXT (blocks env vars): register the webhook + hand over secrets.**
+      Jesse, in the Stripe dashboard (the Zapier key is restricted and
+      cannot manage webhooks): Developers → Webhooks → Add endpoint →
+      https://gdntnlhnjyyzxcjuypuy.supabase.co/functions/v1/stripe-webhook
+      → events: checkout.session.completed, charge.refunded,
+      charge.dispute.created, invoice.paid, customer.subscription.deleted.
+      Send Claude the whsec_ signing secret + an sk_ secret key for the
+      Edge Function. Then: secrets set, webhook deploy, signed-event test
+      battery, and ONLY THEN the NEXT_PUBLIC_* payment-link env vars go
+      live (buttons before webhook = money taken with no entitlement).
 - [ ] Run the webhook tests in runbook §B (replay, unmatched, bad
       signature, browser insert) + the subscription lifecycle tests.
 
