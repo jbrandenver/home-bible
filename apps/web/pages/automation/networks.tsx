@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationNetworkType } from '@home-folder/shared';
 import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import {
   createNetworkForContext,
   deleteNetworkForContext,
@@ -24,6 +26,7 @@ const CUSTOM_LOCATION_VALUE = '__custom-location__';
 const textareaStyle = { width: '100%', minHeight: 54, marginTop: 6, padding: 10 };
 
 export default function AutomationNetworksPage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AutomationDataMode>('demo');
   const [networks, setNetworks] = useState<AutomationNetworkRow[]>([]);
@@ -166,6 +169,9 @@ export default function AutomationNetworksPage() {
         {dataMode === 'supabase' ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Add a network</h2>
+            {!access.loading && !access.canWrite ? (
+              <ViewOnlyNotice role={access.role} action="add networks" inline />
+            ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', alignItems: 'start' }}>
                 <label><span>Name (what you call it)</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Home Wi-Fi" style={{ marginTop: 6 }} /></label>
@@ -237,6 +243,7 @@ export default function AutomationNetworksPage() {
               {formError ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }} role="alert">{formError}</p> : null}
               {savedNote ? <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }} role="status">{savedNote}</p> : null}
             </div>
+            )}
           </Card>
         ) : null}
 
@@ -261,7 +268,9 @@ export default function AutomationNetworksPage() {
                     {network.is_iot ? <UtilityBadge label="IoT" /> : null}
                     {network.is_guest ? <UtilityBadge label="Guest" /> : null}
                     <ActionLink href={`/automation/networks/${network.id}`} variant="secondary">Open</ActionLink>
+                    {access.loading || access.canWrite ? (
                     <Button variant="secondary" onClick={() => remove(network)} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove</Button>
+                    ) : null}
                   </div>
                 </div>
               </Card>

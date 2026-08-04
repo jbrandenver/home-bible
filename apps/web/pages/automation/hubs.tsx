@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { AUTOMATION_HUB_TYPES, AUTOMATION_STATUS_LABELS, formatEnumLabel, sortEnumForDisplay, type AutomationHubType } from '@home-folder/shared';
 import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
 import {
   createHubForContext,
@@ -28,6 +30,7 @@ type Room = { id: string; name: string; room_type?: string | null; floor_name?: 
 const NEW_NETWORK_VALUE = '__new-network__';
 
 export default function AutomationHubsPage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AutomationDataMode>('demo');
   const [hubs, setHubs] = useState<AutomationHubRow[]>([]);
@@ -192,6 +195,10 @@ export default function AutomationHubsPage() {
         {dataMode === 'supabase' ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Add a hub or controller</h2>
+            {!access.loading && !access.canWrite ? (
+              <ViewOnlyNotice role={access.role} action="add hubs" inline />
+            ) : (
+            <>
             <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', alignItems: 'start' }}>
               <label><span>Name</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Hue Bridge" style={{ marginTop: 6 }} /></label>
               <label><span>Type</span>
@@ -238,6 +245,8 @@ export default function AutomationHubsPage() {
               <Button onClick={add} disabled={saving}>{saving ? 'Adding…' : 'Add hub'}</Button>
             </div>
             {formError ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700, marginBottom: 0 }}>{formError}</p> : null}
+            </>
+            )}
           </Card>
         ) : null}
 
@@ -263,7 +272,9 @@ export default function AutomationHubsPage() {
                     {hub.internet_dependency ? <UtilityBadge label="Needs internet" tone="attention" /> : <UtilityBadge label="Local" tone="good" />}
                     {hub.criticality === 'critical' || hub.criticality === 'high' ? <UtilityBadge label={formatEnumLabel(hub.criticality)} tone="attention" /> : null}
                     <ActionLink href={`/automation/hubs/${hub.id}`} variant="secondary">Open</ActionLink>
+                    {access.loading || access.canWrite ? (
                     <Button variant="secondary" onClick={() => remove(hub)} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove</Button>
+                    ) : null}
                   </div>
                 </div>
               </Card>

@@ -9,6 +9,7 @@ import {
 } from '@home-folder/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { usePropertyAccess } from '../lib/access';
 import {
   getAssetDataContext,
   getAssetsForContext,
@@ -52,6 +53,7 @@ function getStatusTextColor(status: string): string {
 }
 
 export default function WarrantiesPage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AssetDataContext | null>(null);
   const [reminderContext, setReminderContext] = useState<ReminderDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
@@ -485,6 +487,8 @@ export default function WarrantiesPage() {
                   </div>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {access.loading || access.canWrite ? (
+                    <>
                     <Button type="button" onClick={() => startEditing(asset)}>
                       Edit warranty
                     </Button>
@@ -495,6 +499,8 @@ export default function WarrantiesPage() {
                     >
                       {savingReminderAssetId === asset.id ? 'Saving...' : 'Add reminder'}
                     </Button>
+                    </>
+                    ) : null}
                     <ActionLink href={`/assets/${asset.id}`} variant="secondary">View</ActionLink>
                     <ActionLink href={`/documents?assetId=${asset.id}`} variant="secondary">Documents</ActionLink>
                   </div>
@@ -585,6 +591,7 @@ export default function WarrantiesPage() {
                           View official notice
                         </a>
                       )}
+                      {access.loading || access.canWrite ? (
                       <Button
                         type="button"
                         onClick={() => dismissRecall(match)}
@@ -592,6 +599,7 @@ export default function WarrantiesPage() {
                       >
                         {dismissingRecallId === match.id ? 'Dismissing...' : 'Dismiss'}
                       </Button>
+                      ) : null}
                     </div>
                   </div>
                 ))}

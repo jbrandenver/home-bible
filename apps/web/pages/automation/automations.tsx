@@ -9,6 +9,8 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import {
   createRoutineForContext,
   getAutomationContext,
@@ -26,6 +28,7 @@ function statusTone(status: AutomationRoutineRow['status']): 'good' | 'urgent' |
 }
 
 export default function AutomationsListPage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AutomationDataMode>('demo');
   const [routines, setRoutines] = useState<AutomationRoutineRow[]>([]);
@@ -111,6 +114,9 @@ export default function AutomationsListPage() {
         {dataMode === 'supabase' ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Add an automation</h2>
+            {!access.loading && !access.canWrite ? (
+              <ViewOnlyNotice role={access.role} action="add automations" inline />
+            ) : (
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                 <label><span>Name</span><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Lock up at night" style={{ marginTop: 6 }} /></label>
@@ -133,6 +139,7 @@ export default function AutomationsListPage() {
               </label>
               <div><Button onClick={add} disabled={saving}>{saving ? 'Adding…' : 'Add automation'}</Button></div>
             </div>
+            )}
             {formError ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700, marginBottom: 0 }}>{formError}</p> : null}
           </Card>
         ) : null}

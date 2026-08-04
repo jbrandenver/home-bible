@@ -10,6 +10,7 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { usePropertyAccess } from '../../lib/access';
 import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
 import {
   attachConditionPhoto,
@@ -105,6 +106,7 @@ export default function ConditionReportDetailPage() {
   const { id } = router.query;
   const reportId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<ResolvedDataContext | null>(null);
   const [report, setReport] = useState<ConditionReportRow | null>(null);
   const [entries, setEntries] = useState<ConditionReportEntryRow[]>([]);
@@ -560,7 +562,7 @@ export default function ConditionReportDetailPage() {
           ) : null}
         </Card>
 
-        {!isCompleted ? (
+        {!isCompleted && (access.loading || access.canWrite) ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Edit report</h2>
             {editingReport ? (
@@ -658,7 +660,7 @@ export default function ConditionReportDetailPage() {
           </Card>
         ) : null}
 
-        {!isCompleted ? (
+        {!isCompleted && (access.loading || access.canWrite) ? (
           <Card>
             <h2 style={{ marginTop: 0 }}>Add entry</h2>
             <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>
@@ -802,7 +804,7 @@ export default function ConditionReportDetailPage() {
                         </div>
                       </div>
 
-                      {!isCompleted ? (
+                      {!isCompleted && (access.loading || access.canWrite) ? (
                         <div style={{ display: 'grid', gap: 8, minWidth: 170 }}>
                           <label style={{ display: 'grid', gap: 4 }}>
                             <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>Condition</span>
@@ -856,7 +858,7 @@ export default function ConditionReportDetailPage() {
               })}
             </div>
           )}
-          {!isCompleted ? (
+          {!isCompleted && (access.loading || access.canWrite) ? (
             <div style={{ marginTop: 14 }}>
               <ConditionPhotoButton
                 label="Add a general photo (whole unit)"
@@ -868,7 +870,7 @@ export default function ConditionReportDetailPage() {
           ) : null}
         </Card>
 
-        {!isCompleted ? (
+        {!isCompleted && (access.loading || access.canWrite) ? (
           <Card tone="dark">
             <h2 style={{ marginTop: 0 }}>Finish the walkthrough</h2>
             <p style={{ color: 'rgba(255,248,234,0.78)' }}>

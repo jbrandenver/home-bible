@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { TENANCY_STATUSES, formatCalendarDate, formatEnumLabel, type TenancyStatus } from '@home-folder/shared';
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../lib/access';
 import { formatCentsAsCurrency } from '../lib/conditionReports';
 import { resolveDataContext, type ResolvedDataContext } from '../lib/dataContext';
 import {
@@ -44,6 +46,7 @@ function centsToDollarsField(cents: number | null): string {
 }
 
 export default function TenanciesPage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<ResolvedDataContext | null>(null);
   const [tenancies, setTenancies] = useState<TenancyRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -266,6 +269,9 @@ export default function TenanciesPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>{editingId ? 'Edit tenancy' : 'Add tenancy'}</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="add or change tenancies" inline />
+          ) : (
           <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Label</span>
@@ -350,6 +356,7 @@ export default function TenanciesPage() {
               ) : null}
             </div>
           </form>
+          )}
         </Card>
 
         {!loading && tenancies.length === 0 ? (
@@ -397,6 +404,8 @@ export default function TenanciesPage() {
 
                       <div style={{ display: 'grid', gap: 8, minWidth: 160 }}>
                         <ActionLink href="/condition-reports" variant="secondary">Condition reports</ActionLink>
+                        {access.loading || access.canWrite ? (
+                        <>
                         <Button type="button" variant="secondary" onClick={() => startEditing(tenancy)}>
                           Edit
                         </Button>
@@ -416,6 +425,8 @@ export default function TenanciesPage() {
                         >
                           {deletingId === tenancy.id ? 'Deleting...' : 'Delete'}
                         </button>
+                        </>
+                        ) : null}
                       </div>
                     </div>
                   </div>

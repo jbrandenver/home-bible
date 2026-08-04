@@ -8,6 +8,8 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import {
   canModifyConditionReport,
   createConditionReport,
@@ -39,6 +41,7 @@ function formatDate(value: string | null) {
 }
 
 export default function ConditionReportsPage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<ResolvedDataContext | null>(null);
   const [reports, setReports] = useState<ConditionReportRow[]>([]);
   const [tenancies, setTenancies] = useState<TenancyRow[]>([]);
@@ -239,6 +242,9 @@ export default function ConditionReportsPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Start a report</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="create condition reports" inline />
+          ) : (
           <form onSubmit={submit} style={{ display: 'grid', gap: 12 }}>
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
               <label style={{ display: 'grid', gap: 6 }}>
@@ -290,6 +296,7 @@ export default function ConditionReportsPage() {
               </Button>
             </div>
           </form>
+          )}
           {tenancies.length === 0 && !loading ? (
             <p style={{ color: 'var(--text-muted)', marginBottom: 0 }}>
               No tenancies yet — you can link one later, or <ActionLink href="/tenancies" variant="secondary">add a tenancy</ActionLink> first
@@ -337,7 +344,7 @@ export default function ConditionReportsPage() {
 
                       <div style={{ display: 'grid', gap: 8, minWidth: 140 }}>
                         <ActionLink href={`/condition-reports/${report.id}`} variant="secondary">Open</ActionLink>
-                        {canModifyConditionReport(report.status) ? (
+                        {canModifyConditionReport(report.status) && (access.loading || access.canWrite) ? (
                           <button
                             type="button"
                             onClick={() => removeReport(report)}

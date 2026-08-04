@@ -9,6 +9,8 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
@@ -117,6 +119,7 @@ export default function RepairDetailPage() {
   const { id } = router.query;
   const repairId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<RepairDataContext | null>(null);
   const [dataMode, setDataMode] = useState<RepairDataMode>('demo');
   const [repair, setRepair] = useState<RepairRow | null>(null);
@@ -495,6 +498,9 @@ export default function RepairDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Status</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="change this repair" inline />
+          ) : (
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <select value={repair.status} onChange={(event) => changeStatus(event.target.value as RepairStatus)} disabled={acting} style={fieldStyle}>
               {statusOptions.map((status) => (
@@ -519,6 +525,7 @@ export default function RepairDetailPage() {
               Delete repair
             </button>
           </div>
+          )}
         </Card>
 
         <Card>
@@ -527,6 +534,9 @@ export default function RepairDetailPage() {
             Everything about this repair stays open to correction — including which room,
             appliance, or utility it belongs to, and when the visit is booked.
           </p>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="edit this repair" inline />
+          ) : (
           <form onSubmit={saveRepair} style={{ display: 'grid', gap: 12 }}>
             <label style={labelStyle}>
               <span style={{ fontWeight: 600 }}>Title</span>
@@ -750,6 +760,7 @@ export default function RepairDetailPage() {
               </Button>
             </div>
           </form>
+          )}
         </Card>
 
         <RelatedList title="Service History" empty="No related service history found.">

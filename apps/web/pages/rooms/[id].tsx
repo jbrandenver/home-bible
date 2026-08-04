@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel, ROOM_TYPES } from '@home-folder/shared';
 import { PageHeader, Card, Button, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getAssetDataContext, getAssetsForRoom, type AssetRow } from '../../lib/assets';
@@ -63,6 +65,7 @@ export default function RoomDetailPage() {
   const { id } = router.query;
   const roomId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
@@ -664,6 +667,9 @@ export default function RoomDetailPage() {
             a technician asks for (outlets, vents, plumbing, which breaker feeds
             it), and its closet.
           </p>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="change this room" inline />
+          ) : (
           <form onSubmit={handleSaveRoom} style={{ display: 'grid', gap: 14 }}>
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
               <label>
@@ -831,6 +837,7 @@ export default function RoomDetailPage() {
                 : 'Removing a room here only changes this browser’s demo data. Anything recorded in it will show its room as deleted.'}
             </p>
           </form>
+          )}
 
           <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 16, paddingTop: 16 }}>
             <h3 style={{ marginTop: 0 }}>Closet</h3>
@@ -849,11 +856,11 @@ export default function RoomDetailPage() {
                 </p>
                 <ActionLink href={`/rooms/${closetCreatedId}`} variant="secondary">Open the closet</ActionLink>
               </div>
-            ) : (
+            ) : access.loading || access.canWrite ? (
               <Button type="button" variant="secondary" onClick={handleAddCloset} disabled={closetAdding}>
                 {closetAdding ? 'Adding closet...' : 'Add a closet to this room'}
               </Button>
-            )}
+            ) : null}
           </div>
         </Card>
 

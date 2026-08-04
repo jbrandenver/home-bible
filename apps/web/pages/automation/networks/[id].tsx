@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationNetworkType } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
+import { ViewOnlyNotice } from '../../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../../lib/access';
 import {
   deleteNetworkForContext,
   getAutomationContext,
@@ -25,6 +27,7 @@ export default function NetworkDetailPage() {
   const { id } = router.query;
   const networkId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [network, setNetwork] = useState<AutomationNetworkRow | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -185,7 +188,7 @@ export default function NetworkDetailPage() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {network.is_iot ? <UtilityBadge label="IoT" /> : null}
           {network.is_guest ? <UtilityBadge label="Guest" /> : null}
-          {context?.mode === 'supabase' && !editing ? <Button variant="secondary" onClick={startEdit}>Edit</Button> : null}
+          {context?.mode === 'supabase' && !editing && (access.loading || access.canWrite) ? <Button variant="secondary" onClick={startEdit}>Edit</Button> : null}
           <ActionLink href="/automation/networks" variant="secondary">Back to networks</ActionLink>
           <ActionLink href="/automation" variant="secondary">Smart home overview</ActionLink>
         </div>
@@ -284,7 +287,11 @@ export default function NetworkDetailPage() {
         {error ? <Card><p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }}>{error}</p></Card> : null}
         <Card>
           <h2 style={{ marginTop: 0 }}>Manage</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="remove this network" inline />
+          ) : (
           <Button variant="secondary" onClick={remove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove network</Button>
+          )}
         </Card>
       </div>
     </>

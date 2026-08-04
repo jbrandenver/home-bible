@@ -9,6 +9,8 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../../lib/assets';
@@ -93,6 +95,7 @@ export default function IssueDetailPage() {
   const { id } = router.query;
   const issueId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<IssueDataContext | null>(null);
   const [dataMode, setDataMode] = useState<IssueDataMode>('demo');
   const [issue, setIssue] = useState<IssueRow | null>(null);
@@ -410,6 +413,9 @@ export default function IssueDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Status</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="change this issue" inline />
+          ) : (
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <select value={issue.status} onChange={(event) => changeStatus(event.target.value as IssueStatus)} disabled={acting} style={fieldStyle}>
               {ISSUE_STATUSES.map((status) => (
@@ -434,6 +440,7 @@ export default function IssueDetailPage() {
               Delete issue
             </button>
           </div>
+          )}
         </Card>
 
         <Card>
@@ -442,6 +449,9 @@ export default function IssueDetailPage() {
             Everything about this issue stays open to correction — including which room,
             appliance, utility, or repair it belongs to.
           </p>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="edit this issue" inline />
+          ) : (
           <form onSubmit={saveIssue} style={{ display: 'grid', gap: 12 }}>
             <label style={labelStyle}>
               <span style={{ fontWeight: 600 }}>Title</span>
@@ -611,6 +621,7 @@ export default function IssueDetailPage() {
               </Button>
             </div>
           </form>
+          )}
         </Card>
 
         {issue.repair_id ? (

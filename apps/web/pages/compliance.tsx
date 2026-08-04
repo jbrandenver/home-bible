@@ -8,6 +8,8 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../lib/access';
 import { resolveDataContext, type ResolvedDataContext } from '../lib/dataContext';
 import {
   advanceNextDue,
@@ -259,6 +261,7 @@ function ObligationFormFields({
 }
 
 export default function CompliancePage() {
+  const access = usePropertyAccess();
   const [context, setContext] = useState<ResolvedDataContext | null>(null);
   const [obligations, setObligations] = useState<ComplianceObligationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -581,7 +584,7 @@ export default function CompliancePage() {
             ) : null}
           </div>
 
-          {!isEditing ? (
+          {!isEditing && (access.loading || access.canWrite) ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <Button type="button" onClick={() => completeToday(obligation)} disabled={isActing}>
                 {isActing ? 'Saving...' : 'Mark completed today'}
@@ -777,9 +780,11 @@ export default function CompliancePage() {
                     ) : null}
                   </div>
                   <div style={{ marginTop: 12 }}>
+                    {access.loading || access.canWrite ? (
                     <Button type="button" onClick={() => loadTemplate(template)}>
                       Add to this property
                     </Button>
+                    ) : null}
                   </div>
                 </Card>
               );
@@ -792,6 +797,9 @@ export default function CompliancePage() {
             Add custom obligation
           </h2>
           <Card>
+            {!access.loading && !access.canWrite ? (
+              <ViewOnlyNotice role={access.role} action="add compliance obligations" inline />
+            ) : (
             <form onSubmit={submitNewObligation} style={{ display: 'grid', gap: 12 }}>
               <ObligationFormFields
                 draft={addDraft}
@@ -816,6 +824,7 @@ export default function CompliancePage() {
                 </Button>
               </div>
             </form>
+            )}
           </Card>
         </section>
       </div>

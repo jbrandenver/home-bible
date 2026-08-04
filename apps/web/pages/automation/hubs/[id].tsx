@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { AUTOMATION_CRITICALITIES, AUTOMATION_HUB_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationCriticality, type AutomationHubType } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
+import { ViewOnlyNotice } from '../../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../../lib/access';
 import { RoomLocationSelect, roomSelectionValue } from '../../../components/RoomLocationSelect';
 import {
   deleteHubForContext,
@@ -29,6 +31,7 @@ export default function HubDetailPage() {
   const { id } = router.query;
   const hubId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [hub, setHub] = useState<AutomationHubRow | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -204,7 +207,7 @@ export default function HubDetailPage() {
           <UtilityBadge label={formatEnumLabel(hub.status)} />
           {hub.internet_dependency ? <UtilityBadge label="Needs internet" tone="attention" /> : <UtilityBadge label="Local" tone="good" />}
           {hub.criticality === 'critical' || hub.criticality === 'high' ? <UtilityBadge label={formatEnumLabel(hub.criticality)} tone="attention" /> : null}
-          {context?.mode === 'supabase' && !editing ? <Button variant="secondary" onClick={startEdit}>Edit</Button> : null}
+          {context?.mode === 'supabase' && !editing && (access.loading || access.canWrite) ? <Button variant="secondary" onClick={startEdit}>Edit</Button> : null}
           <ActionLink href="/automation/hubs" variant="secondary">Back to hubs</ActionLink>
           <ActionLink href="/automation" variant="secondary">Smart home overview</ActionLink>
         </div>
@@ -275,7 +278,11 @@ export default function HubDetailPage() {
         {error ? <Card><p style={{ color: 'var(--status-urgent)', fontWeight: 700, margin: 0 }}>{error}</p></Card> : null}
         <Card>
           <h2 style={{ marginTop: 0 }}>Manage</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="remove this hub" inline />
+          ) : (
           <Button variant="secondary" onClick={remove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove hub</Button>
+          )}
         </Card>
       </div>
     </>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Card, PageHeader } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ShortcutLink } from '../components/ShortcutLink';
+import { usePropertyAccess } from '../lib/access';
 import { getAssetDataContext, getAssetsForProperty, getDemoAssets } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getPropertyAddressDetails } from '../lib/properties';
@@ -76,7 +77,7 @@ function dueDateForMonth(month: number): string {
   return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
 }
 
-function SeasonalTaskRow({ task, month }: { task: SeasonalTask; month: number }) {
+function SeasonalTaskRow({ task, month, canWrite }: { task: SeasonalTask; month: number; canWrite: boolean }) {
   const [state, setState] = useState<'idle' | 'saving' | 'added' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
@@ -110,11 +111,11 @@ function SeasonalTaskRow({ task, month }: { task: SeasonalTask; month: number })
         </div>
         {state === 'added' ? (
           <span style={{ color: 'var(--status-good)', fontSize: '0.875rem' }}>Reminder added</span>
-        ) : (
+        ) : canWrite ? (
           <Button type="button" variant="secondary" disabled={state === 'saving'} onClick={addAsReminder}>
             {state === 'saving' ? 'Adding…' : 'Add as reminder'}
           </Button>
-        )}
+        ) : null}
       </div>
       {state === 'error' && message ? (
         <p style={{ margin: '4px 0 0', color: 'var(--status-urgent)', fontSize: '0.875rem' }}>{message}</p>
@@ -124,6 +125,7 @@ function SeasonalTaskRow({ task, month }: { task: SeasonalTask; month: number })
 }
 
 export default function MaintenanceHubPage() {
+  const access = usePropertyAccess();
   const [plan, setPlan] = useState<SeasonalMonth[] | null>(null);
   const [planIsDemo, setPlanIsDemo] = useState(false);
 
@@ -237,7 +239,7 @@ export default function MaintenanceHubPage() {
                 ) : (
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {currentTasks.map((task) => (
-                      <SeasonalTaskRow key={task.title} task={task} month={currentMonth} />
+                      <SeasonalTaskRow key={task.title} task={task} month={currentMonth} canWrite={access.loading || access.canWrite} />
                     ))}
                   </ul>
                 )}
@@ -250,7 +252,7 @@ export default function MaintenanceHubPage() {
                 ) : (
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {nextTasks.map((task) => (
-                      <SeasonalTaskRow key={task.title} task={task} month={nextMonth} />
+                      <SeasonalTaskRow key={task.title} task={task} month={nextMonth} canWrite={access.loading || access.canWrite} />
                     ))}
                   </ul>
                 )}

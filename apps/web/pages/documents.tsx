@@ -8,6 +8,8 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../lib/access';
 import { VisibilityContextPicker } from '../components/VisibilityContextPicker';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getAutomationContext, getDevicesForContext, type AutomationDeviceRow } from '../lib/automation';
@@ -157,6 +159,7 @@ function buildLinkUpdatePayload(linkKind: LinkKind, linkId: string): DocumentMet
 export default function DocumentsPage() {
   const router = useRouter();
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<DocumentDataContext | null>(null);
   const [documents, setDocuments] = useState<DocumentRow[]>([]);
   const [thumbnailUrls, setThumbnailUrls] = useState<Map<string, string>>(new Map());
@@ -564,6 +567,8 @@ export default function DocumentsPage() {
               </p>
               <ActionLink href="/sign-in">Sign in</ActionLink>
             </div>
+          ) : !access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="upload documents" inline />
           ) : (
             <form onSubmit={uploadDocument} style={{ display: 'grid', gap: 12 }}>
               <label style={{ display: 'grid', gap: 6 }}>
@@ -773,14 +778,17 @@ export default function DocumentsPage() {
                           <Button type="button" onClick={() => openDocument(document.id)} disabled={isActing}>
                             {isActing ? 'Opening...' : 'View / download'}
                           </Button>
+                          {access.loading || access.canWrite ? (
                           <Button type="button" onClick={() => startEditing(document)} style={{ background: 'var(--text-muted)' }}>
                             Edit details
                           </Button>
+                          ) : null}
                           {document.document_type === 'receipt' ? (
                             <ActionLink href={`/receipts?documentId=${document.id}`} variant="secondary">
                               Review receipt
                             </ActionLink>
                           ) : null}
+                          {access.loading || access.canWrite ? (
                           <button
                             type="button"
                             onClick={() => deleteDocument(document.id)}
@@ -798,6 +806,7 @@ export default function DocumentsPage() {
                           >
                             Delete
                           </button>
+                          ) : null}
                         </div>
                       </>
                     )}

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { SERVICE_TYPES, formatEnumLabel, sortEnumForDisplay, UTILITY_TYPES } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
 import { getDemoRooms } from '../../lib/demoStorage';
@@ -87,6 +89,7 @@ export default function UtilityDetailPage() {
   const { id } = router.query;
   const utilityId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<UtilityDataContext | null>(null);
   const [dataMode, setDataMode] = useState<UtilityDataMode>('demo');
   const [utility, setUtility] = useState<UtilityRow | null>(null);
@@ -478,6 +481,9 @@ export default function UtilityDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Edit utility</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="edit this utility" inline />
+          ) : (
           <form onSubmit={saveUtility} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Name</span>
@@ -542,6 +548,7 @@ export default function UtilityDetailPage() {
               </button>
             </div>
           </form>
+          )}
         </Card>
 
         <RelatedList
@@ -575,7 +582,7 @@ export default function UtilityDetailPage() {
         <Card>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0 }}>Service History</h2>
-            {!serviceFormOpen ? (
+            {!serviceFormOpen && (access.loading || access.canWrite) ? (
               <Button type="button" variant="secondary" onClick={() => setServiceFormOpen(true)}>
                 Add service history
               </Button>

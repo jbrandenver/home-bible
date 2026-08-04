@@ -12,6 +12,8 @@ import {
 } from '@home-folder/shared';
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../lib/access';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import {
@@ -85,6 +87,7 @@ export default function IssuesPage() {
   const [issueContext, setIssueContext] = useState<IssueDataContext | null>(null);
   const [trendContext, setTrendContext] = useState<TrendFlagDataContext | null>(null);
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
+  const access = usePropertyAccess();
   const [hasProperty, setHasProperty] = useState(false);
   const [issues, setIssues] = useState<IssueRow[]>([]);
   const [trendFlags, setTrendFlags] = useState<TrendFlagRow[]>([]);
@@ -622,6 +625,9 @@ export default function IssuesPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Add issue</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="add issues" inline />
+          ) : (
           <form onSubmit={submitIssue} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Title</span>
@@ -702,10 +708,14 @@ export default function IssuesPage() {
               </Button>
             </div>
           </form>
+          )}
         </Card>
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Add trend</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="add trends" inline />
+          ) : (
           <form onSubmit={submitTrendFlag} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Title</span>
@@ -773,6 +783,7 @@ export default function IssuesPage() {
               </Button>
             </div>
           </form>
+          )}
         </Card>
 
         <Card>
@@ -922,6 +933,8 @@ export default function IssuesPage() {
 
                     <div style={{ display: 'grid', gap: 8, minWidth: 150 }}>
                       <ActionLink href={`/issues/${issue.id}`} variant="secondary">View</ActionLink>
+                      {access.loading || access.canWrite ? (
+                      <>
                       <select
                         value={issue.status}
                         onChange={(event) => changeIssueStatus(issue.id, event.target.value as IssueStatus)}
@@ -944,6 +957,8 @@ export default function IssuesPage() {
                       >
                         {deletingId === issue.id ? 'Deleting...' : 'Delete'}
                       </button>
+                      </>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -982,6 +997,7 @@ export default function IssuesPage() {
                       </div>
                     </div>
 
+                    {access.loading || access.canWrite ? (
                     <div style={{ display: 'grid', gap: 8, minWidth: 150 }}>
                       <select
                         value={flag.status}
@@ -1006,6 +1022,7 @@ export default function IssuesPage() {
                         {deletingId === flag.id ? 'Deleting...' : 'Delete'}
                       </button>
                     </div>
+                    ) : null}
                   </div>
                 </div>
               ))}

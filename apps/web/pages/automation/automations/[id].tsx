@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AUTOMATION_CRITICALITIES, AUTOMATION_ROUTINE_STATUSES, AUTOMATION_ROUTINE_TYPES, formatEnumLabel, type AutomationCriticality, type AutomationRoutineStatus, type AutomationRoutineType } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
+import { ViewOnlyNotice } from '../../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../../lib/access';
 import {
   addRoutineDeviceForContext,
   deleteRoutineForContext,
@@ -32,6 +34,7 @@ export default function AutomationDetailPage() {
   const { id } = router.query;
   const routineId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [routine, setRoutine] = useState<AutomationRoutineRow | null>(null);
   const [devices, setDevices] = useState<AutomationDeviceRow[]>([]);
@@ -244,7 +247,7 @@ export default function AutomationDetailPage() {
           <UtilityBadge label={formatEnumLabel(routine.status)} />
           {routine.internet_dependency ? <UtilityBadge label="Needs internet" tone="attention" /> : <UtilityBadge label="Works locally" tone="good" />}
           {routine.criticality === 'critical' || routine.criticality === 'high' ? <UtilityBadge label={formatEnumLabel(routine.criticality)} tone="attention" /> : null}
-          {context?.mode === 'supabase' && !editing ? <Button variant="secondary" onClick={startEdit}>Edit</Button> : null}
+          {context?.mode === 'supabase' && !editing && (access.loading || access.canWrite) ? <Button variant="secondary" onClick={startEdit}>Edit</Button> : null}
         </div>
       </PageHeader>
 
@@ -305,7 +308,9 @@ export default function AutomationDetailPage() {
                   {roleLinks.map((link) => (
                     <span key={`${link.device_id}-${link.role}`} style={{ display: 'inline-flex', gap: 8, alignItems: 'center', border: '1px solid var(--border-subtle)', borderRadius: 4, padding: '4px 10px' }}>
                       <Link href={`/automation/devices/${link.device_id}`} style={{ textDecoration: 'none' }}>{deviceName(link.device_id)}</Link>
+                      {access.loading || access.canWrite ? (
                       <button type="button" onClick={() => removeDevice(link)} disabled={acting} aria-label="Remove" style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--status-urgent)', minWidth: 24, minHeight: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, lineHeight: 1 }}>×</button>
+                      ) : null}
                     </span>
                   ))}
                 </div>
@@ -314,7 +319,7 @@ export default function AutomationDetailPage() {
           })}
           {links.length === 0 ? <p style={{ color: 'var(--text-muted)', marginTop: 0 }}>No devices linked yet.</p> : null}
 
-          {context?.mode === 'supabase' ? (
+          {context?.mode === 'supabase' && (access.loading || access.canWrite) ? (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end', marginTop: 8 }}>
               <label style={{ flex: '1 1 200px' }}>
                 <span>Add device</span>
@@ -336,9 +341,13 @@ export default function AutomationDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Manage</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="remove this automation" inline />
+          ) : (
           <Button variant="secondary" onClick={remove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>
             {acting ? 'Working…' : 'Remove automation'}
           </Button>
+          )}
         </Card>
       </div>
     </>

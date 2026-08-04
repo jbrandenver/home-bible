@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AUTOMATION_DEVICE_STATUSES, AUTOMATION_POWER_LABELS, AUTOMATION_STATUS_LABELS, formatEnumLabel, type AutomationDeviceStatus } from '@home-folder/shared';
 import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
+import { ViewOnlyNotice } from '../../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../../lib/access';
 import { RoomLocationSelect, roomSelectionValue } from '../../../components/RoomLocationSelect';
 import {
   createIssueForDevice,
@@ -76,6 +78,7 @@ export default function AutomationDeviceDetailPage() {
   const { id } = router.query;
   const deviceId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AutomationDataContext | null>(null);
   const [device, setDevice] = useState<AutomationDeviceRow | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -421,7 +424,7 @@ export default function AutomationDeviceDetailPage() {
           {device.is_critical ? <UtilityBadge label="Critical" tone="attention" /> : null}
           {device.internet_required ? <UtilityBadge label="Needs internet" /> : <UtilityBadge label="Works locally" tone="good" />}
           <UtilityBadge label={`${completeness}% documented`} tone={completeness >= 80 ? 'good' : 'attention'} />
-          {context?.mode === 'supabase' && !editing ? (
+          {context?.mode === 'supabase' && !editing && (access.loading || access.canWrite) ? (
             <Button variant="secondary" onClick={startEdit}>Edit details</Button>
           ) : null}
           <ActionLink href="/automation/devices" variant="secondary">Back to devices</ActionLink>
@@ -568,13 +571,16 @@ export default function AutomationDeviceDetailPage() {
                   {dependencies.map((d) => (
                     <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 4 }}>
                       <span>{d.label}</span>
+                      {access.loading || access.canWrite ? (
                       <button type="button" onClick={() => removeDep(d.id)} disabled={acting} aria-label="Remove dependency" style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--status-urgent)', minWidth: 24, minHeight: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, lineHeight: 1 }}>×</button>
+                      ) : null}
                     </div>
                   ))}
                 </div>
               ) : (
                 <p style={{ color: 'var(--text-muted)', margin: '0 0 10px', fontSize: 14 }}>None recorded. Add a cloud service this device needs (e.g. Ring Cloud) so the failure guide can warn about it.</p>
               )}
+              {access.loading || access.canWrite ? (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'end' }}>
                 <label style={{ flex: '1 1 220px' }}>
                   <span>Cloud service it depends on</span>
@@ -582,6 +588,7 @@ export default function AutomationDeviceDetailPage() {
                 </label>
                 <Button variant="secondary" onClick={addCloudDep} disabled={acting || !cloudDep.trim()}>Add dependency</Button>
               </div>
+              ) : null}
             </div>
           </Card>
         ) : null}
@@ -621,12 +628,16 @@ export default function AutomationDeviceDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Manage</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="change this device" inline />
+          ) : (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <ActionLink href={`/documents?automationDeviceId=${device.id}`} variant="secondary">Add document</ActionLink>
             <Button variant="secondary" onClick={remove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>
               {acting ? 'Working…' : 'Remove device'}
             </Button>
           </div>
+          )}
         </Card>
       </div>
     </>

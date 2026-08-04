@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { ASSET_TYPES, formatEnumLabel, getWarrantyMeta, safeHttpUrl, toLocalDateString, type VisibilityContext } from '@home-folder/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
+import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../../lib/access';
 import { VisibilityContextPicker } from '../../components/VisibilityContextPicker';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
 import { RelatedReceipts } from '../../components/RelatedReceipts';
@@ -52,6 +54,7 @@ export default function AssetDetailPage() {
   const { id } = router.query;
   const assetId = typeof id === 'string' ? id : '';
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<AssetDataContext | null>(null);
   const [dataMode, setDataMode] = useState<AssetDataMode>('demo');
   const [asset, setAsset] = useState<AssetRow | null>(null);
@@ -639,6 +642,9 @@ export default function AssetDetailPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Edit asset</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="edit this asset" inline />
+          ) : (
           <form onSubmit={handleSave} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Name</span>
@@ -769,6 +775,7 @@ export default function AssetDetailPage() {
               <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</Button>
             </div>
           </form>
+          )}
         </Card>
 
         <Card>
@@ -908,6 +915,7 @@ export default function AssetDetailPage() {
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           <ActionLink href="/assets" variant="secondary">Back to assets</ActionLink>
 
+          {access.loading || access.canWrite ? (
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -924,6 +932,7 @@ export default function AssetDetailPage() {
           >
             {deleting ? 'Deleting...' : 'Delete Asset'}
           </button>
+          ) : null}
         </div>
       </div>
     </>

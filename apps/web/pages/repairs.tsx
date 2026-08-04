@@ -11,6 +11,8 @@ import {
 import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { RoomLocationSelect, roomSelectionValue } from '../components/RoomLocationSelect';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../lib/access';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
@@ -152,6 +154,7 @@ export default function RepairsPage() {
   const [repairContext, setRepairContext] = useState<RepairDataContext | null>(null);
   const [serviceContext, setServiceContext] = useState<ServiceRecordDataContext | null>(null);
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
+  const access = usePropertyAccess();
   const [hasProperty, setHasProperty] = useState(false);
   const [repairs, setRepairs] = useState<RepairRow[]>([]);
   const [serviceRecords, setServiceRecords] = useState<ServiceRecordRow[]>([]);
@@ -890,6 +893,9 @@ export default function RepairsPage() {
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Add repair</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="add repairs" inline />
+          ) : (
           <form onSubmit={submitRepair} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Title</span>
@@ -1003,10 +1009,14 @@ export default function RepairsPage() {
               </Button>
             </div>
           </form>
+          )}
         </Card>
 
         <Card>
           <h2 style={{ marginTop: 0 }}>Add service history</h2>
+          {!access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="add service history" inline />
+          ) : (
           <form onSubmit={submitServiceRecord} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Service title</span>
@@ -1079,6 +1089,7 @@ export default function RepairsPage() {
               </Button>
             </div>
           </form>
+          )}
         </Card>
 
         <Card>
@@ -1230,6 +1241,8 @@ export default function RepairsPage() {
                     <div style={{ display: 'grid', gap: 8, minWidth: 140 }}>
                       <ActionLink href={`/repairs/${repair.id}`} variant="secondary">View</ActionLink>
                       <ActionLink href={`/repairs/${repair.id}/service-call`} variant="secondary">Service call sheet</ActionLink>
+                      {access.loading || access.canWrite ? (
+                      <>
                       <select
                         value={repair.status}
                         onChange={(event) => changeRepairStatus(repair.id, event.target.value as RepairStatus)}
@@ -1256,6 +1269,8 @@ export default function RepairsPage() {
                       >
                         {deletingId === repair.id ? 'Deleting...' : 'Delete'}
                       </button>
+                      </>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -1505,7 +1520,7 @@ export default function RepairsPage() {
                       ) : null}
                     </div>
 
-                    {editingRecordId === record.id ? null : (
+                    {editingRecordId === record.id || (!access.loading && !access.canWrite) ? null : (
                       <div style={{ display: 'grid', gap: 8, minWidth: 120, height: 'fit-content' }}>
                         <Button
                           type="button"

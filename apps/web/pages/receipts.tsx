@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { RECEIPT_CATEGORIES, formatEnumLabel, type ReceiptCategory } from '@home-folder/shared';
 import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../lib/access';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { createDocumentSignedUrlForContext, formatFileSize, getDocumentDataContext, getDocumentsForContext, type DocumentDataContext, type DocumentRow } from '../lib/documents';
 import { getDemoRooms } from '../lib/demoStorage';
@@ -119,6 +121,7 @@ function getLinkLabel(linkKind: LinkKind, linkId: string, optionsByKind: Record<
 export default function ReceiptsPage() {
   const router = useRouter();
 
+  const access = usePropertyAccess();
   const [context, setContext] = useState<ReceiptDataContext | null>(null);
   const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
   const [receipts, setReceipts] = useState<ReceiptRow[]>([]);
@@ -521,6 +524,8 @@ export default function ReceiptsPage() {
               <p style={{ color: 'var(--text-muted)' }}>Sign in and create a property to upload private receipt files. Review before saving.</p>
               <ActionLink href="/sign-in">Sign in</ActionLink>
             </div>
+          ) : !access.loading && !access.canWrite ? (
+            <ViewOnlyNotice role={access.role} action="upload receipts" inline />
           ) : (
             <form onSubmit={uploadReceipt} style={{ display: 'grid', gap: 12 }}>
               <label style={{ display: 'grid', gap: 6 }}>
@@ -750,6 +755,8 @@ export default function ReceiptsPage() {
                           {actingDocumentId === receipt.document_id ? 'Opening...' : 'View / download'}
                         </Button>
                       ) : null}
+                      {access.loading || access.canWrite ? (
+                      <>
                       <Button type="button" onClick={() => startEditing(receipt)} style={{ background: 'var(--text-muted)' }}>
                         Edit details
                       </Button>
@@ -770,6 +777,8 @@ export default function ReceiptsPage() {
                       >
                         {isActing ? 'Deleting...' : 'Delete details'}
                       </button>
+                      </>
+                      ) : null}
                     </div>
                   </div>
                 );

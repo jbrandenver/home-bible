@@ -10,6 +10,8 @@ import {
 } from '@home-folder/shared';
 import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
+import { usePropertyAccess } from '../lib/access';
 import { getAssetDataContext, getAssetsForContext, type AssetRow } from '../lib/assets';
 import { getDemoActiveProperty, getDemoRooms } from '../lib/demoStorage';
 import {
@@ -44,6 +46,7 @@ export default function RemindersPage() {
   const router = useRouter();
   const [context, setContext] = useState<ReminderDataContext | null>(null);
   const [dataMode, setDataMode] = useState<ReminderDataMode>('demo');
+  const access = usePropertyAccess();
   const [property, setProperty] = useState<PropertyOption | null>(null);
   const [reminders, setReminders] = useState<ReminderRow[]>([]);
   const [rooms, setRooms] = useState<RoomOption[]>([]);
@@ -415,6 +418,8 @@ export default function RemindersPage() {
             <p style={{ color: 'var(--text-muted)' }}>Create a property before adding reminders.</p>
             <ActionLink href="/create-property">Create property</ActionLink>
           </div>
+        ) : !access.loading && !access.canWrite ? (
+          <ViewOnlyNotice role={access.role} action="add or change reminders" inline />
         ) : (
           <form onSubmit={submitReminder} style={{ display: 'grid', gap: 12 }}>
             <label style={{ display: 'grid', gap: 6 }}>
@@ -664,6 +669,7 @@ export default function RemindersPage() {
                   </div>
                 </div>
 
+                {access.loading || access.canWrite ? (
                 <div style={{ display: 'grid', gap: 6, alignContent: 'start' }}>
                   <button
                     type="button"
@@ -738,6 +744,7 @@ export default function RemindersPage() {
                     Delete
                   </button>
                 </div>
+                ) : null}
               </div>
             </Card>
           ))}
