@@ -8,7 +8,7 @@ import {
   REMINDER_TYPES
 } from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
-import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
+import { getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured, getCurrentUserUncached } from './auth';
 import { getDemoActiveProperty, getDemoCollection } from './demoStorage';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
@@ -394,7 +394,11 @@ export async function getReminderDataContext(): Promise<ReminderDataContext> {
     };
   }
 
-  const user = await getCurrentUser();
+  // A cached `null` from a moment earlier -- mid sign-out -> sign-in -- used to
+  // read as "signed out", and signed-out means demo mode, which means this
+  // person's next save goes to browser storage instead of their account and
+  // is quietly lost. Confirm against the auth client before concluding that.
+  const user = (await getCurrentUser()) ?? (await getCurrentUserUncached());
 
   if (!user) {
     return {

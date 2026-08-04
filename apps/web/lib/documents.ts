@@ -10,7 +10,7 @@ import {
   type VisibilityContext
 } from '@home-folder/shared';
 import type { User } from '@supabase/supabase-js';
-import { ensureProfileForUser, getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured } from './auth';
+import { ensureProfileForUser, getCurrentUser, getSupabaseSetupMessage, isSupabaseConfigured, getCurrentUserUncached } from './auth';
 import { isCompressibleImage, prepareImageForUpload } from './images';
 import { getPrimaryPropertyForUser, type PropertySummary } from './properties';
 import { getSupabaseBrowserClient } from './supabase/client';
@@ -401,7 +401,11 @@ export async function getDocumentDataContext(): Promise<DocumentDataContext> {
     };
   }
 
-  const user = await getCurrentUser();
+  // A cached `null` from a moment earlier -- mid sign-out -> sign-in -- used to
+  // read as "signed out", and signed-out means demo mode, which means this
+  // person's next save goes to browser storage instead of their account and
+  // is quietly lost. Confirm against the auth client before concluding that.
+  const user = (await getCurrentUser()) ?? (await getCurrentUserUncached());
   if (!user) {
     return {
       mode: 'demo',
