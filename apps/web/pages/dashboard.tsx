@@ -37,7 +37,11 @@ type Room = {
 export default function DashboardPage() {
   const [propertyNickname, setPropertyNickname] = useState('Your property');
   const [dataMode, setDataMode] = useState<'demo' | 'supabase'>('demo');
-  const [hasProperty, setHasProperty] = useState(false);
+  // null = still finding out. Rendering the no-property welcome (with its
+  // claim-a-transfer link) during that beat made every dashboard visit flash
+  // "Been handed a home?" at people who very much have homes (launch QA
+  // 2026-08-03). The hero stays quiet until the answer is real.
+  const [hasProperty, setHasProperty] = useState<boolean | null>(null);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [utilities, setUtilities] = useState<UtilityRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
@@ -466,6 +470,10 @@ export default function DashboardPage() {
   );
 
   const nextStep = useMemo(() => {
+    if (hasProperty === null) {
+      return null;
+    }
+
     if (!hasProperty) {
       return {
         title: 'Start your home record.',
@@ -543,16 +551,23 @@ export default function DashboardPage() {
             />
           ) : null}
 
-          <Card tone="dark">
-            <h2 style={{ marginTop: 0 }}>{nextStep.title}</h2>
-            <p style={{ color: 'rgba(255,248,234,0.78)' }}>{nextStep.description}</p>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-              <ActionLink href={nextStep.href}>{nextStep.action}</ActionLink>
-              {!hasProperty ? (
-                <ActionLink href="/claim" variant="secondary">Been handed a home? Claim it with your code</ActionLink>
-              ) : null}
-            </div>
-          </Card>
+          {nextStep ? (
+            <Card tone="dark">
+              <h2 style={{ marginTop: 0 }}>{nextStep.title}</h2>
+              <p style={{ color: 'rgba(255,248,234,0.78)' }}>{nextStep.description}</p>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <ActionLink href={nextStep.href}>{nextStep.action}</ActionLink>
+                {hasProperty === false ? (
+                  <ActionLink href="/claim" variant="secondary">Been handed a home? Claim it with your code</ActionLink>
+                ) : null}
+              </div>
+            </Card>
+          ) : (
+            <Card tone="dark">
+              <h2 style={{ marginTop: 0 }}>Opening your record&hellip;</h2>
+              <p style={{ color: 'rgba(255,248,234,0.78)', marginBottom: 0 }}>One moment.</p>
+            </Card>
+          )}
 
           {hasProperty ? (
             <div
@@ -1019,7 +1034,9 @@ export default function DashboardPage() {
 
           <Card id="room-list">
             <h2 style={{ marginTop: 0 }}>All rooms</h2>
-            {!hasProperty ? (
+            {hasProperty === null ? (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading&hellip;</p>
+            ) : !hasProperty ? (
               <div>
                 <p style={{ color: 'var(--text-muted)' }}>Start your home record.</p>
                 <ActionLink href="/create-property" variant="secondary">Create property</ActionLink>
