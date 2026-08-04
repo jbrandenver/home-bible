@@ -102,13 +102,17 @@ when. Check them off in this file.
 
 ## Jesse — feature switches (independent of money)
 
-- [ ] Reminder emails: Resend account + send.ourhomefolder.com DNS +
-      postal address + secrets + hourly cron (runbook §A). Should precede
-      any paid tier — it is the retention engine.
-      **Progress 2026-08-03:** Resend account created (contact@
-      ourhomefolder.com), domain send.ourhomefolder.com verified, DNS
-      confirmed resolving (DKIM/SPF/MX). Still needed: API key → secret,
-      CAN-SPAM postal address, apex DMARC record, then build the digest.
+- [x] Reminder emails — **LIVE 2026-08-03** (runbook §A executed end to
+      end): Resend account (contact@ourhomefolder.com), domain
+      send.ourhomefolder.com verified (DKIM/SPF/MX resolving); all six
+      secrets set (RESEND_API_KEY, UNSUBSCRIBE_SECRET, DIGEST_CRON_SECRET,
+      SITE_URL, DIGEST_FROM, POSTAL_ADDRESS = the PO box); send-digest +
+      unsubscribe deployed ACTIVE; hourly `home-folder-digest` cron +
+      monthly `purge-cron-history` scheduled via vault secret. Smoke
+      tests: manual invoke returned ok/dryRun:false/considered:0 (correct
+      off-hour), wrong secret → 401. First real sends: next local 8am for
+      any user with something due. Remaining nicety: apex DMARC record
+      (p=none, tighten after a month of reports).
 - [ ] Data-plate scanner: `supabase secrets set ANTHROPIC_API_KEY=…`
       (runbook §D). ~$3–5 per 1,000 scans, capped server-side.
 
