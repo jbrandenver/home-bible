@@ -34,6 +34,20 @@ type DueRow = {
 const SITE_URL = Deno.env.get('SITE_URL') ?? 'https://ourhomefolder.com';
 const FROM = Deno.env.get('DIGEST_FROM') ?? 'Our Home Folder <reminders@send.ourhomefolder.com>';
 
+// Everyone on a monthly cadence is due in the same local hour on the 1st, so
+// the loop below is a burst, not a trickle. Resend's free tier throttles at a
+// couple of requests a second; going faster earns a 429 per person, and each
+// one used to cost that reader their whole month (see migration 039).
+const SEND_INTERVAL_MS = 600;
+
+// Ceiling per invocation, well under Resend's 100/day so the security digest
+// and any transactional mail still fit. Whoever does not make the cut has no
+// digest_log row, so they are simply still due in tomorrow's retry window —
+// the overflow spreads itself instead of being dropped.
+const DIGEST_BATCH_LIMIT = 80;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Constant-time compare. Both sides are hashed first so the comparison always
  * runs over 32 equal-length bytes — a plain `!==` on the raw strings returns
@@ -280,17 +294,44 @@ Deno.serve(async (request) => {
     return json({ error: 'Could not list due users.' }, 500);
   }
 
-  const due = (data ?? []) as DueRow[];
+  // digest_log is UNIQUE on (user_id, kind, period_key), so a retry after a
+  // failure cannot INSERT — it has to overwrite the 'failed' row. Getting this
+  // wrong is worse than the bug it fixes: the mail goes out, the write is
+  // rejected, the guard still sees only 'failed', and the reader is mailed
+  // again every day of the retry window.
+  const logDigest = async (entry: Record<string, unknown>) => {
+    const { error: logError } = await supabase
+      .from('digest_log')
+      .upsert(entry, { onConflict: 'user_id,kind,period_key' });
+    if (logError) {
+      // Loud, because a lost write here is what turns one send into three.
+      console.error('send-digest: could not record digest_log', {
+        code: logError.code,
+        status: entry.status
+      });
+    }
+  };
+
+  const allDue = (data ?? []) as DueRow[];
+  const due = allDue.slice(0, DIGEST_BATCH_LIMIT);
+  const deferred = allDue.length - due.length;
+  if (deferred > 0) {
+    // Not a silent truncation: the deferred users keep no digest_log row, so
+    // the next day in the retry window picks them up.
+    console.log('send-digest: deferring to tomorrow', { deferred, limit: DIGEST_BATCH_LIMIT });
+  }
+
   let sent = 0;
   let skippedEmpty = 0;
   let failed = 0;
+  let attempted = 0;
 
   for (const row of due) {
     // Never send an empty digest. It is the single biggest driver of
     // unsubscribes, and it trains people to ignore the ones that matter.
     if (!row.payload || row.payload.item_count === 0) {
       skippedEmpty += 1;
-      await supabase.from('digest_log').insert({
+      await logDigest({
         user_id: row.user_id,
         kind: 'digest',
         period_key: row.period_key,
@@ -309,6 +350,13 @@ Deno.serve(async (request) => {
       console.log(`send-digest[dry-run]: would email ${row.payload.item_count} item(s)`);
       continue;
     }
+
+    // Pace the burst. Only between real sends — skips and dry runs cost
+    // Resend nothing, so making them wait would just stretch the run.
+    if (attempted > 0) {
+      await sleep(SEND_INTERVAL_MS);
+    }
+    attempted += 1;
 
     try {
       const response = await fetch('https://api.resend.com/emails', {
@@ -336,7 +384,7 @@ Deno.serve(async (request) => {
       }
 
       sent += 1;
-      await supabase.from('digest_log').insert({
+      await logDigest({
         user_id: row.user_id,
         kind: 'digest',
         period_key: row.period_key,
@@ -352,7 +400,7 @@ Deno.serve(async (request) => {
       console.error('send-digest: send failed', {
         message: sendError instanceof Error ? sendError.message : 'unknown'
       });
-      await supabase.from('digest_log').insert({
+      await logDigest({
         user_id: row.user_id,
         kind: 'digest',
         period_key: row.period_key,
@@ -363,7 +411,7 @@ Deno.serve(async (request) => {
     }
   }
 
-  return json({ ok: true, dryRun, considered: due.length, sent, skippedEmpty, failed });
+  return json({ ok: true, dryRun, considered: due.length, sent, skippedEmpty, failed, deferred });
 });
 
 function json(body: Record<string, unknown>, status = 200) {
