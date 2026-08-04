@@ -5,6 +5,18 @@ import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-fol
 import { ActionLink } from '../components/ActionLink';
 import { getCurrentUser, getCurrentUserUncached, isSupabaseConfigured } from '../lib/auth';
 import { setDemoActiveProperty } from '../lib/demoStorage';
+import {
+  clearDemoData,
+  createPropertyFromDemoHome,
+  importDemoDataIntoAccount,
+  summarizeDemoData,
+  type DemoSummary
+} from '../lib/demoImport';
+import { getAssetDataContext } from '../lib/assets';
+import { getIssueDataContext } from '../lib/issues';
+import { getReminderDataContext } from '../lib/reminders';
+import { getRepairDataContext } from '../lib/repairs';
+import { getServiceRecordDataContext } from '../lib/serviceRecords';
 import { createPropertyForUser, getPrimaryPropertyForUser, type PropertySummary } from '../lib/properties';
 import { createUtilityForContext, getUtilityDataContext } from '../lib/utilities';
 import { PROPERTY_TYPES, formatEnumLabel } from '@home-folder/shared';
@@ -21,7 +33,10 @@ import { PROPERTY_TYPES, formatEnumLabel } from '@home-folder/shared';
 // It is also what the product's own completeness score rewards most heavily
 // (15 and 10 points), so the fast win and the valuable win are the same thing.
 
-type Step = 'home' | 'water' | 'electrical' | 'done';
+// 'demo' comes first: somebody who mapped their house before signing up must
+// be asked what to do with that work before being handed a blank wizard that
+// silently ignores it.
+type Step = 'demo' | 'home' | 'water' | 'electrical' | 'done';
 
 const STEP_ORDER: Step[] = ['home', 'water', 'electrical', 'done'];
 
@@ -33,6 +48,7 @@ export default function WelcomePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const [demoSummary, setDemoSummary] = useState<DemoSummary | null>(null);
   const [property, setProperty] = useState<PropertySummary | null>(null);
   const [nickname, setNickname] = useState('');
   const [propertyType, setPropertyType] = useState<(typeof PROPERTY_TYPES)[number]>('single_family_home');
@@ -61,9 +77,21 @@ export default function WelcomePage() {
         const existing = await getPrimaryPropertyForUser(user.id);
         if (!isMounted) return;
 
+        const demo = summarizeDemoData();
+        if (demo.hasAnything) {
+          setDemoSummary(demo);
+        }
+
         if (existing) {
           setProperty(existing);
           setNickname(existing.nickname);
+        }
+
+        // The browser copy is the thing they already spent time on, so it is
+        // the first question — ahead of naming a home they may have named.
+        if (demo.hasAnything) {
+          setStep('demo');
+        } else if (existing) {
           setStep('water');
         }
       } catch {
@@ -78,6 +106,69 @@ export default function WelcomePage() {
       isMounted = false;
     };
   }, [supabaseReady]);
+
+  async function handleDemoImport() {
+    setSaving(true);
+    setError('');
+
+    try {
+      const user = await getCurrentUserUncached();
+      if (!user) {
+        throw new Error('Sign in again to bring this home into your account.');
+      }
+
+      // Reuse the account's property if it already has one; otherwise create it
+      // from the demo home, which already carries the name they chose.
+      const targetPropertyId = property?.id ?? (await createPropertyFromDemoHome(user));
+
+      const [utility, asset, reminder, repair, serviceRecord, issue] = await Promise.all([
+        getUtilityDataContext(),
+        getAssetDataContext(),
+        getReminderDataContext(),
+        getRepairDataContext(),
+        getServiceRecordDataContext(),
+        getIssueDataContext()
+      ]);
+
+      const result = await importDemoDataIntoAccount(targetPropertyId, {
+        utility,
+        asset,
+        reminder,
+        repair,
+        serviceRecord,
+        issue
+      });
+
+      // Keep the browser copy if anything failed, so nothing is destroyed that
+      // did not make it across.
+      if (Object.keys(result.failed).length === 0) {
+        clearDemoData();
+      }
+
+      router.push('/dashboard');
+    } catch (importError) {
+      setError(
+        importError instanceof Error
+          ? importError.message
+          : 'Could not bring your home across. Nothing was removed from this browser.'
+      );
+      setSaving(false);
+    }
+  }
+
+  function handleDemoDiscard() {
+    if (
+      !window.confirm(
+        'Discard the home recorded in this browser and start fresh? This cannot be undone.'
+      )
+    ) {
+      return;
+    }
+
+    clearDemoData();
+    setDemoSummary(null);
+    setStep(property ? 'water' : 'home');
+  }
 
   async function handleCreateHome(event: React.FormEvent) {
     event.preventDefault();
@@ -216,6 +307,29 @@ export default function WelcomePage() {
             <p style={{ margin: 0, color: 'var(--status-urgent)', fontWeight: 700 }} role="alert">
               {error}
             </p>
+          </Card>
+        ) : null}
+
+        {step === 'demo' && demoSummary ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>
+              We found {demoSummary.propertyNickname ? demoSummary.propertyNickname : 'a home'} in this browser
+            </h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              You recorded {Object.entries(demoSummary.counts)
+                .filter(([, count]) => count > 0)
+                .map(([label, count]) => `${count} ${label}`)
+                .join(', ')} before signing up. Bring it into your account and it is saved for good —
+              you will not have to enter any of it again.
+            </p>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <Button onClick={handleDemoImport} disabled={saving}>
+                {saving ? 'Bringing it across...' : 'Yes, bring it into my account'}
+              </Button>
+              <Button variant="secondary" onClick={handleDemoDiscard} disabled={saving}>
+                Start fresh instead
+              </Button>
+            </div>
           </Card>
         ) : null}
 

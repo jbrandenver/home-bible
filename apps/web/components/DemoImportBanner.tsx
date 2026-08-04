@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, Card } from '@home-folder/ui';
 import {
   clearDemoData,
+  createPropertyFromDemoHome,
   importDemoDataIntoAccount,
   summarizeDemoData,
   type DemoSummary,
   type ImportResult
 } from '../lib/demoImport';
+import { getCurrentUserUncached } from '../lib/auth';
 import { getAssetDataContext } from '../lib/assets';
 import { getIssueDataContext } from '../lib/issues';
 import { getReminderDataContext } from '../lib/reminders';
@@ -37,12 +39,26 @@ export function DemoImportBanner({
   }, []);
 
   const handleImport = useCallback(async () => {
-    if (!propertyId) return;
+    // `undefined` means we do not yet know whether there is a property. `null`
+    // means there genuinely is not one — and that is the common case for a
+    // fresh signup who skipped the wizard, so it must not block the import.
+    // The demo copy already describes the home; create it from that.
+    if (propertyId === undefined) return;
 
     setImporting(true);
     setError('');
 
     try {
+      let targetPropertyId = propertyId;
+
+      if (!targetPropertyId) {
+        const user = await getCurrentUserUncached();
+        if (!user) {
+          throw new Error('Sign in again to bring this home into your account.');
+        }
+        targetPropertyId = await createPropertyFromDemoHome(user);
+      }
+
       const [utility, asset, reminder, repair, serviceRecord, issue] = await Promise.all([
         getUtilityDataContext(),
         getAssetDataContext(),
@@ -52,7 +68,7 @@ export function DemoImportBanner({
         getIssueDataContext()
       ]);
 
-      const importResult = await importDemoDataIntoAccount(propertyId, {
+      const importResult = await importDemoDataIntoAccount(targetPropertyId, {
         utility,
         asset,
         reminder,
@@ -142,18 +158,13 @@ export function DemoImportBanner({
           Checking your account…
         </p>
       ) : null}
-      {propertyId === null ? (
-        <p style={{ color: 'var(--status-attention)', fontWeight: 600 }}>
-          Create a property first, then come back here to import it.
-        </p>
-      ) : null}
       {error ? (
         <p style={{ color: 'var(--status-urgent)', fontWeight: 700 }} role="alert">
           {error}
         </p>
       ) : null}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <Button onClick={handleImport} disabled={importing || !propertyId}>
+        <Button onClick={handleImport} disabled={importing || propertyId === undefined}>
           {importing ? 'Importing...' : 'Import into my account'}
         </Button>
         <Button variant="secondary" onClick={handleDiscard} disabled={importing}>

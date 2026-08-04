@@ -9,7 +9,9 @@
 // Order matters: rooms are created first so every child record can be
 // re-pointed from its old local id to the new database id.
 
+import type { User } from '@supabase/supabase-js';
 import { getDemoActiveProperty, getDemoRooms } from './demoStorage';
+import { createPropertyForUser, type PropertyInput } from './properties';
 import { createRoomsForProperty, getRoomsForProperty } from './rooms';
 import { getDemoUtilities, createUtilityForContext, type UtilityDataContext } from './utilities';
 import { getDemoAssets, createAssetForContext, type AssetDataContext } from './assets';
@@ -97,6 +99,23 @@ export function clearDemoData(): void {
  * import; the caller is told exactly how many of each kind moved and how many
  * did not, and demo storage is only cleared when nothing failed.
  */
+/**
+ * Create the account property the demo home describes.
+ *
+ * A brand-new signup who skipped the wizard owns no property, and the import
+ * used to require one — so the offer to bring their demo home across was
+ * permanently unusable, which is exactly the dead end it exists to prevent.
+ * The demo copy already knows what the home is called; use it.
+ */
+export async function createPropertyFromDemoHome(user: User): Promise<string> {
+  const demoProperty = getDemoActiveProperty();
+  const created = await createPropertyForUser(user, {
+    nickname: demoProperty?.nickname?.trim() || 'My home',
+    property_type: (demoProperty?.property_type as PropertyInput['property_type']) || 'single_family_home'
+  });
+  return created.id;
+}
+
 export async function importDemoDataIntoAccount(
   propertyId: string,
   contexts: ImportContexts
