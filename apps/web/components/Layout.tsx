@@ -7,6 +7,8 @@ import { getCurrentUser, onAuthStateChange, signOut } from '../lib/auth';
 import { PUBLIC_ROUTES } from '../lib/seo';
 import { BrandMark } from './BrandMark';
 import { PropertySwitcher } from './PropertySwitcher';
+import { usePropertyAccess } from '../lib/access';
+import { ViewOnlyNotice } from './ViewOnlyNotice';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -29,6 +31,7 @@ function sectionHref(section: NavSection, item: NavSectionLink) {
 }
 
 export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
+  const access = usePropertyAccess();
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -344,7 +347,14 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
 
       {/* Main content */}
       <main id="main-content" className="p-6 app-main">
-        <div className="max-w-6xl mx-auto">{children}</div>
+        <div className="max-w-6xl mx-auto">
+          {!isPublicSurface && !access.loading && !access.canWrite ? (
+            <div style={{ marginBottom: 16 }}>
+              <ViewOnlyNotice role={access.role} action="change anything in it" inline />
+            </div>
+          ) : null}
+          {children}
+        </div>
       </main>
 
       {/* Legal footer */}
