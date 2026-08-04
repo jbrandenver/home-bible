@@ -934,3 +934,52 @@ export async function acceptPropertyInvitation(inviteToken: string) {
 
   return String(data);
 }
+
+// --- Invitations waiting for the signed-in address ---------------------------
+//
+// The token lives only in the emailed link, so anything that interrupted the
+// trip from that link to the Accept button stranded the recipient with no way
+// back. These two read and accept by invitation id instead, which is safe
+// because the database requires the invited address to match the caller
+// (migration 040) — and because open invitations, which have no address, are
+// deliberately invisible here.
+
+export type PendingInvitation = {
+  invitation_id: string;
+  property_id: string;
+  property_nickname: string | null;
+  role: string;
+  expires_at: string;
+};
+
+export async function listPendingInvitationsForMe(): Promise<PendingInvitation[]> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return [];
+  }
+
+  const { data, error } = await supabase.rpc('list_pending_invitations_for_me');
+  if (error) {
+    // A convenience surface must never break the dashboard it sits on.
+    return [];
+  }
+
+  return (data ?? []) as PendingInvitation[];
+}
+
+export async function acceptPendingInvitation(invitationId: string): Promise<string> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error(getSupabaseSetupMessage());
+  }
+
+  const { data, error } = await supabase.rpc('accept_pending_invitation', {
+    p_invitation_id: invitationId
+  });
+
+  if (error) {
+    throw new Error(error.message || 'Failed to accept invitation.');
+  }
+
+  return String(data);
+}

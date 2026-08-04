@@ -4,6 +4,7 @@ import { formatEnumLabel, getWarrantyMeta } from '@home-folder/shared';
 import { PageHeader, Card, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { DemoImportBanner } from '../components/DemoImportBanner';
+import { PendingInvitationsBanner } from '../components/PendingInvitationsBanner';
 import {
   getAutomationContext,
   getDevicesForContext,
@@ -544,6 +545,10 @@ export default function DashboardPage() {
       />
 
         <div style={{ display: 'grid', gap: 24 }}>
+          {dataMode === 'supabase' ? (
+            <PendingInvitationsBanner onAccepted={() => setReloadKey((key) => key + 1)} />
+          ) : null}
+
           {dataMode === 'supabase' ? (
             <DemoImportBanner
               propertyId={activePropertyId}

@@ -437,7 +437,12 @@ export default function SharingPage() {
         invitedEmail: inviteEmail || null
       });
       setInviteUrl(created.inviteUrl);
-      setInviteNotice('Invitation link created. Copy and send it to the recipient.');
+      setInviteNotice(
+        // Say plainly that nothing was emailed. "Send an invitation" that sends
+        // nothing is a fair thing to misread, and the recipient waiting on an
+        // email that will never arrive is the failure it causes.
+        'Invitation link created. We do not email it — copy the link and send it yourself. If you set a recipient email, they can also just sign in with that address and accept from their dashboard.'
+      );
       setInvitations(await listPropertyInvitations());
     } catch (createError) {
       setInviteError(createError instanceof Error ? createError.message : 'Failed to create invitation.');
@@ -743,7 +748,7 @@ export default function SharingPage() {
                       style={fieldStyle}
                     />
                     <span style={{ ...subtleText, fontSize: 13 }}>
-                      If set, only an account with this email can claim the code.
+                      If set, only an account with this email can claim the code — and the invitation will appear on their dashboard when they sign in, so they do not need the link.
                     </span>
                   </label>
 
