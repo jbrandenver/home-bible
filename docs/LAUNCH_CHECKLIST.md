@@ -196,7 +196,21 @@ when. Check them off in this file.
 - [x] $4.99/home entitlement enforcement — **DONE 2026-08-04**, same
       migration 035 as the fee-ladder item above.
 - [ ] Per-unit Portfolio pricing when real 20+ door portfolios appear.
-- [ ] Wire `entitlement_downloads` (see the reserved-tables item above).
+- [x] Wire `entitlement_downloads` — **DONE 2026-08-04** (migration 038).
+- [x] Digest send could silently drop a whole period — **FIXED 2026-08-04**
+      (migration 039 + send-digest v11). Everyone monthly was due in the
+      same local hour on the 1st, the loop had no delay, and a failed send
+      wrote a `digest_log` row the due-check read as proof of delivery.
+      From the third subscriber in a timezone onward, people would have
+      stopped receiving digests with no trace anywhere anyone looks. Now:
+      only `sent`/`skipped` suppresses, monthly retries on days 1-3 and
+      weekly Mon-Tue, 600ms pacing, 80/run ceiling spilling to the next day,
+      and `digest_log` writes are upserts (it is UNIQUE on
+      user_id+kind+period_key, so the naive retry would have double-mailed).
+- [ ] **Resend free tier is 100 emails/day.** Not close yet — one subscriber,
+      first send 1 September — but every monthly reader lands on the same
+      day, so the ceiling is ~100 *subscribers*, not 100/day of steady
+      traffic. Watch `digest_log` for `status='failed'` as signups grow.
 - [ ] Audit trail records successful sensitive actions but **not blocked
       escalation attempts** — the guard triggers `raise`, which rolls back
       any audit row written in the same transaction. Closing this needs an
