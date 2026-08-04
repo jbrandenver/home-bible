@@ -663,6 +663,40 @@ export async function createPropertyInvitation(input: {
   };
 }
 
+// ---------------------------------------------------------------------------
+// ZERO-ROW WRITES ARE FAILURES HERE
+//
+// PostgREST reports success when an UPDATE or DELETE matches nothing — RLS
+// filtering and guarded WHERE clauses both look identical to "done". On this
+// page that silence is an access-control lie: Jesse revoked a viewer from a
+// stale invitation list, the guarded update matched zero rows, the UI said
+// "Invitation revoked.", and the viewer kept reading the house. Every write
+// below now asks for the affected rows back and treats an empty result as an
+// error with a message that says what actually happened.
+// ---------------------------------------------------------------------------
+
+/** Why a guarded invitation revoke matched zero rows, given what the
+ * invitation looks like when re-read. Pure, so it is testable. */
+export function describeInvitationRevokeMiss(invitation: Pick<
+  PropertyInvitation,
+  'accepted_at' | 'revoked_at' | 'invited_email'
+> | null): string {
+  if (!invitation) {
+    return 'This invitation no longer exists. Refresh the page to see the current list.';
+  }
+
+  if (invitation.accepted_at) {
+    const who = invitation.invited_email || 'the person who accepted it';
+    return `This invitation was already accepted, so revoking it changes nothing — ${who} already has access. Remove them under “People with access” to take that access away.`;
+  }
+
+  if (invitation.revoked_at) {
+    return 'This invitation was already revoked. Refresh the page to see the current list.';
+  }
+
+  return 'This invitation could not be revoked — it may have changed since this page loaded. Refresh and try again.';
+}
+
 export async function revokePropertyInvitation(invitationId: string) {
   const context = await getHandoverContext();
   if (context.mode === 'demo' || !context.property) {
@@ -674,17 +708,31 @@ export async function revokePropertyInvitation(invitationId: string) {
     throw new Error(getSupabaseSetupMessage());
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('property_invitations')
     .update({ revoked_at: new Date().toISOString() })
     .eq('id', invitationId)
     .eq('property_id', context.property.id)
     .is('accepted_at', null)
     .is('revoked_at', null)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .select('id');
 
   if (error) {
     throw new Error(formatDataError('withdraw this invitation', error.message || ''));
+  }
+
+  if (!data || data.length === 0) {
+    // The guarded update matched nothing. Re-read the invitation so the
+    // message states what is true now, not what this page believed.
+    let invitation: PropertyInvitation | null = null;
+    try {
+      const invitations = await listPropertyInvitations();
+      invitation = invitations.find((item) => item.id === invitationId) || null;
+    } catch {
+      // If the re-read fails we still refuse to claim success.
+    }
+    throw new Error(describeInvitationRevokeMiss(invitation));
   }
 }
 
@@ -885,15 +933,22 @@ export async function updatePropertyMemberRole(memberId: string, role: SharingRo
 
   // Only the role moves. property_id and user_id are immutable by trigger, and
   // sending them would be rejected rather than ignored.
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('property_members')
     .update({ role })
     .eq('id', memberId)
     .eq('property_id', context.property.id)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .select('id');
 
   if (error) {
     throw new Error(formatDataError('change this person’s access', error.message || ''));
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(
+      'This person’s access was not changed — their membership may have changed since this page loaded. Refresh and try again.'
+    );
   }
 }
 
@@ -908,14 +963,21 @@ export async function removePropertyMember(memberId: string) {
     throw new Error(getSupabaseSetupMessage());
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('property_members')
     .delete()
     .eq('id', memberId)
-    .eq('property_id', context.property.id);
+    .eq('property_id', context.property.id)
+    .select('id');
 
   if (error) {
     throw new Error(formatDataError('remove this person', error.message || ''));
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(
+      'This person was not removed — they still have access. Their membership may have changed since this page loaded; refresh and try again.'
+    );
   }
 }
 

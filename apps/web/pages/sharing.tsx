@@ -360,6 +360,12 @@ export default function SharingPage() {
       await reloadMembers();
     } catch (removeError) {
       setMemberError(removeError instanceof Error ? removeError.message : 'Failed to remove this person.');
+      // Reload so the list reflects what the database actually holds.
+      try {
+        await reloadMembers();
+      } catch {
+        // Keep the honest error on screen.
+      }
     } finally {
       setRemovingMemberId('');
     }
@@ -464,6 +470,14 @@ export default function SharingPage() {
       setInvitations(await listPropertyInvitations());
     } catch (revokeError) {
       setInviteError(revokeError instanceof Error ? revokeError.message : 'Failed to revoke invitation.');
+      // A zero-row revoke means this page was showing a stale invitation —
+      // reload so the list stops offering a button the database will ignore.
+      try {
+        setInvitations(await listPropertyInvitations());
+        await reloadMembers();
+      } catch {
+        // The error message above is already honest; keep it on screen.
+      }
     } finally {
       setRevokingId('');
     }
