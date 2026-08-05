@@ -81,12 +81,36 @@ render in which to mint one). Next's own inline output is `__NEXT_DATA__` with
 `type="application/ld+json"` — neither is executable, so neither needs a
 `script-src` allowance.
 
-**To actually drop `'unsafe-inline'`,** turn off whichever Cloudflare feature
-injects that script (Bot Fight Mode / Challenge Platform, or Rocket Loader) for
-this zone, then re-run `pnpm --filter @home-folder/web verify:csp`, which fails
-if any un-hashed executable inline script is present. That is a real trade-off:
-the injected script is bot protection, and the app has no rate limiting of its
-own on the auth endpoints beyond Supabase's per-IP limits. Decide deliberately.
+**This was tried and it did not work — do not repeat it.** On 2026-08-04 the
+obvious remedy was attempted on this zone: Bot Fight Mode turned **off** (and
+cycled off/on/off), AI Labyrinth turned **off**, AI-bot blocking set to
+**Allow**, and the Cloudflare cache purged. The injection persisted for 30+
+minutes, for both `curl` and a real browser. A re-check on **2026-08-05** — more
+than a day later, far beyond any propagation window — found the script still
+present on `/`, `/pricing` and `/sign-in`:
+
+```
+for p in "" "pricing" "sign-in"; do curl -s "https://ourhomefolder.com/$p" | grep -c 'CF$cv$params'; done
+# 1 1 1
+```
+
+The conclusion is that this zone's injection comes from Cloudflare's automated
+("always protected") security layer, which has **no customer-facing off switch**.
+There is therefore no configuration that lets us drop `'unsafe-inline'` from
+`script-src` while the site stays behind Cloudflare. The allowance is an
+**accepted, compensated risk** (see the residual-risk paragraph below), not a
+pending task.
+
+Because the strict CSP is off the table anyway, the bot protections that were
+disabled during this investigation buy us nothing by staying off — Bot Fight
+Mode should be turned back **on** (Security → Settings), and AI Labyrinth and
+AI-bot blocking ("Block on pages with ads") restored if wanted. This matters:
+the app has no rate limiting of its own on the auth endpoints beyond Supabase's
+per-IP limits.
+
+If Cloudflare ever does expose a switch for this layer, the verification step is
+`pnpm --filter @home-folder/web verify:csp`, which fails if any un-hashed
+executable inline script is present.
 
 **Residual risk while it stays:** an injected inline script is not blocked by
 CSP, and Supabase sessions live in `localStorage`, so an XSS is account
