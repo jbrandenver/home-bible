@@ -65,7 +65,9 @@ when. Check them off in this file.
 - [x] **Cloudflare: turn on "Always Use HTTPS"** — verified done 2026-08-03:
       plain http:// now 301s to https://, HSTS header present. (Was the one
       remaining HIGH item.)
-- [ ] **Turn on "Confirm email"** (Authentication → Sign In / Providers →
+- [x] **Turn on "Confirm email"** — DONE 2026-08-04, verified in the data
+      (`confirmation_sent_at` populated, `email_confirmed_at` gating).
+      Original ask: (Authentication → Sign In / Providers →
       Email). It is currently **OFF in production**, which means no address
       in `auth.users` has ever been proven and anyone can sign up as
       someone else's email. This is the highest-value open item on the
@@ -74,7 +76,10 @@ when. Check them off in this file.
       verified_email` requires `email_confirmed_at`) — turning this on is
       what restores that path to usefulness instead of dumping every
       purchase into `unmatched_purchases`. Full table in docs/SECURITY.md.
-- [ ] **Leaked password protection ON** — the advisor still reports it
+- [ ] **Leaked password protection ON (Supabase)** — still the top open
+      dashboard toggle. (Cloudflare-side leaked-credentials detection was
+      enabled 2026-08-05 — that is the edge check; this is the Supabase
+      auth-level one.) The advisor still reports it
       disabled. It was Pro-only, and the project is on Pro as of
       2026-08-03, so the blocker is gone. Safe: it blocks signup and
       password *changes* only; sign-in is explicitly non-blocking, so it
@@ -160,8 +165,9 @@ when. Check them off in this file.
       any user with something due. Apex DMARC record added by Jesse and
       verified resolving 2026-08-03 (p=none; tighten to quarantine after a
       month of reports). Nothing remains on this item.
-- [ ] Data-plate scanner: `supabase secrets set ANTHROPIC_API_KEY=…`
-      (runbook §D). ~$3–5 per 1,000 scans, capped server-side.
+- [x] Data-plate scanner key — DONE 2026-08-04, and live-verified
+      2026-08-05: a real scan succeeded (Claude vision 200 in ~7s) and was
+      recorded against the per-account cap.
 
 ## Engineering — post-launch (tracked, not blocking)
 
@@ -211,13 +217,17 @@ when. Check them off in this file.
       first send 1 September — but every monthly reader lands on the same
       day, so the ceiling is ~100 *subscribers*, not 100/day of steady
       traffic. Watch `digest_log` for `status='failed'` as signups grow.
-- [ ] Audit trail records successful sensitive actions but **not blocked
-      escalation attempts** — the guard triggers `raise`, which rolls back
-      any audit row written in the same transaction. Closing this needs an
-      out-of-transaction write path (dblink self-connection or a queue), so
-      it is real work, not a one-liner.
-- [ ] Marketing: submit the sitemap in Google Search Console; moment-based
-      content (disaster season, closing season) per THREAT_MITIGATION.
+- [x] Audit trail blocked-escalation gap — **CLOSED 2026-08-05**
+      (migration 042): guards now record-then-skip — a violation writes a
+      severity-'alert' audit row (which the security digest emails) and
+      skips the offending row instead of raising. Verified live in
+      rolled-back impersonation tests; legitimate flows traced first
+      (transfer-claim/invite-accept bypasses, account deletion) so only
+      previously-erroring requests changed behavior.
+- [x] Sitemap in Google Search Console — DONE (property verified, sitemap
+      submitted; confirmed 2026-08-05).
+- [ ] Marketing: moment-based content (disaster season, closing season) per
+      THREAT_MITIGATION.
 
 ## Fixed 2026-08-04 (post-launch, found by founder QA)
 

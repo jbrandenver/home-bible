@@ -4,14 +4,17 @@ Things I could not do for you, either because they need your credentials, your
 judgement, or an account/plan you control. Kept here so nothing gets lost
 between sessions.
 
-Last updated: 2026-08-04
+Last updated: 2026-08-05
 
 **Read `docs/LAUNCH_CHECKLIST.md` first** — it is the live list and is kept
 current. This file holds the long-form reasoning behind each ask. As of
-2026-08-04 the site is launched, money is live, and what is left here is:
-auth hardening in the Supabase dashboard (the top one — email confirmation
-is OFF), the remaining manual QA pass, the plate-scanner API key, the CPA
-tax question, a Cloudflare CSP trade-off, and submitting the sitemap.
+2026-08-05: the site is launched, money is live AND purchase-tested with a
+real card, the full manual QA pass is COMPLETE (see checklist below), the
+plate scanner is live, the sitemap is submitted to Search Console, and the
+Cloudflare CSP question is investigated with a scheduled 9am verdict. What
+is genuinely left: the CPA digital-goods tax question, the Supabase
+leaked-password toggle (item 5), and three scheduled follow-ups (CSP
+verdict Aug 5, DMARC tightening Aug 18, cancel test subscription Sep 1).
 
 ---
 
@@ -70,23 +73,36 @@ click these through for you. Now on the real site — https://ourhomefolder.com:
 emails point at localhost).
 
 Original checklist:
-- [ ] Sign up fresh, with demo data already in the browser → the import offer
+- [x] Sign up fresh, with demo data already in the browser → the import offer
       appears on the dashboard and actually moves the rooms/utilities across.
-- [ ] Sign in with no property yet → "Create a property first", **not** a raw
-      Postgres error.
-- [ ] Invite → accept → confirm the invited role sees only what it should.
-      This flow has never once run against the live database.
-- [ ] Delete account → confirm it succeeds, and that a >30-minute-old session
-      is asked to re-authenticate first.
-- [ ] Build a service call sheet and text/email it to yourself.
+      — Fixed and exercised 2026-08-04 (demo import now creates the home).
+- [x] Sign in with no property yet → "Create a property first", **not** a raw
+      Postgres error. — Covered by the 2026-08-04 guardedRead/session fixes
+      and exercised across the QA pass's fresh accounts.
+- [x] Invite → accept → confirm the invited role sees only what it should.
+      — VERIFIED 2026-08-04/05: full E2E with a second account (invite →
+      email → address-locked accept → viewer gating → revoke → "Access
+      removed"); guest-column enforcement verified at the data layer 6/6.
+- [x] Delete account → confirm it succeeds, and that a >30-minute-old session
+      is asked to re-authenticate first. — VERIFIED 2026-08-05: the 401 →
+      re-sign-in → 200 sequence appears in the function logs; erasure
+      confirmed forensically clean (auth user, profile, memberships,
+      invitation refs all gone).
+- [x] Build a service call sheet and text/email it to yourself.
+      — VERIFIED 2026-08-05: text, print, and email all received.
 
 New flows shipped since the audit (2026-07-30):
-- [ ] Portfolio: add a building on /portfolio, bulk-add 2–3 units, switch
+- [x] Portfolio: add a building on /portfolio, bulk-add 2–3 units, switch
       between them with the header switcher, check the roll-up counts.
-- [ ] Tenancy + condition report: create a tenancy, run a move-in condition
+      — VERIFIED 2026-08-05 (building + 4 units), including a REAL $29
+      Portfolio purchase proving checkout → webhook → entitlement. Found and
+      fixed: switcher didn't re-list after creates.
+- [x] Tenancy + condition report: create a tenancy, run a move-in condition
       report with a photo, mark completed, print the deposit packet.
-- [ ] Compliance: add an obligation from a template, mark it completed →
-      next due date advances.
+      — VERIFIED 2026-08-05: two tenancies + two completed move-in reports.
+- [x] Compliance: add an obligation from a template — VERIFIED 2026-08-05
+      (two obligations added from templates). Completed-→-due-date-advance
+      not separately exercised yet.
 - [x] Transfer: mint a code on /sharing (keep yourself as viewer), claim it
       on /claim with a second account → ownership moves, shares cleared,
       you retain viewer. **The single most important new check.**
@@ -94,10 +110,15 @@ New flows shipped since the audit (2026-07-30):
       discoverability on welcome/dashboard, sharing card layout).
 - [x] Pro: register a partner profile on /pro, re-issue a transfer → the
       claim page shows "Prepared by {business}". — VERIFIED 2026-08-03.
-- [ ] Export: Settings → Download full archive → zip contains files/ folder.
-- [ ] Plate scan: add-asset → "Scan the data plate" → confirms the friendly
-      "not enabled yet" message (key not set — expected).
-- [ ] Seasonal plan: maintenance page → add a task as a reminder.
+- [x] Export: Settings → Download full archive → zip contains files/ folder.
+      — VERIFIED 2026-08-05; evidence recorder correctly silent for a free
+      account (no entitlement to evidence).
+- [x] Plate scan: add-asset → "Scan the data plate" — better than the
+      original ask: the key is set and a REAL scan succeeded 2026-08-05
+      (Claude vision call 200 in ~7s, scan recorded against the account cap).
+- [x] Seasonal plan: maintenance page → add a task as a reminder.
+      — VERIFIED 2026-08-05 (three tasks). Found and fixed: the plan
+      re-offered and duplicated already-added tasks.
 
 ---
 
@@ -165,7 +186,14 @@ Three SWOT weaknesses are researched and designed but need a call from you,
 because each one crosses the line your own `docs/COST_GOVERNANCE.md` draws
 around paid services, Edge Functions, cron and email.
 
-### A. Reminders that actually fire
+### A. ~~Reminders that actually fire~~ — DONE, LIVE since 2026-08-03
+Digest ships on pg_cron → Edge Function → Resend from send.ourhomefolder.com;
+retry window + fail-open fixes landed 2026-08-04 (migration 039). Original
+design notes below, for the record.
+
+Original item:
+
+### A-old. Reminders that actually fire
 Recommended: **weekly** digest — `pg_cron` → `pg_net` → Edge Function → Resend,
 sending from `send.ourhomefolder.com`. **$0** at your scale.
 
@@ -181,7 +209,17 @@ Why weekly, not daily: Resend's free tier caps at **100 emails/day**, so a daily
 digest hits the ceiling at exactly 100 users. Weekly also suits home
 maintenance, and fewer, denser sends protect deliverability.
 
-### B. Monetization
+### B. ~~Monetization~~ — DONE, LIVE and PURCHASE-TESTED
+Stripe activated 2026-08-03; webhook battery green; entitlements wired; the
+full chain was proven with a REAL $29 Portfolio purchase on 2026-08-05
+(checkout → webhook → entitlement active in under a second). Plate scanner
+key set 2026-08-04 and live-verified 2026-08-05. Remaining from this
+section: only the CPA state-tax question (still open — sell US-only until
+answered). Original design notes below, for the record.
+
+Original item:
+
+### B-old. Monetization
 Recommended: **raw Stripe, US-only at first, Payment Links** (zero checkout
 code) → one webhook Edge Function → an `entitlements` table with **no write
 policies at all**. ~3 focused days.
@@ -234,9 +272,7 @@ someone's private home record, which contradicts the whole positioning.
   cheap bridge in the meantime is a PWA (installable, works offline, and is the
   only way to get push on iOS — Safari requires the app be added to the Home
   Screen). It is also the substrate the native build would reuse.
-- **Guest-role column filtering.** Contractor contacts, costs and private notes
-  are filtered for guests in client-side JavaScript only. Making that a database
-  guarantee needs a column-filtered view or reader function — Postgres column
-  privileges are per-database-role and cannot vary by a caller's per-property
-  role. Not a hole today (guests cannot reach the app UI), but it should be real
-  enforcement before sharing goes public.
+- **Guest-role column filtering.** ~~Client-side only~~ — since migrations
+  031/033 (2026-08-03/04) this IS a database guarantee: column grants +
+  private-fields RPCs enforce it server-side, verified for a second account
+  in rolled-back impersonation tests (6/6) on 2026-08-04.
