@@ -81,9 +81,17 @@
   --radius-card:3px;
   --radius-control:2px;
 
-  --shadow-card:0 1px 0 rgba(22,40,34,0.05), 0 2px 8px -2px rgba(22,40,34,0.12);
-  --shadow-card-hover:0 2px 0 rgba(22,40,34,0.05), 0 14px 32px -12px rgba(22,40,34,0.3);
+  /* Leaves of the register lift off the ledger: a crisp near shadow for the
+     paper edge plus a soft ambient one for the room. */
+  --shadow-card:0 1px 2px rgba(22,40,34,0.08), 0 4px 12px -4px rgba(22,40,34,0.15), 0 16px 32px -18px rgba(22,40,34,0.26);
+  --shadow-card-hover:0 2px 3px rgba(22,40,34,0.07), 0 12px 24px -10px rgba(22,40,34,0.24), 0 28px 56px -20px rgba(22,40,34,0.4);
   --shadow-pop:0 24px 70px -18px rgba(12,26,22,0.5);
+
+  /* Controls are struck plates: milled top light, shaded under-edge, and a
+     small cast shadow. Pressed goes into the paper, letterpress-style. */
+  --control-emboss:inset 0 1px 0 rgba(255,246,224,0.5), inset 0 -1px 0 rgba(66,42,10,0.3), 0 1px 2px rgba(33,28,21,0.22), 0 3px 8px -3px rgba(33,28,21,0.28);
+  --control-emboss-hover:inset 0 1px 0 rgba(255,246,224,0.5), inset 0 -1px 0 rgba(66,42,10,0.3), 0 2px 3px rgba(33,28,21,0.18), 0 7px 16px -5px rgba(33,28,21,0.32);
+  --control-emboss-pressed:inset 0 2px 4px rgba(33,28,21,0.32), inset 0 -1px 0 rgba(255,246,224,0.16);
 
   --rule-double:linear-gradient(var(--gilt-line-strong), var(--gilt-line-strong)) 0 0/100% 1px no-repeat,
                 linear-gradient(var(--gilt-line), var(--gilt-line)) 0 4px/100% 1px no-repeat;
@@ -144,6 +152,11 @@ input,select,textarea{
   border-radius:var(--radius-control);
   color:var(--text-primary);
   transition:border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+/* Entry fields are wells pressed into the sheet — the counterpart to the
+   raised controls. Native checked controls keep their own rendering. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea{
+  box-shadow:inset 0 1px 3px rgba(22,40,34,0.1), inset 0 -1px 0 rgba(255,253,246,0.5);
 }
 /* Example text must never be mistaken for an entry: lighter and italic,
    while typed values keep full-strength ink (launch QA 2026-08-03). */
@@ -292,6 +305,8 @@ p a{text-decoration:underline}
     var(--color-green-deep);
   color:var(--text-inverse);
   border-bottom:1px solid rgba(227,194,136,0.32);
+  /* The chrome sits above the page plane and casts onto the paper below. */
+  box-shadow:0 4px 10px -4px rgba(12,26,22,0.35), 0 14px 30px -16px rgba(12,26,22,0.4);
 }
 /* engraved gilt hairline under the masthead — the frame of an official page */
 .app-header::after{
@@ -349,8 +364,10 @@ p a{text-decoration:underline}
 .header-action:hover{border-color:var(--color-brass-pale);color:var(--color-brass-pale);background:rgba(227,194,136,0.08)}
 
 .action-link{transition:filter 160ms ease, transform 160ms ease, box-shadow 160ms ease}
-.action-link:hover{filter:brightness(1.04);transform:translateY(-1px)}
-.action-link:active{transform:translateY(0)}
+/* !important: the resting emboss ships as an inline style from getControlStyle,
+   so the hover/pressed depths can only win from here with priority. */
+.action-link:hover{filter:brightness(1.04);transform:translateY(-1px);box-shadow:var(--control-emboss-hover) !important}
+.action-link:active{transform:translateY(1px);box-shadow:var(--control-emboss-pressed) !important}
 .action-link:focus-visible{outline:2px solid var(--color-brass);outline-offset:2px}
 
 /* editorial nav — mono small caps, gilt ink-draw underline */
@@ -451,6 +468,10 @@ main [id]{scroll-margin-top:1.25rem}
   --btn-secondary-bg:transparent;
   --btn-secondary-color:var(--text-inverse);
   --btn-secondary-border:rgba(227,194,136,0.5);
+  /* Ghost controls on green carry a gilt top light, not a paper-white one. */
+  --control-emboss:inset 0 1px 0 rgba(227,194,136,0.22), 0 1px 2px rgba(0,0,0,0.28), 0 3px 8px -3px rgba(0,0,0,0.34);
+  --control-emboss-hover:inset 0 1px 0 rgba(227,194,136,0.3), 0 2px 3px rgba(0,0,0,0.24), 0 7px 16px -5px rgba(0,0,0,0.4);
+  --control-emboss-pressed:inset 0 2px 4px rgba(0,0,0,0.42);
 }
 .brand-hero h1,.brand-hero h2,.brand-hero h3{color:var(--text-inverse)}
 .brand-hero p{color:rgba(244,238,221,0.82)}
@@ -564,8 +585,8 @@ main [id]{scroll-margin-top:1.25rem}
 
 /* controls */
 .hb-control{transition:filter 160ms ease, transform 140ms ease, box-shadow 160ms ease}
-.hb-control:not(:disabled):hover{filter:brightness(1.05);transform:translateY(-1px)}
-.hb-control:not(:disabled):active{transform:translateY(0);filter:brightness(0.98)}
+.hb-control:not(:disabled):hover{filter:brightness(1.05);transform:translateY(-1px);box-shadow:var(--control-emboss-hover) !important}
+.hb-control:not(:disabled):active{transform:translateY(1px);filter:brightness(0.98);box-shadow:var(--control-emboss-pressed) !important}
 
 .hb-dialog{animation:hb-settle 240ms cubic-bezier(0.22,0.9,0.3,1) both}
 .hb-backdrop{backdrop-filter:blur(3px)}
@@ -625,6 +646,7 @@ main [id]{scroll-margin-top:1.25rem}
   .app-main{padding:0}
   .app-main > div > *{animation:none !important}
   .hb-card,.hb-card::before{box-shadow:none !important}
+  .action-link,.hb-control,input,select,textarea{box-shadow:none !important}
   section{break-inside:avoid}
   a{text-decoration:none;color:inherit}
 }

@@ -44,7 +44,17 @@ binding, the hex is replaceable.
 | Inverse | `--text-inverse` | `#F4EEDD` |
 
 Radii are tight (`--radius-card:3px`, `--radius-control:2px`) — a printed
-instrument, not a soft app. Shadows are near-flat.
+instrument, not a soft app. Depth is physical, not decorative (2026-08-05):
+cards are leaves lifted off the ledger (`--shadow-card`, a crisp paper-edge
+shadow plus a soft ambient one), controls are struck plates
+(`--control-emboss` — milled top light, shaded under-edge, small cast shadow;
+`:active` presses into the paper via `--control-emboss-pressed`), entry
+fields are wells pressed into the sheet (inset shadow), and the masthead
+chrome casts onto the page below. `.brand-hero` swaps the emboss tokens for
+gilt-lit ghost-button variants so paper-white highlights never land on green.
+Controls are `box-sizing:border-box` (the app has no global reset — without
+it, padding + border stacked on `minHeight:44` and rendered controls 68px
+tall). Print drops all of it.
 
 ## Type (`apps/web/lib/fonts.ts`, self-hosted via `next/font`)
 

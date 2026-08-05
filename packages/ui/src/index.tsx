@@ -45,8 +45,11 @@ export function getControlStyle({
     justifyContent: 'center',
     gap: 8,
     borderRadius: 'var(--radius-control)',
-    padding: '11px 16px',
+    padding: '10px 16px',
     minHeight: 44,
+    // The app has no global box-sizing reset; without this, padding + border
+    // stack on top of minHeight and every control renders 68px tall.
+    boxSizing: 'border-box',
     textDecoration: 'none',
     ...(variant === 'secondary' ? secondaryStyle : primaryStyle),
     color: hasCustomBackground
@@ -59,7 +62,9 @@ export function getControlStyle({
     lineHeight: 1.2,
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.65 : 1,
-    boxShadow: disabled ? 'none' : '0 1px 0 rgba(44,31,24,0.12)',
+    // Struck-plate emboss: token lives in globals.css so dark grounds
+    // (.brand-hero) can swap it for a ghost-appropriate depth.
+    boxShadow: disabled ? 'none' : 'var(--control-emboss, 0 1px 0 rgba(44,31,24,0.12))',
     ...style
   };
 }
