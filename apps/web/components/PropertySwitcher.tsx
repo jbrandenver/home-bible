@@ -1,4 +1,5 @@
 import { useEffect, useState, type ChangeEvent, type CSSProperties } from 'react';
+import { useRouter } from 'next/router';
 import { getCurrentUser } from '../lib/auth';
 import {
   getActivePropertyId,
@@ -67,6 +68,7 @@ export function PropertySwitcher() {
   const [properties, setProperties] = useState<PropertySummary[]>([]);
   const [activeId, setActiveId] = useState('');
   const [viewerId, setViewerId] = useState('');
+  const router = useRouter();
 
   useEffect(() => {
     let isMounted = true;
@@ -103,7 +105,14 @@ export function PropertySwitcher() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [
+    // The Layout (and this switcher) lives in _app and survives client-side
+    // navigation, so a once-per-mount load showed a list from minutes ago —
+    // a just-created building and its units were simply absent (founder QA,
+    // 2026-08-04). Re-list on every route change; the query is two cheap
+    // selects.
+    router.asPath
+  ]);
 
   // Shown from the first home onward, not the second. Someone whose only home
   // is one shared with them used to see no control at all — which reads as
