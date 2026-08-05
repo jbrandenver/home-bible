@@ -178,6 +178,17 @@ export default function RemindersPage() {
     return [] as Array<{ id: string; label: string }>;
   }, [linkedType, property, rooms, utilities, assets]);
 
+  // Whether a link type has anything to offer on this home. A building record
+  // with no rooms or assets of its own used to let you pick "Asset", show an
+  // empty item list, and then refuse to save with no way forward except
+  // un-picking the type — which nothing explained (founder QA, 2026-08-04).
+  const linkedTypeCounts: Record<string, number> = {
+    property: property ? 1 : 0,
+    room: rooms.length,
+    utility: utilities.length,
+    asset: assets.length
+  };
+
   useEffect(() => {
     setLinkedId((currentId) =>
       linkedOptions.some((option) => option.id === currentId) ? currentId : linkedOptions[0]?.id || ''
@@ -295,7 +306,11 @@ export default function RemindersPage() {
     }
 
     if (linkedType && !linkedId) {
-      setError('Choose a linked item, or set the linked type to not linked.');
+      setError(
+        linkedOptions.length === 0
+          ? `This home has no ${formatEnumLabel(linkedType).toLowerCase()} records to link yet. Set Linked type back to "Not linked" to save, or add the ${formatEnumLabel(linkedType).toLowerCase()} first.`
+          : 'Choose a linked item, or set the linked type to not linked.'
+      );
       return;
     }
 
@@ -502,8 +517,9 @@ export default function RemindersPage() {
                 >
                   <option value="">Not linked</option>
                   {REMINDER_LINKED_TYPES.map((type) => (
-                    <option key={type} value={type}>
+                    <option key={type} value={type} disabled={linkedTypeCounts[type] === 0}>
                       {formatEnumLabel(type)}
+                      {linkedTypeCounts[type] === 0 ? ' — none on this home yet' : ''}
                     </option>
                   ))}
                 </select>
@@ -517,7 +533,13 @@ export default function RemindersPage() {
                   disabled={formDisabled || !linkedType}
                   style={{ padding: 10, borderRadius: 8, border: '1px solid var(--border-subtle)' }}
                 >
-                  <option value="">Not linked</option>
+                  <option value="">
+                    {!linkedType
+                      ? 'Not linked'
+                      : linkedOptions.length === 0
+                        ? 'Nothing to link yet'
+                        : 'Choose an item…'}
+                  </option>
                   {linkedOptions.map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.label}
