@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getCurrentPropertyRole } from './sharing';
-import { getActivePropertyId, getPrimaryPropertyForUser } from './properties';
+import { getPrimaryPropertyForUser } from './properties';
 import { getCurrentUser } from './auth';
 import type { SharingRole } from './sharing';
 
@@ -58,8 +58,12 @@ export function usePropertyAccess(): PropertyAccess {
           return;
         }
 
-        const activeId = getActivePropertyId();
-        const property = activeId ? { id: activeId } : await getPrimaryPropertyForUser(user.id);
+        // Resolve through getPrimaryPropertyForUser, never straight from the
+        // stored id: localStorage survives account switches, so the raw id can
+        // point at a home this account cannot access — which made an owner's
+        // whole app read as view-only. The resolver honors a stored id only
+        // when it belongs to this user's list.
+        const property = await getPrimaryPropertyForUser(user.id);
         if (!isMounted) return;
 
         if (!property) {

@@ -574,6 +574,10 @@ async function loadPrimaryPropertyForUser(userId: string): Promise<PropertySumma
     if (active) {
       return active;
     }
+    // The pin points at a home this account cannot see — a leftover from a
+    // previous account in this browser. Clear it so every later reader gets
+    // the fallback too, instead of re-tripping on the stale id.
+    setActivePropertyId(null);
   }
 
   const newestFirst = [...properties].sort((a, b) => b.created_at.localeCompare(a.created_at));

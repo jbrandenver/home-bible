@@ -380,8 +380,13 @@ function clearLocalHomeData() {
   }
 
   try {
-    const appKeys = Object.keys(window.localStorage).filter((key) =>
-      key.startsWith('homeFolder.')
+    // Two prefixes, historically: demo data uses `homeFolder.`, while the
+    // active-property pin uses `home-folder.`. Filtering on only the first
+    // left the pin alive across account switches — the next account opened
+    // pinned to a home it had no access to, and the whole app read as
+    // "view only · shared with me" (founder QA, 2026-08-04).
+    const appKeys = Object.keys(window.localStorage).filter(
+      (key) => key.startsWith('homeFolder.') || key.startsWith('home-folder.')
     );
     for (const key of appKeys) {
       window.localStorage.removeItem(key);
