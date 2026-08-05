@@ -6,7 +6,7 @@ import { usePropertyAccess } from '../lib/access';
 import { getAssetDataContext, getAssetsForProperty, getDemoAssets } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getPropertyAddressDetails } from '../lib/properties';
-import { createReminderForContext, getReminderDataContext } from '../lib/reminders';
+import { createReminderForContext, getReminderDataContext, getRemindersForContext } from '../lib/reminders';
 import { getRoomsForProperty } from '../lib/rooms';
 import { buildSeasonalPlan, type SeasonalMonth, type SeasonalTask } from '../lib/seasonalPlan';
 import { getDemoUtilities, getUtilitiesForProperty } from '../lib/utilities';
@@ -77,7 +77,23 @@ function dueDateForMonth(month: number): string {
   return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
 }
 
-function SeasonalTaskRow({ task, month, canWrite }: { task: SeasonalTask; month: number; canWrite: boolean }) {
+function SeasonalTaskRow({
+  task,
+  month,
+  canWrite,
+  alreadyAdded,
+  onAdded
+}: {
+  task: SeasonalTask;
+  month: number;
+  canWrite: boolean;
+  /** True when an open reminder with this task's title already exists —
+   * derived from the saved reminders, so it survives reloads. The button
+   * state alone did not, and every visit could re-add the same tasks
+   * (founder QA, 2026-08-04: three duplicates in one evening). */
+  alreadyAdded: boolean;
+  onAdded: (title: string) => void;
+}) {
   const [state, setState] = useState<'idle' | 'saving' | 'added' | 'error'>('idle');
   const [message, setMessage] = useState('');
 
@@ -87,20 +103,49 @@ function SeasonalTaskRow({ task, month, canWrite }: { task: SeasonalTask; month:
 
     try {
       const reminderContext = await getReminderDataContext();
-      await createReminderForContext(reminderContext, {
-        title: task.title,
-        description: `${task.why} (From your seasonal plan.)`,
-        reminder_type: 'seasonal',
-        source: 'system_suggestion',
-        due_date: dueDateForMonth(month),
-        priority: 'normal'
-      });
+      // Idempotency check against what is actually saved, not component
+      // state: a second tab, a re-render, or a stale page must not write a
+      // duplicate.
+      const existing = await getRemindersForContext(reminderContext);
+      const duplicate = existing.some(
+        (reminder) =>
+          reminder.title === task.title &&
+          reminder.source === 'system_suggestion' &&
+          reminder.status !== 'completed' &&
+          reminder.status !== 'dismissed'
+      );
+
+      if (!duplicate) {
+        await createReminderForContext(reminderContext, {
+          title: task.title,
+          description: `${task.why} (From your seasonal plan.)`,
+          reminder_type: 'seasonal',
+          source: 'system_suggestion',
+          due_date: dueDateForMonth(month),
+          priority: 'normal'
+        });
+      }
       setState('added');
+      onAdded(task.title);
     } catch (reminderError) {
       setState('error');
       setMessage(reminderError instanceof Error ? reminderError.message : 'Could not add the reminder.');
     }
   };
+
+  if (alreadyAdded && state !== 'error') {
+    return (
+      <li style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 220, flex: '1 1 260px' }}>
+            <strong>{task.title}</strong>
+            <p style={{ margin: '2px 0 0', color: 'var(--text-muted)', fontSize: '0.875rem' }}>{task.why}</p>
+          </div>
+          <span style={{ color: 'var(--status-good)', fontSize: '0.875rem' }}>On your reminders</span>
+        </div>
+      </li>
+    );
+  }
 
   return (
     <li style={{ marginBottom: 12 }}>
@@ -128,6 +173,7 @@ export default function MaintenanceHubPage() {
   const access = usePropertyAccess();
   const [plan, setPlan] = useState<SeasonalMonth[] | null>(null);
   const [planIsDemo, setPlanIsDemo] = useState(false);
+  const [addedTitles, setAddedTitles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     let isMounted = true;
@@ -190,6 +236,40 @@ export default function MaintenanceHubPage() {
     };
   }, []);
 
+  // Titles of the seasonal suggestions already saved as open reminders, so
+  // the plan shows "On your reminders" instead of offering the same task
+  // again on every visit.
+  useEffect(() => {
+    let isMounted = true;
+
+    (async () => {
+      try {
+        const context = await getReminderDataContext();
+        const reminders = await getRemindersForContext(context);
+        if (!isMounted) return;
+        setAddedTitles(
+          new Set(
+            reminders
+              .filter(
+                (reminder) =>
+                  reminder.source === 'system_suggestion' &&
+                  reminder.status !== 'completed' &&
+                  reminder.status !== 'dismissed'
+              )
+              .map((reminder) => reminder.title)
+          )
+        );
+      } catch {
+        // Without the list the buttons still work — the click handler makes
+        // its own duplicate check before writing.
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const currentMonth = new Date().getMonth() + 1;
   const nextMonth = currentMonth === 12 ? 1 : currentMonth + 1;
   const currentTasks = plan?.find((entry) => entry.month === currentMonth)?.tasks ?? [];
@@ -239,7 +319,14 @@ export default function MaintenanceHubPage() {
                 ) : (
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {currentTasks.map((task) => (
-                      <SeasonalTaskRow key={task.title} task={task} month={currentMonth} canWrite={access.loading || access.canWrite} />
+                      <SeasonalTaskRow
+                        key={task.title}
+                        task={task}
+                        month={currentMonth}
+                        canWrite={access.loading || access.canWrite}
+                        alreadyAdded={addedTitles.has(task.title)}
+                        onAdded={(title) => setAddedTitles((current) => new Set(current).add(title))}
+                      />
                     ))}
                   </ul>
                 )}
@@ -252,7 +339,14 @@ export default function MaintenanceHubPage() {
                 ) : (
                   <ul style={{ margin: 0, paddingLeft: 18 }}>
                     {nextTasks.map((task) => (
-                      <SeasonalTaskRow key={task.title} task={task} month={nextMonth} canWrite={access.loading || access.canWrite} />
+                      <SeasonalTaskRow
+                        key={task.title}
+                        task={task}
+                        month={nextMonth}
+                        canWrite={access.loading || access.canWrite}
+                        alreadyAdded={addedTitles.has(task.title)}
+                        onAdded={(title) => setAddedTitles((current) => new Set(current).add(title))}
+                      />
                     ))}
                   </ul>
                 )}
