@@ -8,9 +8,11 @@ import {
   enabledOAuthProviders,
   formatAuthError,
   isSupabaseConfigured,
+  signInWithApple,
   signInWithGoogle,
   signUpWithEmail
 } from '../lib/auth';
+import { useIsNativeApp } from '../lib/native';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -21,7 +23,12 @@ export default function SignUpPage() {
   const [confirmationSentTo, setConfirmationSentTo] = useState('');
 
   const setupMissing = !isSupabaseConfigured();
-  const oauthProviders = enabledOAuthProviders();
+  // Same shell rule as sign-in: Google refuses OAuth inside embedded
+  // webviews, so its button is hidden in the iOS app; Apple and email remain.
+  const nativeApp = useIsNativeApp();
+  const oauthProviders = enabledOAuthProviders().filter(
+    (provider) => !(nativeApp && provider === 'google')
+  );
 
   const handleSignUp = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -140,6 +147,29 @@ export default function SignUpPage() {
                 style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
               >
                 Continue with Google
+              </button>
+            ) : null}
+            {oauthProviders.includes('apple') ? (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setError('');
+                  const result = await signInWithApple();
+                  if (result.error) {
+                    setError(formatAuthError(result.error));
+                    return;
+                  }
+                  // Native sheet resolves in place with a session (Apple
+                  // accounts need no email confirmation); web OAuth redirects
+                  // on its own. Cancelled sheet: both null, stay put.
+                  if (result.data) {
+                    router.push(safeRelativePath(router.query.next, '/welcome'));
+                  }
+                }}
+                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #000', background: '#000', color: '#fff', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.65 : 1 }}
+              >
+                Continue with Apple
               </button>
             ) : null}
           </div>

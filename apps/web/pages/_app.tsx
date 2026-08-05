@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import type { AppProps } from 'next/app';
 import { Layout } from '../components/Layout';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { NativeShell } from '../components/NativeShell';
 import { fontVariables } from '../lib/fonts';
 
 export default function App({ Component, pageProps }: AppProps) {
@@ -36,6 +37,7 @@ export default function App({ Component, pageProps }: AppProps) {
     // display:contents so the font-variable wrapper adds no box (no layout
     // impact); the CSS custom properties still cascade to all descendants.
     <div className={fontVariables} style={{ display: 'contents' }}>
+      <NativeShell />
       <Layout>
         <ErrorBoundary>
           <Component {...pageProps} />

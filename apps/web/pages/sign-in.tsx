@@ -8,9 +8,12 @@ import {
   enabledOAuthProviders,
   formatAuthError,
   isSupabaseConfigured,
+  signInWithApple,
   signInWithEmail,
-  signInWithGoogle
+  signInWithGoogle,
+  type OAuthProvider
 } from '../lib/auth';
+import { useIsNativeApp } from '../lib/native';
 
 export default function SignInPage() {
   const router = useRouter();
@@ -18,10 +21,16 @@ export default function SignInPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [oauthProvider, setOauthProvider] = useState<'google' | null>(null);
+  const [oauthProvider, setOauthProvider] = useState<OAuthProvider | null>(null);
 
   const setupMissing = !isSupabaseConfigured();
-  const oauthProviders = enabledOAuthProviders();
+  // In the iOS shell, Google's button is hidden: Google refuses OAuth inside
+  // embedded webviews (disallowed_useragent), so the button could only fail.
+  // Apple sign-in and email both work natively.
+  const nativeApp = useIsNativeApp();
+  const oauthProviders = enabledOAuthProviders().filter(
+    (provider) => !(nativeApp && provider === 'google')
+  );
   // Never redirect anywhere but back into this app — an attacker-supplied
   // `?next=` would otherwise be an open redirect and a `javascript:` sink.
   const nextPath = safeRelativePath(router.query.next, '/dashboard');
@@ -45,15 +54,24 @@ export default function SignInPage() {
     router.push(nextPath);
   };
 
-  const handleOAuthSignIn = async (provider: 'google') => {
+  const handleOAuthSignIn = async (provider: OAuthProvider) => {
     if (loading || oauthProvider) return;
 
     setError('');
     setOauthProvider(provider);
 
-    const result = await signInWithGoogle();
+    const result = provider === 'apple' ? await signInWithApple() : await signInWithGoogle();
     if (result.error) {
       setError(formatAuthError(result.error));
+      setOauthProvider(null);
+      return;
+    }
+    // Web OAuth navigates away on its own. The native Apple sheet resolves in
+    // place: with a session, go where the user was headed; cancelled (both
+    // null), just re-arm the button.
+    if (result.data) {
+      router.push(nextPath);
+    } else {
       setOauthProvider(null);
     }
   };
@@ -110,6 +128,16 @@ export default function SignInPage() {
                 style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid var(--border-subtle)', background: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
               >
                 {oauthProvider === 'google' ? 'Redirecting...' : 'Continue with Google'}
+              </button>
+            ) : null}
+            {oauthProviders.includes('apple') ? (
+              <button
+                type="button"
+                disabled={loading || Boolean(oauthProvider)}
+                onClick={() => handleOAuthSignIn('apple')}
+                style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #000', background: '#000', color: '#fff', cursor: loading || oauthProvider ? 'not-allowed' : 'pointer', opacity: loading || oauthProvider ? 0.65 : 1 }}
+              >
+                {oauthProvider === 'apple' ? 'Signing in...' : 'Continue with Apple'}
               </button>
             ) : null}
           </div>

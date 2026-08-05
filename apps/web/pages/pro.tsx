@@ -12,6 +12,7 @@ import {
   type PartnerKind,
   type PartnerRow
 } from '../lib/partners';
+import { isNativeApp } from '../lib/native';
 
 // The professional channel (docs/THREAT_MITIGATION.md, T6 / Phase 5).
 //
@@ -181,7 +182,11 @@ export default function ProPage() {
     );
   }
 
-  const checkoutUrl = getProBinderCheckoutUrl(context.user.id);
+  // iOS shell: no purchase links in the app (account-based ruling, Apple
+  // 3.1.1). Safe as a plain call — this point is only reached after client
+  // auth state resolves, so there is no SSR/hydration mismatch.
+  const nativeApp = isNativeApp();
+  const checkoutUrl = nativeApp ? null : getProBinderCheckoutUrl(context.user.id);
 
   const profileForm = (
     <form onSubmit={submitProfile} style={{ display: 'grid', gap: 12, maxWidth: 560 }}>
@@ -355,6 +360,11 @@ export default function ProPage() {
                 Purchase a binder
               </a>
             </>
+          ) : nativeApp ? (
+            <p style={{ ...subtleText, marginBottom: 0 }}>
+              Binder purchases aren&apos;t offered in the app. Binders you already hold, and
+              everything else on this page, work here in full.
+            </p>
           ) : (
             <p style={{ ...subtleText, marginBottom: 0 }}>
               Pro billing isn&apos;t switched on yet — during early access, binders are free. When it
