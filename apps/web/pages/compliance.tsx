@@ -749,7 +749,10 @@ export default function CompliancePage() {
               const templateUrl = safeHttpUrl(template.reference_url);
 
               return (
-                <Card key={template.id}>
+                // Flex column with the action pinned to the bottom edge, so
+                // every card's button sits on the same line no matter how
+                // long its text runs (founder QA, 2026-08-04).
+                <Card key={template.id} style={{ display: 'flex', flexDirection: 'column' }}>
                   <h3 style={{ marginTop: 0, marginBottom: 8 }}>{template.title}</h3>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, alignItems: 'center' }}>
                     <UtilityBadge label={template.jurisdiction} />
@@ -779,7 +782,7 @@ export default function CompliancePage() {
                       </a>
                     ) : null}
                   </div>
-                  <div style={{ marginTop: 12 }}>
+                  <div style={{ marginTop: 'auto', paddingTop: 12 }}>
                     {access.loading || access.canWrite ? (
                     <Button type="button" onClick={() => loadTemplate(template)}>
                       Add to this property

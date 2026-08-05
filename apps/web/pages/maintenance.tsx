@@ -263,12 +263,15 @@ export default function MaintenanceHubPage() {
 
         <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
           {maintenanceLinks.map((link) => (
-            <Card key={`${link.title}-${link.href}`}>
+            <Card key={`${link.title}-${link.href}`} style={{ display: 'flex', flexDirection: 'column' }}>
               <h2 style={{ marginTop: 0 }}>{link.title}</h2>
               <p style={{ color: 'var(--text-muted)' }}>{link.description}</p>
-              <ActionLink href={link.href} variant={link.title === 'Reminders' ? 'primary' : 'secondary'}>
-                {link.action}
-              </ActionLink>
+              {/* Pinned to the card's bottom edge so every action in the row aligns. */}
+              <div style={{ marginTop: 'auto' }}>
+                <ActionLink href={link.href} variant={link.title === 'Reminders' ? 'primary' : 'secondary'}>
+                  {link.action}
+                </ActionLink>
+              </div>
             </Card>
           ))}
         </div>

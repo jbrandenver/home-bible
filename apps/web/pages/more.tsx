@@ -108,12 +108,18 @@ export default function MorePage() {
               {moreLinks
                 .filter((link) => link.group === group)
                 .map((link) => (
-                  <div key={link.href} style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 14 }}>
+                  <div
+                    key={link.href}
+                    style={{ border: '1px solid var(--border-subtle)', borderRadius: 6, padding: 14, display: 'flex', flexDirection: 'column' }}
+                  >
                     <h3 style={{ marginTop: 0 }}>{link.title}</h3>
                     <p style={{ color: 'var(--text-muted)' }}>{link.description}</p>
-                    <ActionLink href={link.href} variant={link.title === 'Documents' ? 'primary' : 'secondary'}>
-                      {link.action}
-                    </ActionLink>
+                    {/* Pinned to the card's bottom edge so every action in the row aligns. */}
+                    <div style={{ marginTop: 'auto' }}>
+                      <ActionLink href={link.href} variant={link.title === 'Documents' ? 'primary' : 'secondary'}>
+                        {link.action}
+                      </ActionLink>
+                    </div>
                   </div>
                 ))}
             </div>

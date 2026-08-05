@@ -709,12 +709,15 @@ export default function DashboardPage() {
                 gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'
               }}
             >
-              <Card id="home-record">
+              <Card id="home-record" style={{ display: 'flex', flexDirection: 'column' }}>
                 <h2 style={{ marginTop: 0 }}>Home record</h2>
                 <p style={{ color: 'var(--text-muted)' }}>
                   No home on file yet. Once one is saved, its record score and next steps live here.
                 </p>
-                <ActionLink href="/welcome" variant="secondary">Start your home record</ActionLink>
+                {/* Pinned to the card's bottom edge so the row of cards aligns. */}
+                <div style={{ marginTop: 'auto' }}>
+                  <ActionLink href="/welcome" variant="secondary">Start your home record</ActionLink>
+                </div>
               </Card>
 
               <Card id="this-week">
