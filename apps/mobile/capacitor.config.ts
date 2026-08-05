@@ -15,6 +15,8 @@ const config: CapacitorConfig = {
   appName: 'Our Home Folder',
   webDir: 'shell',
   server: {
+    // For local verification against the dev server, temporarily set
+    // url: 'http://localhost:3055' (see apps/mobile/README.md), then restore.
     url: 'https://ourhomefolder.com',
     // Supabase auth redirects stay inside the shell; everything else
     // (Stripe, external links) must go through @capacitor/browser.
