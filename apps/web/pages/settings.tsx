@@ -4,6 +4,7 @@ import type { User } from '@supabase/supabase-js';
 import { formatEnumLabel, PROPERTY_TYPES } from '@home-folder/shared';
 import { PageHeader, Card, Button, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
+import { AppLockSettingsCard } from '../components/NativeShell';
 import {
   getCurrentUser,
   isSupabaseConfigured,
@@ -633,6 +634,8 @@ export default function SettingsPage() {
               A home, documented. Keep the record calm, private, and complete enough to hand on.
             </p>
           </Card>
+
+          <AppLockSettingsCard />
 
           <Card>
             <h2 style={{ marginTop: 0 }}>Account</h2>

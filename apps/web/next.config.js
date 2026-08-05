@@ -28,7 +28,13 @@ const SUPABASE_ORIGIN = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://gdntnl
 
 const contentSecurityPolicy = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
+  // Dev only: webpack's dev runtime is eval-based; without 'unsafe-eval' the
+  // blocked eval throws during hydration and React clears the SSR DOM to a
+  // blank page (reliably in WebKit — the iOS shell and simulator Safari).
+  // Production stays eval-free.
+  process.env.NODE_ENV === 'production'
+    ? "script-src 'self' 'unsafe-inline'"
+    : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   `img-src 'self' data: blob: ${SUPABASE_ORIGIN}`,
   "font-src 'self'",
@@ -41,11 +47,20 @@ const contentSecurityPolicy = [
   "frame-src 'none'",
   "manifest-src 'self'",
   "worker-src 'self'",
-  'upgrade-insecure-requests'
+  // Production only: on the http dev server this directive rewrites every
+  // subresource to https://localhost, which nothing serves. Desktop browsers
+  // exempt localhost as a trustworthy origin; WKWebView (the iOS shell in
+  // local verification) does not, and renders a blank page.
+  ...(process.env.NODE_ENV === 'production' ? ['upgrade-insecure-requests'] : [])
 ].join('; ');
 
 const securityHeaders = [
-  { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+  // Production only: HSTS served from the http dev server teaches WKWebView
+  // (iOS shell local verification) that localhost requires https, blanking
+  // every subsequent dev load. Desktop browsers ignore HSTS on localhost.
+  ...(process.env.NODE_ENV === 'production'
+    ? [{ key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' }]
+    : []),
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   // The app is never legitimately framed; blocks clickjacking on auth pages.
   { key: 'X-Frame-Options', value: 'DENY' },

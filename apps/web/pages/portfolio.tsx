@@ -30,6 +30,7 @@ import {
   hasPortfolioPlan,
   type PortfolioAccess
 } from '../lib/entitlements';
+import { isNativeApp } from '../lib/native';
 
 const subtleText: CSSProperties = { color: 'var(--text-muted)' };
 
@@ -218,7 +219,11 @@ export default function PortfolioPage() {
   const propertyName = (propertyId: string) =>
     propertiesById.get(propertyId)?.nickname ?? 'Property no longer visible';
 
-  const checkoutUrl = context?.user ? getPortfolioCheckoutUrl(context.user.id) : null;
+  // iOS shell: no purchase links in the app (account-based ruling, Apple
+  // 3.1.1). The locked-state card still explains the plan; only the checkout
+  // button disappears. Plain call is safe — context?.user resolves client-side.
+  const checkoutUrl =
+    context?.user && !isNativeApp() ? getPortfolioCheckoutUrl(context.user.id) : null;
   const addingLocked = Boolean(access?.requiresUpgradeToAdd);
   const paymentsConfigured = Boolean(access?.paymentsConfigured);
 

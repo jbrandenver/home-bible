@@ -6,6 +6,7 @@ import { PlateRow, PlateSeal } from '../components/PlateRow';
 import { Seo } from '../components/Seo';
 import { getCurrentUser } from '../lib/auth';
 import { getPerHomeCheckoutUrl, getPortfolioCheckoutUrl } from '../lib/entitlements';
+import { useIsNativeApp } from '../lib/native';
 
 /* Schedule of fees — the register's pricing page (Persuade). Same direction
    contract as pages/index.tsx: a fee schedule inside the instrument, not a
@@ -55,8 +56,12 @@ export default function PricingPage() {
     };
   }, []);
 
-  const perHomeCheckout = getPerHomeCheckoutUrl(userId);
-  const portfolioCheckout = getPortfolioCheckoutUrl(userId);
+  // iOS shell (account-based app, 2026-08-05 ruling): no purchase flow and no
+  // checkout links in the app — Apple guideline 3.1.1. The record and any plan
+  // already held work in full; plan changes simply aren't offered here.
+  const nativeApp = useIsNativeApp();
+  const perHomeCheckout = nativeApp ? null : getPerHomeCheckoutUrl(userId);
+  const portfolioCheckout = nativeApp ? null : getPortfolioCheckoutUrl(userId);
 
   return (
     <div style={{ display: 'grid', gap: 28 }}>
@@ -145,6 +150,11 @@ export default function PricingPage() {
         <div style={{ marginTop: 16 }}>
           {perHomeCheckout ? (
             <ActionLink href={perHomeCheckout}>Add a home — $4.99 a month</ActionLink>
+          ) : nativeApp ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
+              Plan changes aren&rsquo;t offered in the app. Any plan you already hold
+              works here in full.
+            </p>
           ) : signedIn ? (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
               Checkout has not opened yet — until it does, additional homes are simply
@@ -182,6 +192,11 @@ export default function PricingPage() {
         <div style={{ marginTop: 16 }}>
           {portfolioCheckout ? (
             <ActionLink href={portfolioCheckout}>Get the Portfolio plan — $29 a month</ActionLink>
+          ) : nativeApp ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
+              Plan changes aren&rsquo;t offered in the app. Any plan you already hold
+              works here in full.
+            </p>
           ) : signedIn ? (
             <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', margin: 0 }}>
               Checkout has not opened yet — until it does, the Portfolio tools are simply

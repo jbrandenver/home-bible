@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js';
+import { isNativeApp, nativeAppleAuthorize } from './native';
 import { getSupabaseBrowserClient } from './supabase/client';
 
 type AuthResult = {
@@ -273,22 +274,24 @@ export async function signInWithEmail(email: string, password: string): Promise<
   };
 }
 
-// Google is the only social provider. Sign in with Apple was removed
-// 2026-08-01: it requires a paid Apple Developer account, and Apple's rule
-// that an iOS app offering other social logins must also offer Apple's does
-// not apply to a web app. Re-adding it means an `'google' | 'apple'` union
-// here, a second button on both auth pages, and the Supabase provider.
+// Social providers: Google, and — since the iOS shell (2026-08-05) — Apple.
+// Sign in with Apple was removed 2026-08-01 as unnecessary for a web app, but
+// Apple's rule that an iOS app offering other social logins must also offer
+// Apple's makes it mandatory now that the app ships in the App Store.
 //
-// The button still renders only when NEXT_PUBLIC_OAUTH_PROVIDERS names google
-// AND the provider is enabled in Supabase (Authentication → Providers, with
-// real Google Cloud credentials). A provider enabled on one side only sends
-// the visitor to a bare JSON error page, so the gate stays.
-export function enabledOAuthProviders(): Array<'google'> {
+// A button still renders only when NEXT_PUBLIC_OAUTH_PROVIDERS names the
+// provider AND it is enabled in Supabase (Authentication → Providers, with
+// real credentials — for Apple, the Services ID/key plus the shell bundle id
+// in Authorized Client IDs). A provider enabled on one side only sends the
+// visitor to a bare JSON error page, so the gate stays.
+export type OAuthProvider = 'google' | 'apple';
+
+export function enabledOAuthProviders(): OAuthProvider[] {
   const raw = process.env.NEXT_PUBLIC_OAUTH_PROVIDERS || '';
   return raw
     .split(',')
     .map((entry) => entry.trim().toLowerCase())
-    .filter((entry): entry is 'google' => entry === 'google');
+    .filter((entry): entry is OAuthProvider => entry === 'google' || entry === 'apple');
 }
 
 export async function signInWithGoogle(): Promise<AuthResult> {
@@ -308,6 +311,39 @@ export async function signInWithGoogle(): Promise<AuthResult> {
     data: result.data,
     error: result.error
   };
+}
+
+/**
+ * Sign in with Apple. In the iOS shell this is the native Apple sheet — the
+ * identity token is exchanged directly for a Supabase session, no browser
+ * round-trip. On the web it is the standard OAuth redirect. A cancelled native
+ * sheet resolves { data: null, error: null }: nothing happened, show nothing.
+ */
+export async function signInWithApple(): Promise<AuthResult> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return { data: null, error: new Error(getSupabaseSetupMessage()) };
+  }
+
+  if (isNativeApp()) {
+    const authorization = await nativeAppleAuthorize();
+    if (!authorization) {
+      return { data: null, error: null };
+    }
+    const result = await supabase.auth.signInWithIdToken({
+      provider: 'apple',
+      token: authorization.identityToken,
+      nonce: authorization.rawNonce
+    });
+    return { data: result.data, error: result.error };
+  }
+
+  const result = await supabase.auth.signInWithOAuth({
+    provider: 'apple',
+    options: { redirectTo: `${window.location.origin}/dashboard` }
+  });
+
+  return { data: result.data, error: result.error };
 }
 
 /**
