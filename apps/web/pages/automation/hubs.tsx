@@ -217,7 +217,7 @@ export default function AutomationHubsPage() {
                 disabled={loading}
               />
               <div style={{ display: 'grid', gap: 8 }}>
-                <label htmlFor="hub-network" style={{ fontWeight: 600 }}>On network</label>
+                <label htmlFor="hub-network" style={{ fontWeight: 600 }}><span>On network</span></label>
                 <Select id="hub-network" value={networkId} onChange={(e) => setNetworkId(e.target.value)} disabled={loading}>
                   <option value="">Not recorded</option>
                   {networks.map((network) => <option key={network.id} value={network.id}>{network.name}</option>)}
@@ -225,7 +225,7 @@ export default function AutomationHubsPage() {
                 </Select>
                 {networkId === NEW_NETWORK_VALUE ? (
                   <div style={{ display: 'grid', gap: 6 }}>
-                    <label htmlFor="hub-new-network" style={{ fontSize: '0.9rem' }}>What is this network called?</label>
+                    <label htmlFor="hub-new-network" style={{ fontSize: '0.9rem' }}><span>What is this network called?</span></label>
                     <Input
                       id="hub-new-network"
                       value={newNetworkName}

@@ -171,7 +171,7 @@ export function RelatedDocuments({
           }}
         >
           <label htmlFor={pickerId} style={{ fontWeight: 600 }}>
-            Document already in your folder
+            <span>Document already in your folder</span>
           </label>
           <select
             id={pickerId}

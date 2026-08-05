@@ -266,7 +266,7 @@ export default function AddUtilityPage() {
                 marginBottom: 8
               }}
             >
-              Utility name
+              <span>Utility name</span>
             </label>
             <Input
               id="name"
@@ -285,7 +285,7 @@ export default function AddUtilityPage() {
                 marginBottom: 8
               }}
             >
-              Utility type
+              <span>Utility type</span>
             </label>
             <Select
               id="utilityType"
@@ -309,7 +309,7 @@ export default function AddUtilityPage() {
                 marginBottom: 8
               }}
             >
-              Location (optional)
+              <span>Location (optional)</span>
             </label>
             <Select
               id="roomId"
@@ -351,7 +351,7 @@ export default function AddUtilityPage() {
                 marginBottom: 8
               }}
             >
-              Location notes
+              <span>Location notes</span>
             </label>
             <Input
               id="locationNotes"
@@ -371,7 +371,7 @@ export default function AddUtilityPage() {
                   marginBottom: 8
                 }}
               >
-                Date installed (optional)
+                <span>Date installed (optional)</span>
               </label>
               <Input
                 id="dateInstalled"
@@ -392,7 +392,7 @@ export default function AddUtilityPage() {
                   marginBottom: 8
                 }}
               >
-                Date of last service (optional)
+                <span>Date of last service (optional)</span>
               </label>
               <Input
                 id="lastServiceDate"
@@ -415,7 +415,7 @@ export default function AddUtilityPage() {
                 marginBottom: 8
               }}
             >
-              Emergency notes
+              <span>Emergency notes</span>
             </label>
             <Input
               id="emergencyNotes"

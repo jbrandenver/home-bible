@@ -173,7 +173,7 @@ export function RelatedReceipts({
           }}
         >
           <label htmlFor={pickerId} style={{ fontWeight: 600 }}>
-            Receipt already in your records
+            <span>Receipt already in your records</span>
           </label>
           <select
             id={pickerId}

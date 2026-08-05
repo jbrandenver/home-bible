@@ -303,16 +303,18 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                   data-menu-key={menuKey}
                   onKeyDown={handleMenuKeyDown(menuKey)}
                 >
-                  <Link href={section.href} className={navLinkClass(section)}>
-                    {section.label}
-                  </Link>
+                  {/* The whole tab is the trigger, exactly like the mobile
+                      bar. The old shape — label navigates, a separate tiny
+                      caret opens the menu — hid the menu from anyone who
+                      didn't know to aim at the caret (founder QA,
+                      2026-08-04). The tab's own page stays one click away
+                      as the menu's first entry. */}
                   <button
                     type="button"
-                    className="desktop-nav-link nav-menu-trigger"
+                    className={`${navLinkClass(section)} nav-menu-trigger`}
                     aria-expanded={isOpen}
                     aria-controls={menuId}
                     aria-haspopup="menu"
-                    aria-label={`${section.label} sections`}
                     ref={(element) => {
                       menuTriggerRefs.current[menuKey] = element;
                     }}
@@ -324,7 +326,8 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                       }
                     }}
                   >
-                    <span aria-hidden="true">▾</span>
+                    {section.label}
+                    <span className="nav-caret" aria-hidden="true">▾</span>
                   </button>
                   {isOpen ? (
                     <div

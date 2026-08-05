@@ -49,9 +49,12 @@ export function RoomLocationSelect({
   const showCustom = isCustomLocationValue(value);
 
   return (
-    <div style={{ display: 'grid', gap: 8 }}>
-      <label htmlFor={selectId} style={{ fontWeight: 600 }}>
-        {label}
+    <div style={{ display: 'grid', gap: 6 }}>
+      {/* The text sits in a span because the app's field-label styling keys
+          on `label span` (globals.css) — a bare label renders in body serif
+          at a different height and knocks sibling fields out of line. */}
+      <label htmlFor={selectId}>
+        <span>{label}</span>
       </label>
       <Select
         id={selectId}
@@ -94,8 +97,8 @@ export function RoomLocationSelect({
 
       {showCustom ? (
         <div style={{ display: 'grid', gap: 6 }}>
-          <label htmlFor={customId} style={{ fontSize: '0.9rem' }}>
-            What is this room called?
+          <label htmlFor={customId}>
+            <span>What is this room called?</span>
           </label>
           <Input
             id={customId}

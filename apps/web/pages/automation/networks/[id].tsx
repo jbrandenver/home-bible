@@ -205,7 +205,7 @@ export default function NetworkDetailPage() {
                 <label><span>Wi-Fi network name (SSID)</span><Input value={String(form.ssid ?? '')} onChange={(e) => set('ssid', e.target.value)} style={{ marginTop: 6 }} /></label>
                 <label><span>Internet provider</span><Input value={String(form.internet_provider ?? '')} onChange={(e) => set('internet_provider', e.target.value)} style={{ marginTop: 6 }} /></label>
                 <div style={{ display: 'grid', gap: 6 }}>
-                  <label htmlFor="network-location-edit" style={{ fontWeight: 600 }}>Where the router sits</label>
+                  <label htmlFor="network-location-edit" style={{ fontWeight: 600 }}><span>Where the router sits</span></label>
                   <Select id="network-location-edit" value={locationChoice} onChange={(e) => setLocationChoice(e.target.value)}>
                     <option value="">Not recorded</option>
                     {rooms.length > 0 ? (

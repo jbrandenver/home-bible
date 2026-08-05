@@ -416,7 +416,7 @@ export default function AddRoomsPage() {
             <form onSubmit={handleAddRoom} style={{ display: 'grid', gap: 20 }}>
               <div>
                 <label htmlFor="roomName" style={{ display: 'block', fontWeight: 700, marginBottom: 8 }}>
-                  Room or space name
+                  <span>Room or space name</span>
                 </label>
                 <Input
                   id="roomName"
@@ -439,7 +439,7 @@ export default function AddRoomsPage() {
 
               <div>
                 <label htmlFor="roomType" style={{ display: 'block', fontWeight: 700, marginBottom: 8 }}>
-                  Room or space type
+                  <span>Room or space type</span>
                 </label>
                 <Select
                   id="roomType"
@@ -478,7 +478,7 @@ export default function AddRoomsPage() {
 
               <div>
                 <label htmlFor="floorChoice" style={{ display: 'block', fontWeight: 700, marginBottom: 8 }}>
-                  Floor
+                  <span>Floor</span>
                 </label>
                 <Select
                   id="floorChoice"
@@ -495,7 +495,7 @@ export default function AddRoomsPage() {
                 {floorChoice === NEW_FLOOR ? (
                   <div style={{ marginTop: 8 }}>
                     <label htmlFor="newFloorName" style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>
-                      New floor name
+                      <span>New floor name</span>
                     </label>
                     <Input
                       id="newFloorName"

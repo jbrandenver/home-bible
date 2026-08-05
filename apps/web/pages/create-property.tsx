@@ -137,7 +137,7 @@ export default function CreatePropertyPage() {
                   marginBottom: 8
                 }}
               >
-                Property nickname
+                <span>Property nickname</span>
               </label>
               <Input
                 id="nickname"
@@ -156,7 +156,7 @@ export default function CreatePropertyPage() {
                   marginBottom: 8
                 }}
               >
-                Property type
+                <span>Property type</span>
               </label>
               <Select
                 id="propertyType"

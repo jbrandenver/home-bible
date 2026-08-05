@@ -348,7 +348,7 @@ export default function AddAssetPage() {
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Asset type</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Asset type</span></label>
                   <select
                     value={form.asset_type}
                     onChange={(e) => handleInputChange('asset_type', e.target.value as (typeof ASSET_TYPES)[number])}
@@ -363,7 +363,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Asset name *</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Asset name *</span></label>
                   <input
                     type="text"
                     value={form.name}
@@ -375,7 +375,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Room (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Room (optional)</span></label>
                   <select
                     value={form.room_id}
                     onChange={(e) => handleInputChange('room_id', e.target.value)}
@@ -399,7 +399,7 @@ export default function AddAssetPage() {
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Brand (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Brand (optional)</span></label>
                   <input
                     type="text"
                     value={form.brand}
@@ -410,7 +410,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Model (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Model (optional)</span></label>
                   <input
                     type="text"
                     value={form.model}
@@ -421,7 +421,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Serial number (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Serial number (optional)</span></label>
                   <input
                     type="text"
                     value={form.serial_number}
@@ -439,7 +439,7 @@ export default function AddAssetPage() {
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Purchase date (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Purchase date (optional)</span></label>
                   <input
                     type="date"
                     value={form.purchase_date}
@@ -455,7 +455,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Purchase price (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Purchase price (optional)</span></label>
                   <input
                     type="number"
                     value={form.purchase_price}
@@ -467,7 +467,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Retailer (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Retailer (optional)</span></label>
                   <input
                     type="text"
                     value={form.retailer}
@@ -485,7 +485,7 @@ export default function AddAssetPage() {
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Warranty length (months, optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Warranty length (months, optional)</span></label>
                   <input
                     type="number"
                     value={form.warranty_length_months}
@@ -496,7 +496,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Warranty expires (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Warranty expires (optional)</span></label>
                   <input
                     type="date"
                     value={form.warranty_expires_at}
@@ -513,7 +513,7 @@ export default function AddAssetPage() {
 
               <div style={{ display: 'grid', gap: 12 }}>
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Manual URL (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Manual URL (optional)</span></label>
                   <input
                     type="url"
                     value={form.manual_url}
@@ -524,7 +524,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Support URL (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Support URL (optional)</span></label>
                   <input
                     type="url"
                     value={form.support_url}
@@ -551,7 +551,7 @@ export default function AddAssetPage() {
                 </div>
 
                 <div>
-                  <label style={inputStyles.label as React.CSSProperties}>Notes (optional)</label>
+                  <label style={inputStyles.label as React.CSSProperties}><span>Notes (optional)</span></label>
                   <textarea
                     value={form.notes}
                     onChange={(e) => handleInputChange('notes', e.target.value)}

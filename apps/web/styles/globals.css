@@ -380,8 +380,9 @@ p a{text-decoration:underline}
   padding:0.55rem 0.35rem 0.7rem;
 }
 .nav-menu-trigger[aria-expanded="true"]{color:var(--color-brass-pale)}
-.nav-menu-trigger > span{display:inline-block;transition:transform 160ms ease}
-.nav-menu-trigger[aria-expanded="true"] > span{transform:rotate(180deg)}
+.nav-caret{display:inline-block;margin-left:0.3rem;transition:transform 160ms ease}
+.nav-menu-trigger[aria-expanded="true"] .nav-caret{transform:rotate(180deg)}
+@media (prefers-reduced-motion: reduce){.nav-caret{transition:none}}
 .nav-dropdown{
   background:var(--surface-card);
   border:1px solid var(--border-strong);

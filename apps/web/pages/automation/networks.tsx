@@ -183,7 +183,7 @@ export default function AutomationNetworksPage() {
                 <label><span>Wi-Fi network name (SSID)</span><Input value={ssid} onChange={(e) => setSsid(e.target.value)} placeholder="What devices see when they scan" style={{ marginTop: 6 }} /></label>
                 <label><span>Internet provider</span><Input value={provider} onChange={(e) => setProvider(e.target.value)} placeholder="Comcast, CenturyLink…" style={{ marginTop: 6 }} /></label>
                 <div style={{ display: 'grid', gap: 6 }}>
-                  <label htmlFor="network-location" style={{ fontWeight: 600 }}>Where the router sits</label>
+                  <label htmlFor="network-location" style={{ fontWeight: 600 }}><span>Where the router sits</span></label>
                   <Select id="network-location" value={locationChoice} onChange={(e) => setLocationChoice(e.target.value)} disabled={loading}>
                     <option value="">Not recorded</option>
                     {rooms.length > 0 ? (
