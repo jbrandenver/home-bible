@@ -35,6 +35,9 @@ const FROM = Deno.env.get('INVITATION_FROM') ?? 'Our Home Folder <reminders@send
 // CAN-SPAM requires a physical postal address on commercial mail; transactional
 // mail is safer with it too. Same variable the digest uses.
 const POSTAL_ADDRESS = Deno.env.get('POSTAL_ADDRESS') ?? '';
+// A real, monitored reply address is a spam-filter trust signal (and replies
+// from confused recipients should reach a human, not bounce).
+const REPLY_TO = Deno.env.get('INVITATION_REPLY_TO') ?? 'contact@ourhomefolder.com';
 
 // A single invitation's email can be re-sent a couple of times (typos happen,
 // spam folders happen), not forever.
@@ -370,7 +373,11 @@ Deno.serve(async (request) => {
     body: JSON.stringify({
       from: FROM,
       to: invitation.invited_email,
-      subject: `${emailInput.inviterEmail} shared "${propertyName}" with you on Our Home Folder`,
+      reply_to: REPLY_TO,
+      // Lead with the home, not a raw email address — "someone@gmail.com
+      // shared..." from a non-Gmail sender pattern-matches phishing heuristics.
+      // The inviter is named in the body, where it reads as context not bait.
+      subject: `Your invitation to "${propertyName}" on Our Home Folder`,
       html: renderHtml(emailInput),
       text: renderText(emailInput)
     })
