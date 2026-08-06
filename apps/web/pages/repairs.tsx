@@ -8,7 +8,7 @@ import {
   SERVICE_TYPES,
   toLocalDateString
 } from '@home-folder/shared';
-import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { RoomLocationSelect, roomSelectionValue } from '../components/RoomLocationSelect';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
@@ -169,6 +169,11 @@ export default function RepairsPage() {
   const [savingRepair, setSavingRepair] = useState(false);
   const [savingServiceRecord, setSavingServiceRecord] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Two-step deletion: the Delete buttons only open a ConfirmDialog; nothing is
+  // removed until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [repairDeleteTarget, setRepairDeleteTarget] = useState<RepairRow | null>(null);
+  const [serviceRecordDeleteTarget, setServiceRecordDeleteTarget] = useState<ServiceRecordRow | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [recordDraft, setRecordDraft] = useState<ServiceRecordDraft>(EMPTY_SERVICE_RECORD_DRAFT);
@@ -658,14 +663,24 @@ export default function RepairsPage() {
     }
   };
 
-  const deleteRepair = async (repairId: string) => {
-    if (!repairContext) {
+  const requestDeleteRepair = (repair: RepairRow) => {
+    setFormError('');
+    setRepairDeleteTarget(repair);
+  };
+
+  const cancelDeleteRepair = () => {
+    if (deletingId !== null) {
+      return;
+    }
+    setRepairDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteRepair = async () => {
+    if (!repairContext || !repairDeleteTarget || deletingId !== null) {
       return;
     }
 
-    if (!window.confirm('Delete this repair?')) {
-      return;
-    }
+    const repairId = repairDeleteTarget.id;
 
     setDeletingId(repairId);
     setFormError('');
@@ -673,7 +688,10 @@ export default function RepairsPage() {
     try {
       await deleteRepairForContext(repairContext, repairId);
       setRepairs((currentRepairs) => currentRepairs.filter((repair) => repair.id !== repairId));
+      setRepairDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setRepairDeleteTarget(null);
       setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete repair.');
     } finally {
       setDeletingId(null);
@@ -786,14 +804,24 @@ export default function RepairsPage() {
     }
   };
 
-  const deleteServiceRecord = async (recordId: string) => {
-    if (!serviceContext) {
+  const requestDeleteServiceRecord = (record: ServiceRecordRow) => {
+    setFormError('');
+    setServiceRecordDeleteTarget(record);
+  };
+
+  const cancelDeleteServiceRecord = () => {
+    if (deletingId !== null) {
+      return;
+    }
+    setServiceRecordDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteServiceRecord = async () => {
+    if (!serviceContext || !serviceRecordDeleteTarget || deletingId !== null) {
       return;
     }
 
-    if (!window.confirm('Delete this service history item?')) {
-      return;
-    }
+    const recordId = serviceRecordDeleteTarget.id;
 
     setDeletingId(recordId);
     setFormError('');
@@ -801,7 +829,10 @@ export default function RepairsPage() {
     try {
       await deleteServiceRecordForContext(serviceContext, recordId);
       setServiceRecords((currentRecords) => currentRecords.filter((record) => record.id !== recordId));
+      setServiceRecordDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setServiceRecordDeleteTarget(null);
       setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete service history item.');
     } finally {
       setDeletingId(null);
@@ -1255,7 +1286,7 @@ export default function RepairsPage() {
                       </select>
                       <button
                         type="button"
-                        onClick={() => deleteRepair(repair.id)}
+                        onClick={() => requestDeleteRepair(repair)}
                         disabled={deletingId === repair.id}
                         style={{
                           padding: '8px 12px',
@@ -1532,7 +1563,7 @@ export default function RepairsPage() {
                         </Button>
                         <button
                           type="button"
-                          onClick={() => deleteServiceRecord(record.id)}
+                          onClick={() => requestDeleteServiceRecord(record)}
                           disabled={deletingId === record.id}
                           style={{
                             padding: '8px 12px',
@@ -1557,6 +1588,32 @@ export default function RepairsPage() {
           </Card>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={repairDeleteTarget !== null}
+        title={repairDeleteTarget ? `Delete ${repairDeleteTarget.title}?` : 'Delete repair?'}
+        description="This removes the repair from your maintenance record. This cannot be undone."
+        confirmLabel="Delete repair"
+        cancelLabel="Keep repair"
+        busy={deletingId !== null && deletingId === repairDeleteTarget?.id}
+        onConfirm={handleConfirmDeleteRepair}
+        onCancel={cancelDeleteRepair}
+      />
+
+      <ConfirmDialog
+        open={serviceRecordDeleteTarget !== null}
+        title={
+          serviceRecordDeleteTarget
+            ? `Delete ${serviceRecordDeleteTarget.service_title}?`
+            : 'Delete service history item?'
+        }
+        description="This removes the item from your service history. This cannot be undone."
+        confirmLabel="Delete service item"
+        cancelLabel="Keep item"
+        busy={deletingId !== null && deletingId === serviceRecordDeleteTarget?.id}
+        onConfirm={handleConfirmDeleteServiceRecord}
+        onCancel={cancelDeleteServiceRecord}
+      />
     </>
   );
 }

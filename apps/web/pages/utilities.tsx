@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { formatEnumLabel, UTILITY_TYPES } from '@home-folder/shared';
-import { PageHeader, Card, EmptyState, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, ConfirmDialog, EmptyState, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
@@ -84,6 +84,10 @@ export default function UtilitiesPage() {
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Two-step deletion: the Delete button only opens this dialog. window.confirm
+  // proved unreliable elsewhere (a suppressed dialog returns false and the
+  // click dies silently), so this uses the in-page ConfirmDialog.
+  const [deleteTarget, setDeleteTarget] = useState<UtilityRow | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<UtilityTypeFilter>('');
   const [roomFilter, setRoomFilter] = useState('');
@@ -207,22 +211,32 @@ export default function UtilitiesPage() {
     setTypeFilter(normalizeUtilityTypeFilter(router.query.type));
   }, [router.isReady, router.query.type]);
 
-  const handleDelete = async (id: string) => {
-    if (!context) {
+  const requestDelete = (utility: UtilityRow) => {
+    setDeleteTarget(utility);
+    setError('');
+  };
+
+  const cancelDelete = () => {
+    if (deletingId) return;
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!context || !deleteTarget || deletingId) {
       return;
     }
 
-    if (!window.confirm('Delete this utility location?')) {
-      return;
-    }
-
+    const id = deleteTarget.id;
     setDeletingId(id);
     setError('');
 
     try {
       await deleteUtilityForContext(context, id);
       setUtilities((currentUtilities) => currentUtilities.filter((utility) => utility.id !== id));
+      setDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete utility.');
     } finally {
       setDeletingId(null);
@@ -458,7 +472,7 @@ export default function UtilitiesPage() {
                   <div style={{ display: 'grid', gap: 8 }}>
                     <ActionLink href={`/utilities/${utility.id}`} variant="secondary">View</ActionLink>
                     <button
-                      onClick={() => handleDelete(utility.id)}
+                      onClick={() => requestDelete(utility)}
                       disabled={deletingId === utility.id}
                       style={{
                         background: 'rgba(163,78,51,0.12)',
@@ -485,6 +499,17 @@ export default function UtilitiesPage() {
           <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Delete ${deleteTarget.name}?` : 'Delete utility?'}
+        description="This cannot be undone."
+        confirmLabel="Delete utility"
+        cancelLabel="Cancel"
+        busy={deletingId !== null}
+        onConfirm={handleConfirmDelete}
+        onCancel={cancelDelete}
+      />
     </>
   );
 }

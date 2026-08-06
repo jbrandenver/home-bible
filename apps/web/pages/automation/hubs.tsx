@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AUTOMATION_HUB_TYPES, AUTOMATION_STATUS_LABELS, formatEnumLabel, sortEnumForDisplay, type AutomationHubType } from '@home-folder/shared';
-import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../lib/access';
@@ -46,6 +46,11 @@ export default function AutomationHubsPage() {
   const [newNetworkName, setNewNetworkName] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+  // Two-step removal: the Remove button only opens this dialog; nothing is
+  // deleted until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [deleteTarget, setDeleteTarget] = useState<AutomationHubRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -171,14 +176,29 @@ export default function AutomationHubsPage() {
     }
   };
 
-  const remove = async (hub: AutomationHubRow) => {
+  const requestRemove = (hub: AutomationHubRow) => {
     if (!context) return;
-    if (!window.confirm(`Remove "${hub.name}"? Devices that depend on it will lose the link.`)) return;
+    setDeleteTarget(hub);
+  };
+
+  const cancelRemove = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!context || !deleteTarget || deleting) return;
+    setDeleting(true);
     try {
-      await deleteHubForContext(context, hub.id);
-      setHubs((current) => current.filter((h) => h.id !== hub.id));
+      await deleteHubForContext(context, deleteTarget.id);
+      setHubs((current) => current.filter((h) => h.id !== deleteTarget.id));
+      setDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete hub.');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -273,7 +293,7 @@ export default function AutomationHubsPage() {
                     {hub.criticality === 'critical' || hub.criticality === 'high' ? <UtilityBadge label={formatEnumLabel(hub.criticality)} tone="attention" /> : null}
                     <ActionLink href={`/automation/hubs/${hub.id}`} variant="secondary">Open</ActionLink>
                     {access.loading || access.canWrite ? (
-                    <Button variant="secondary" onClick={() => remove(hub)} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove</Button>
+                    <Button variant="secondary" onClick={() => requestRemove(hub)} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove</Button>
                     ) : null}
                   </div>
                 </div>
@@ -282,6 +302,17 @@ export default function AutomationHubsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Remove ${deleteTarget.name}?` : 'Remove hub?'}
+        description="Devices that depend on it will lose the link."
+        confirmLabel="Remove hub"
+        cancelLabel="Cancel"
+        busy={deleting}
+        onConfirm={handleConfirmRemove}
+        onCancel={cancelRemove}
+      />
     </>
   );
 }

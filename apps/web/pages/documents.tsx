@@ -6,7 +6,7 @@ import {
   type DocumentType,
   type VisibilityContext
 } from '@home-folder/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
@@ -204,6 +204,10 @@ export default function DocumentsPage() {
   const [notice, setNotice] = useState('');
   const [uploading, setUploading] = useState(false);
   const [actingDocumentId, setActingDocumentId] = useState<string | null>(null);
+  // Two-step deletion: the Delete button only opens the ConfirmDialog;
+  // window.confirm proved unreliable (a suppressed dialog returns false and
+  // the click dies silently), so nothing is removed until the dialog confirms.
+  const [deleteTarget, setDeleteTarget] = useState<DocumentRow | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
@@ -468,12 +472,22 @@ export default function DocumentsPage() {
     }
   };
 
-  const deleteDocument = async (documentId: string) => {
-    if (!context) return;
+  const requestDeleteDocument = (document: DocumentRow) => {
+    setError('');
+    setDeleteTarget(document);
+  };
 
-    if (!window.confirm('Delete this document? Its private file will be removed after the undo window in supported flows.')) {
+  const cancelDeleteDocument = () => {
+    if (actingDocumentId !== null) {
       return;
     }
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteDocument = async () => {
+    if (!context || !deleteTarget || actingDocumentId !== null) return;
+
+    const documentId = deleteTarget.id;
 
     setActingDocumentId(documentId);
     setError('');
@@ -482,8 +496,11 @@ export default function DocumentsPage() {
     try {
       await deleteDocumentForContext(context, documentId);
       setDocuments((current) => current.filter((document) => document.id !== documentId));
+      setDeleteTarget(null);
       setNotice('Document deleted.');
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete document.');
     } finally {
       setActingDocumentId(null);
@@ -791,7 +808,7 @@ export default function DocumentsPage() {
                           {access.loading || access.canWrite ? (
                           <button
                             type="button"
-                            onClick={() => deleteDocument(document.id)}
+                            onClick={() => requestDeleteDocument(document)}
                             disabled={isActing}
                             style={{
                               padding: '10px 14px',
@@ -822,6 +839,17 @@ export default function DocumentsPage() {
           <ActionLink href="/home-map" variant="secondary">Back to home map</ActionLink>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Delete ${deleteTarget.title}?` : 'Delete document?'}
+        description="Its private file will be removed after the undo window in supported flows."
+        confirmLabel="Delete document"
+        cancelLabel="Keep document"
+        busy={actingDocumentId !== null && actingDocumentId === deleteTarget?.id}
+        onConfirm={handleConfirmDeleteDocument}
+        onCancel={cancelDeleteDocument}
+      />
     </>
   );
 }

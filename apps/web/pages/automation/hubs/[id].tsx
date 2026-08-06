@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useRef, useState } from 'react';
 import { AUTOMATION_CRITICALITIES, AUTOMATION_HUB_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationCriticality, type AutomationHubType } from '@home-folder/shared';
-import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
 import { ViewOnlyNotice } from '../../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../../lib/access';
@@ -41,6 +41,10 @@ export default function HubDetailPage() {
   const [acting, setActing] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string | boolean>>({});
+  // Two-step removal: the Remove button only opens this dialog; nothing is
+  // deleted until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -181,14 +185,21 @@ export default function HubDetailPage() {
     }
   };
 
-  const remove = async () => {
+  const requestRemove = () => {
     if (!context || !hub) return;
-    if (!window.confirm(`Remove "${hub.name}"? Devices that depend on it will lose the link.`)) return;
+    setError('');
+    setConfirmingDelete(true);
+  };
+
+  const handleRemove = async () => {
+    if (!context || !hub || acting) return;
     setActing(true);
     try {
       await deleteHubForContext(context, hub.id);
       router.push('/automation/hubs');
     } catch (e) {
+      // Close the dialog so the error is readable on the page it points at.
+      setConfirmingDelete(false);
       setError(e instanceof Error ? e.message : 'Failed to delete.');
       setActing(false);
     }
@@ -281,10 +292,23 @@ export default function HubDetailPage() {
           {!access.loading && !access.canWrite ? (
             <ViewOnlyNotice role={access.role} action="remove this hub" inline />
           ) : (
-          <Button variant="secondary" onClick={remove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove hub</Button>
+          <Button variant="secondary" onClick={requestRemove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove hub</Button>
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Remove ${hub.name}?`}
+        description="Devices that depend on it will lose the link."
+        confirmLabel="Remove hub"
+        cancelLabel="Cancel"
+        busy={acting}
+        onConfirm={handleRemove}
+        onCancel={() => {
+          if (!acting) setConfirmingDelete(false);
+        }}
+      />
     </>
   );
 }

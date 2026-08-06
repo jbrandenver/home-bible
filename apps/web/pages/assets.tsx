@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ASSET_TYPES, formatEnumLabel } from '@home-folder/shared';
-import { PageHeader, Card, EmptyState, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, ConfirmDialog, EmptyState, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   deleteAssetForContext,
@@ -32,6 +32,10 @@ export default function AssetsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Two-step deletion: the Delete button only opens this dialog. window.confirm
+  // proved unreliable elsewhere (a suppressed dialog returns false and the
+  // click dies silently), so this uses the in-page ConfirmDialog.
+  const [deleteTarget, setDeleteTarget] = useState<AssetRow | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [roomFilter, setRoomFilter] = useState('');
@@ -85,22 +89,32 @@ export default function AssetsPage() {
     };
   }, []);
 
-  const handleDelete = async (id: string) => {
-    if (!context) {
+  const requestDelete = (asset: AssetRow) => {
+    setDeleteTarget(asset);
+    setError('');
+  };
+
+  const cancelDelete = () => {
+    if (deletingId) return;
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!context || !deleteTarget || deletingId) {
       return;
     }
 
-    if (!window.confirm('Delete this asset? You can recreate it later, but linked context may be harder to recover.')) {
-      return;
-    }
-
+    const id = deleteTarget.id;
     setDeletingId(id);
     setError('');
 
     try {
       await deleteAssetForContext(context, id);
       setAssets((currentAssets) => currentAssets.filter((asset) => asset.id !== id));
+      setDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete asset.');
     } finally {
       setDeletingId(null);
@@ -327,7 +341,7 @@ export default function AssetsPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       <ActionLink href={`/assets/${asset.id}`} variant="secondary">View</ActionLink>
                       <button
-                        onClick={() => handleDelete(asset.id)}
+                        onClick={() => requestDelete(asset)}
                         disabled={deletingId === asset.id}
                         style={{
                           padding: '8px 12px',
@@ -354,6 +368,17 @@ export default function AssetsPage() {
           <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Delete ${deleteTarget.name}?` : 'Delete asset?'}
+        description="You can recreate it later, but linked context may be harder to recover."
+        confirmLabel="Delete asset"
+        cancelLabel="Cancel"
+        busy={deletingId !== null}
+        onConfirm={handleConfirmDelete}
+        onCancel={cancelDelete}
+      />
     </>
   );
 }

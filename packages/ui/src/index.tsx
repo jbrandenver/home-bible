@@ -335,6 +335,8 @@ export function ConfirmDialog({
   cancelLabel = 'Cancel',
   destructive = true,
   busy = false,
+  confirmDisabled = false,
+  children,
   onConfirm,
   onCancel
 }: {
@@ -345,6 +347,10 @@ export function ConfirmDialog({
   cancelLabel?: string;
   destructive?: boolean;
   busy?: boolean;
+  /** Keeps the confirm button inert until a page-supplied condition is met — e.g. a typed-name match. */
+  confirmDisabled?: boolean;
+  /** Rendered between the description and the buttons, for extra ceremony like a typed-name input. */
+  children?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -419,13 +425,14 @@ export function ConfirmDialog({
       >
         <h2 id="confirm-dialog-title" style={{ marginTop: 0 }}>{title}</h2>
         <p style={{ color: 'var(--text-muted)' }}>{description}</p>
+        {children ? <div style={{ marginBottom: 16 }}>{children}</div> : null}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
           <Button type="button" variant="secondary" disabled={busy} onClick={onCancel}>
             {cancelLabel}
           </Button>
           <Button
             type="button"
-            disabled={busy}
+            disabled={busy || confirmDisabled}
             onClick={onConfirm}
             style={destructive ? { background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' } : undefined}
           >

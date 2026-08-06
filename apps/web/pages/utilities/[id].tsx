@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SERVICE_TYPES, formatEnumLabel, sortEnumForDisplay, UTILITY_TYPES } from '@home-folder/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../lib/access';
@@ -119,6 +119,10 @@ export default function UtilityDetailPage() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Two-step deletion: "Delete utility" only opens this dialog. window.confirm
+  // proved unreliable elsewhere (a suppressed dialog returns false and the
+  // click dies silently), so this uses the in-page ConfirmDialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const [name, setName] = useState('');
   const [utilityType, setUtilityType] = useState<UtilityType>('other');
@@ -354,12 +358,14 @@ export default function UtilityDetailPage() {
     }
   };
 
-  const deleteUtility = async () => {
+  const requestDeleteUtility = () => {
     if (!context || !utility) return;
+    setFormError('');
+    setConfirmingDelete(true);
+  };
 
-    if (!window.confirm('Delete this utility location?')) {
-      return;
-    }
+  const deleteUtility = async () => {
+    if (!context || !utility || deleting) return;
 
     setDeleting(true);
     setFormError('');
@@ -368,6 +374,8 @@ export default function UtilityDetailPage() {
       await deleteUtilityForContext(context, utility.id);
       router.push('/utilities');
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setConfirmingDelete(false);
       setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete utility.');
       setDeleting(false);
     }
@@ -531,7 +539,7 @@ export default function UtilityDetailPage() {
               <Button type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save changes'}</Button>
               <button
                 type="button"
-                onClick={deleteUtility}
+                onClick={requestDeleteUtility}
                 disabled={deleting}
                 style={{
                   padding: '10px 14px',
@@ -684,6 +692,21 @@ export default function UtilityDetailPage() {
           <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete ${utility.name}?`}
+        description="This cannot be undone."
+        confirmLabel="Delete utility"
+        cancelLabel="Cancel"
+        busy={deleting}
+        onConfirm={deleteUtility}
+        onCancel={() => {
+          if (!deleting) {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
     </>
   );
 }

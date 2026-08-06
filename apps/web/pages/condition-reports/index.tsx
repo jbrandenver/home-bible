@@ -6,7 +6,7 @@ import {
   toLocalDateString,
   type ConditionReportType
 } from '@home-folder/shared';
-import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../lib/access';
@@ -52,6 +52,10 @@ export default function ConditionReportsPage() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+  // Two-step removal: "Remove draft" only opens this dialog; nothing is
+  // removed until the dialog is confirmed. window.confirm proved unreliable
+  // elsewhere (a suppressed dialog returns false and the click dies silently).
+  const [deleteTarget, setDeleteTarget] = useState<ConditionReportRow | null>(null);
 
   const [reportType, setReportType] = useState<ConditionReportType>('move_in');
   const [reportDate, setReportDate] = useState(toLocalDateString());
@@ -150,20 +154,28 @@ export default function ConditionReportsPage() {
     }
   };
 
-  const removeReport = async (report: ConditionReportRow) => {
+  const requestRemoveReport = (report: ConditionReportRow) => {
     setFormError('');
+    setDeleteTarget(report);
+  };
 
-    const confirmed = window.confirm(
-      'Remove this draft report? Its entries go with it, and any photos already taken stay in Documents. A completed report cannot be removed — once it is completed, its entries, photos, and timestamps are the deposit evidence.'
-    );
-    if (!confirmed) return;
+  const cancelRemoveReport = () => {
+    if (deletingReportId) return;
+    setDeleteTarget(null);
+  };
 
-    setDeletingReportId(report.id);
+  const handleConfirmRemove = async () => {
+    if (!deleteTarget || deletingReportId) return;
+
+    setDeletingReportId(deleteTarget.id);
 
     try {
-      await softDeleteConditionReport(report.id);
-      setReports((current) => current.filter((row) => row.id !== report.id));
+      await softDeleteConditionReport(deleteTarget.id);
+      setReports((current) => current.filter((row) => row.id !== deleteTarget.id));
+      setDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setDeleteTarget(null);
       setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to remove condition report.');
     } finally {
       setDeletingReportId(null);
@@ -347,7 +359,7 @@ export default function ConditionReportsPage() {
                         {canModifyConditionReport(report.status) && (access.loading || access.canWrite) ? (
                           <button
                             type="button"
-                            onClick={() => removeReport(report)}
+                            onClick={() => requestRemoveReport(report)}
                             disabled={deletingReportId === report.id}
                             style={{
                               padding: '8px 12px',
@@ -372,6 +384,16 @@ export default function ConditionReportsPage() {
           </Card>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title="Remove this draft report?"
+        description="Its entries go with it, and any photos already taken stay in Documents. A completed report cannot be removed — once it is completed, its entries, photos, and timestamps are the deposit evidence."
+        confirmLabel="Remove draft"
+        busy={deletingReportId !== null}
+        onConfirm={handleConfirmRemove}
+        onCancel={cancelRemoveReport}
+      />
     </>
   );
 }
