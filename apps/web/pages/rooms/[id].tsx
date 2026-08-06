@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { formatEnumLabel, ROOM_TYPES } from '@home-folder/shared';
-import { PageHeader, Card, Button, Input, Select, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, ConfirmDialog, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../lib/access';
@@ -20,7 +20,14 @@ import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../../l
 import { getReminderDataContext, getRemindersForRoom, type ReminderRow } from '../../lib/reminders';
 import { getReceiptDataContext, getReceiptsForLink, type ReceiptDataContext, type ReceiptRow } from '../../lib/receipts';
 import { getRepairDataContext, getRepairsForContext, type RepairRow } from '../../lib/repairs';
-import { createRoomsForProperty, deleteRoomForProperty, getRoomById, updateRoomForProperty } from '../../lib/rooms';
+import {
+  createRoomsForProperty,
+  deleteRoomForProperty,
+  getRoomById,
+  getRoomLinkCounts,
+  updateRoomForProperty,
+  type RoomLinkCount
+} from '../../lib/rooms';
 import { getServiceRecordDataContext, getServiceRecordsForContext, type ServiceRecordRow } from '../../lib/serviceRecords';
 import { getTrendFlagDataContext, getTrendFlagsForContext, type TrendFlagRow } from '../../lib/trendFlags';
 import { getUtilitiesForRoom, getUtilityDataContext, type UtilityRow } from '../../lib/utilities';
@@ -103,6 +110,12 @@ export default function RoomDetailPage() {
   const [editHasPlumbing, setEditHasPlumbing] = useState(false);
   const [roomSaving, setRoomSaving] = useState(false);
   const [roomDeleting, setRoomDeleting] = useState(false);
+  // Two-step deletion: "Remove room" opens the dialog, which lists what still
+  // links to the room; nothing is removed until the dialog is confirmed.
+  // window.confirm proved unreliable elsewhere (a suppressed dialog returns
+  // false and the click dies silently), so this uses the in-page ConfirmDialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteLinkCounts, setDeleteLinkCounts] = useState<RoomLinkCount[] | null>(null);
   const [roomFormError, setRoomFormError] = useState('');
   const [roomSaved, setRoomSaved] = useState(false);
 
@@ -517,19 +530,49 @@ export default function RoomDetailPage() {
     }
   }
 
-  async function handleDeleteRoom() {
+  function requestDeleteRoom() {
     if (!room) {
       return;
     }
 
-    // deleteRoomForProperty soft-deletes the room and then clears room_id on
-    // utilities, assets, repairs, reminders, service records, and issues — so
-    // those records survive; they simply stop naming a room.
-    const confirmation = isAccountRoom
-      ? `Remove ${room.name}? Utilities, appliances, repairs, reminders, service history, and issues recorded here are kept — they stop showing a room, and you can point them at another one. This cannot be undone.`
-      : `Remove ${room.name} from this browser's demo data? Anything recorded here will show its room as deleted.`;
+    setRoomFormError('');
+    setConfirmingDelete(true);
 
-    if (!window.confirm(confirmation)) {
+    if (isAccountRoom && propertyId) {
+      setDeleteLinkCounts(null);
+      getRoomLinkCounts(propertyId, room.id)
+        .then((counts) => setDeleteLinkCounts(counts))
+        .catch(() => setDeleteLinkCounts([]));
+      return;
+    }
+
+    setDeleteLinkCounts([]);
+  }
+
+  function describeDeletion() {
+    if (!isAccountRoom) {
+      return `This removes ${room?.name || 'this room'} from this browser's demo data. This cannot be undone.`;
+    }
+
+    const linkedSummary =
+      deleteLinkCounts === null
+        ? 'Checking what links to this room…'
+        : deleteLinkCounts.length === 0
+          ? 'Nothing else links to this room.'
+          : `Still linked to this room: ${deleteLinkCounts
+              .map((entry) => `${entry.count} ${entry.label}`)
+              .join(', ')}. Those records are kept — they simply stop naming this room, and you can point them at another one.`;
+
+    return `${linkedSummary} Removing the room cannot be undone.`;
+  }
+
+  // deleteRoomForProperty soft-deletes the room and then clears room_id on
+  // every table that can reference one — utilities, appliances, repairs,
+  // reminders, service records, issues, home systems, documents, receipts,
+  // trend flags, and automation gear — so those records survive; they simply
+  // stop naming a room.
+  async function handleDeleteRoom() {
+    if (!room || roomDeleting) {
       return;
     }
 
@@ -539,6 +582,7 @@ export default function RoomDetailPage() {
     try {
       if (isAccountRoom) {
         if (!propertyId) {
+          setConfirmingDelete(false);
           setRoomFormError('This room is still loading. Please try again in a moment.');
           return;
         }
@@ -550,6 +594,8 @@ export default function RoomDetailPage() {
 
       router.push('/home-map');
     } catch (deleteError) {
+      // Close the dialog so the error is readable in the form it points at.
+      setConfirmingDelete(false);
       setRoomFormError(deleteError instanceof Error ? deleteError.message : 'Failed to remove this room.');
     } finally {
       setRoomDeleting(false);
@@ -814,7 +860,7 @@ export default function RoomDetailPage() {
               </Button>
               <button
                 type="button"
-                onClick={handleDeleteRoom}
+                onClick={requestDeleteRoom}
                 disabled={roomSaving || roomDeleting}
                 style={{
                   padding: '11px 16px',
@@ -833,11 +879,27 @@ export default function RoomDetailPage() {
             </div>
             <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: 14 }}>
               {isAccountRoom
-                ? 'Removing a room keeps everything recorded in it — utilities, appliances, repairs, reminders, service history, and issues stay in your record and simply stop naming a room.'
+                ? 'Removing a room keeps everything recorded in it — utilities, appliances, repairs, reminders, service history, issues, documents, receipts, and smart devices stay in your record and simply stop naming a room.'
                 : 'Removing a room here only changes this browser’s demo data. Anything recorded in it will show its room as deleted.'}
             </p>
           </form>
           )}
+
+          <ConfirmDialog
+            open={confirmingDelete}
+            title={`Delete ${room.name}?`}
+            description={describeDeletion()}
+            confirmLabel="Delete room"
+            cancelLabel="Keep room"
+            busy={roomDeleting}
+            onConfirm={handleDeleteRoom}
+            onCancel={() => {
+              if (!roomDeleting) {
+                setConfirmingDelete(false);
+                setDeleteLinkCounts(null);
+              }
+            }}
+          />
 
           <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 16, paddingTop: 16 }}>
             <h3 style={{ marginTop: 0 }}>Closet</h3>

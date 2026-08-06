@@ -373,37 +373,114 @@ export async function deleteRoomForProperty(propertyId: string, roomId: string) 
     throw new Error('Supabase is not configured');
   }
 
-  const { error } = await supabase
+  // The name is needed after the delete: automation relationship rows keep a
+  // human label once their room reference is released, and by then the room
+  // row is soft-deleted.
+  const { data: roomRow } = await supabase
+    .from('rooms')
+    .select('name')
+    .eq('id', roomId)
+    .eq('property_id', propertyId)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  const { data: deletedRows, error } = await supabase
     .from('rooms')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', roomId)
     .eq('property_id', propertyId)
-    .is('deleted_at', null);
+    .is('deleted_at', null)
+    .select('id');
 
   if (error) {
     throw new Error(formatDataError('remove this room', error.message || ''));
+  }
+
+  // A soft delete that matches no row is a refusal, not a success: the room may
+  // already be gone, belong to another property, or RLS may have filtered it.
+  // Without this check the UI reported "removed" while the room stayed put.
+  if (!deletedRows || deletedRows.length === 0) {
+    throw new Error('This room could not be removed. It may already be gone, or you may not have permission.');
   }
 
   // Release anything still pointing at the room. The foreign keys are
   // `on delete set null`, which never fires for a soft delete, so without this
   // a deleted room leaves utilities, repairs and assets showing "Unknown room"
   // — and the service call sheet silently resolves their location to nothing.
-  await releaseRoomReferences(propertyId, roomId);
+  await releaseRoomReferences(propertyId, roomId, roomRow?.name || 'a removed room');
 
   return getRoomsForProperty(propertyId);
 }
 
+/**
+ * Every table that links records to a room via a `room_id` column, with the
+ * label the UI uses when telling a person what a room deletion touches.
+ * `condition_report_entries` is deliberately absent: a condition report is a
+ * point-in-time record, so its entries keep their room reference (editors can
+ * still resolve soft-deleted room names under the 032 select policy).
+ */
+const ROOM_DEPENDENT_TABLES: ReadonlyArray<{ table: string; label: string }> = [
+  { table: 'utilities', label: 'utilities' },
+  { table: 'assets', label: 'appliances & belongings' },
+  { table: 'repairs', label: 'repairs' },
+  { table: 'reminders', label: 'reminders' },
+  { table: 'service_records', label: 'service records' },
+  { table: 'issues', label: 'issues' },
+  { table: 'systems', label: 'home systems' },
+  { table: 'documents', label: 'documents & photos' },
+  { table: 'receipts', label: 'receipts' },
+  { table: 'trend_flags', label: 'trend flags' },
+  { table: 'automation_hubs', label: 'automation hubs' },
+  { table: 'automation_devices', label: 'smart devices' }
+];
+
+export type RoomLinkCount = { label: string; count: number };
+
+/**
+ * How many active records still name this room, grouped for the delete
+ * confirmation ("3 appliances & belongings, 1 document…"). A table whose count
+ * cannot be read is skipped rather than failing the dialog — the confirmation
+ * copy still warns that linked records stop naming the room.
+ */
+export async function getRoomLinkCounts(propertyId: string, roomId: string): Promise<RoomLinkCount[]> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return [];
+  }
+
+  const results = await Promise.all(
+    ROOM_DEPENDENT_TABLES.map(async ({ table, label }) => {
+      try {
+        const { count, error } = await supabase
+          .from(table)
+          .select('id', { count: 'exact', head: true })
+          .eq('property_id', propertyId)
+          .eq('room_id', roomId)
+          .is('deleted_at', null);
+
+        if (error || !count) {
+          return null;
+        }
+
+        return { label, count } satisfies RoomLinkCount;
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  return results.filter((entry): entry is RoomLinkCount => entry !== null);
+}
+
 /** Null out room_id on every record that referenced a removed room. */
-async function releaseRoomReferences(propertyId: string, roomId: string) {
+async function releaseRoomReferences(propertyId: string, roomId: string, roomName: string) {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return;
   }
 
-  const dependents = ['utilities', 'assets', 'repairs', 'reminders', 'service_records', 'issues'];
-
-  await Promise.all(
-    dependents.map(async (table) => {
+  await Promise.all([
+    ...ROOM_DEPENDENT_TABLES.map(async ({ table }) => {
       const { error } = await supabase
         .from(table)
         .update({ room_id: null })
@@ -416,6 +493,84 @@ async function releaseRoomReferences(propertyId: string, roomId: string) {
         // reference rather than corrupting anything, and the UI degrades to
         // "Room was deleted" rather than a hard error.
         console.warn(`Could not release ${table}.room_id for a deleted room:`, error.message);
+      }
+    }),
+    releaseReminderLinkTargets(propertyId, roomId),
+    releaseAutomationRelationshipEndpoints(propertyId, roomId, roomName)
+  ]);
+}
+
+/**
+ * Reminders carry a second, FK-less reference: `linked_type`/`linked_id`. The
+ * home map still resolves `linked_type === 'room'`, so a deleted room left a
+ * dangling id there even after `room_id` was nulled. Those reminders fall back
+ * to pointing at the property itself.
+ */
+async function releaseReminderLinkTargets(propertyId: string, roomId: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('reminders')
+    .update({ linked_type: 'property', linked_id: propertyId })
+    .eq('property_id', propertyId)
+    .eq('linked_type', 'room')
+    .eq('linked_id', roomId)
+    .is('deleted_at', null);
+
+  if (error) {
+    console.warn('Could not retarget reminder links for a deleted room:', error.message);
+  }
+}
+
+/**
+ * Automation relationships may name a room as either endpoint without a
+ * foreign key. The uuid is released and the room's name is kept as the
+ * endpoint label (when none was recorded) so the dependency map still reads
+ * "Hub → Office" instead of an unlabeled hole.
+ */
+async function releaseAutomationRelationshipEndpoints(propertyId: string, roomId: string, roomName: string) {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return;
+  }
+
+  const { data: rows, error } = await supabase
+    .from('automation_relationships')
+    .select('id, source_type, source_id, source_label, target_type, target_id, target_label')
+    .eq('property_id', propertyId)
+    .or(`and(source_type.eq.room,source_id.eq.${roomId}),and(target_type.eq.room,target_id.eq.${roomId})`)
+    .is('deleted_at', null);
+
+  if (error || !rows || rows.length === 0) {
+    if (error) {
+      console.warn('Could not read automation relationships for a deleted room:', error.message);
+    }
+    return;
+  }
+
+  await Promise.all(
+    rows.map(async (row) => {
+      const update: Record<string, unknown> = {};
+      if (row.source_type === 'room' && row.source_id === roomId) {
+        update.source_id = null;
+        update.source_label = row.source_label || roomName;
+      }
+      if (row.target_type === 'room' && row.target_id === roomId) {
+        update.target_id = null;
+        update.target_label = row.target_label || roomName;
+      }
+
+      const { error: updateError } = await supabase
+        .from('automation_relationships')
+        .update(update)
+        .eq('id', row.id)
+        .eq('property_id', propertyId);
+
+      if (updateError) {
+        console.warn('Could not release an automation relationship for a deleted room:', updateError.message);
       }
     })
   );

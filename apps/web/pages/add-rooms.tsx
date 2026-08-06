@@ -1,11 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { ROOM_TYPES } from '@home-folder/shared';
-import { PageHeader, Card, Input, Select, Button } from '@home-folder/ui';
+import { PageHeader, Card, Input, Select, Button, ConfirmDialog } from '@home-folder/ui';
 import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
 import { FLOOR_SUGGESTIONS, sortFloorNames } from '../lib/floorOrder';
 import { getPrimaryPropertyForUser } from '../lib/properties';
-import { createRoomsForProperty, getRoomsForProperty, updateRoomForProperty } from '../lib/rooms';
+import {
+  createRoomsForProperty,
+  deleteRoomForProperty,
+  getRoomLinkCounts,
+  getRoomsForProperty,
+  updateRoomForProperty,
+  type RoomLinkCount
+} from '../lib/rooms';
 import { formatRoomTypeLabel } from '../lib/roomLabels';
 import { CLOSET_PROMPT_TYPES, inferRoomTypeFromName, titleCaseName } from '../lib/roomNameHints';
 import { getDemoActiveProperty, getDemoRooms, setDemoRooms } from '../lib/demoStorage';
@@ -56,6 +63,12 @@ export default function AddRoomsPage() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  // Deletion is a two-step flow: the Delete button only opens this dialog,
+  // which names the room and lists what still links to it before anything
+  // is removed. `deleteLinkCounts === null` means the counts are still loading.
+  const [deleteTarget, setDeleteTarget] = useState<Room | null>(null);
+  const [deleteLinkCounts, setDeleteLinkCounts] = useState<RoomLinkCount[] | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const supabaseReady = isSupabaseConfigured();
 
@@ -184,6 +197,84 @@ export default function AddRoomsPage() {
     setEditRoomType('bedroom');
     setEditFloorName('');
     setEditNotes('');
+  }
+
+  function requestDeleteRoom(room: Room) {
+    setDeleteTarget(room);
+    setError('');
+
+    if (dataMode === 'account' && activePropertyId) {
+      setDeleteLinkCounts(null);
+      getRoomLinkCounts(activePropertyId, room.id)
+        .then((counts) => setDeleteLinkCounts(counts))
+        .catch(() => setDeleteLinkCounts([]));
+      return;
+    }
+
+    setDeleteLinkCounts([]);
+  }
+
+  function cancelDeleteRoom() {
+    if (isDeleting) return;
+    setDeleteTarget(null);
+    setDeleteLinkCounts(null);
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteTarget || isDeleting) return;
+
+    setIsDeleting(true);
+
+    if (dataMode === 'account' && activePropertyId) {
+      try {
+        const remoteRooms = await deleteRoomForProperty(activePropertyId, deleteTarget.id);
+        setRooms(
+          remoteRooms.map((room) => ({
+            id: room.id,
+            name: room.name,
+            room_type: room.room_type,
+            floor_name: room.floor_name,
+            notes: room.notes || null
+          }))
+        );
+        setDeleteTarget(null);
+        setDeleteLinkCounts(null);
+        cancelEditingRoom();
+      } catch (deleteError) {
+        setDeleteTarget(null);
+        setDeleteLinkCounts(null);
+        setError(deleteError instanceof Error ? deleteError.message : 'Failed to remove this room.');
+      } finally {
+        setIsDeleting(false);
+      }
+      return;
+    }
+
+    saveRooms(rooms.filter((room) => room.id !== deleteTarget.id));
+    setDeleteTarget(null);
+    setDeleteLinkCounts(null);
+    cancelEditingRoom();
+    setIsDeleting(false);
+  }
+
+  // What the confirmation dialog says. In account mode it names exactly what
+  // still links to the room, so nobody deletes a kitchen without hearing about
+  // the fridge, its receipts, and its service history first.
+  function describeDeletion(room: Room) {
+    if (dataMode !== 'account') {
+      return `This removes ${room.name} from this browser's demo data. This cannot be undone.`;
+    }
+
+    const linkedSummary =
+      deleteLinkCounts === null
+        ? 'Checking what links to this room…'
+        : deleteLinkCounts.length === 0
+          ? 'Nothing else links to this room.'
+          : `Still linked to this room: ${deleteLinkCounts
+              .map((entry) => `${entry.count} ${entry.label}`)
+              .join(', ')}. Those records are kept — they simply stop naming this room, and you can point them at another one.`;
+
+    return `${linkedSummary} Removing the room cannot be undone.`;
   }
 
   async function handleAddRoom(event: React.FormEvent<HTMLFormElement>) {
@@ -581,11 +672,30 @@ export default function AddRoomsPage() {
                             }}
                           />
                         </label>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                          <Button type="submit" disabled={isEditing}>{isEditing ? 'Saving...' : 'Save changes'}</Button>
-                          <Button type="button" disabled={isEditing} onClick={cancelEditingRoom} style={{ background: 'var(--text-muted)' }}>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <Button type="submit" disabled={isEditing || isDeleting}>{isEditing ? 'Saving...' : 'Save changes'}</Button>
+                          <Button type="button" disabled={isEditing || isDeleting} onClick={cancelEditingRoom} style={{ background: 'var(--text-muted)' }}>
                             Cancel
                           </Button>
+                          <button
+                            type="button"
+                            onClick={() => requestDeleteRoom(room)}
+                            disabled={isEditing || isDeleting}
+                            style={{
+                              marginLeft: 'auto',
+                              padding: '11px 16px',
+                              minHeight: 44,
+                              borderRadius: 'var(--radius-control)',
+                              border: '1px solid rgba(138,46,39,0.35)',
+                              background: 'rgba(138,46,39,0.08)',
+                              color: 'var(--status-urgent)',
+                              cursor: isEditing || isDeleting ? 'not-allowed' : 'pointer',
+                              fontWeight: 700,
+                              opacity: isEditing || isDeleting ? 0.7 : 1
+                            }}
+                          >
+                            Delete room…
+                          </button>
                         </div>
                       </form>
                     ) : (
@@ -623,6 +733,17 @@ export default function AddRoomsPage() {
           </Card>
         </div>
         )}
+
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          title={deleteTarget ? `Delete ${deleteTarget.name}?` : 'Delete room?'}
+          description={deleteTarget ? describeDeletion(deleteTarget) : ''}
+          confirmLabel="Delete room"
+          cancelLabel="Keep room"
+          busy={isDeleting}
+          onConfirm={handleConfirmDelete}
+          onCancel={cancelDeleteRoom}
+        />
       </>
     );
   }
