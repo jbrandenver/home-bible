@@ -7,16 +7,16 @@ related_targets: ["apps/web/pages/index.tsx"]
 
 # Surface brief — features page (`/features`)
 
-**Scope & mode:** `apps/web/pages/features.tsx` — Persuade. Related: `apps/web/pages/index.tsx` (Section III links here), `apps/web/components/PlateRow.tsx` (PlateSeal), `.hb-chapter*` rules in `apps/web/styles/globals.css`.
+**Scope & mode:** `apps/web/pages/features.tsx` — Persuade. Related: `apps/web/pages/index.tsx` (Section III links here), `apps/web/components/PlateRow.tsx`, `.hb-chapter*` rules in `apps/web/styles/globals.css`.
 
-**Audience & job:** signed-out visitors who need the WHOLE offering graspable in one or two viewports — homeowners scanning "does it do X", smart-home keepers, landlords, professionals — with depth available on click, never forced by scroll.
+**Audience & job:** a selling page, not a reading page (Jesse's standing ruling, 2026-08-06, density reference: Intuit's accountants hub — structure only, never branding). Visitors scan five headlines and plates, find their door, and act; nothing on the page is required reading.
 
-**Action:** primary "Begin your record — free" → `/sign-up` (cover + attestation); secondary demo → `/welcome`; Terms cell → `/pricing`.
+**Action:** "Begin your record — free" → `/sign-up` (cover + attestation); demo → `/welcome`; landlord block + persona strip → `/pricing`; inspectors → `/pro`.
 
-**Proof/content:** three tiers, all computed from the single `chapters` array (never hardcode counts): (1) the plan — an at-a-glance grid of 7 chapter cards (benefit line + clause-name keywords + "Open entries N–M") plus a dark Terms cell ("Chapters I–VI: free, complete"); (2) "Who this serves" — homeowners / landlords / inspectors, using researched segment vocabulary (2 a.m. emergency, paper trail, condition reports, issue at closing); (3) the full schedule — all clauses in `<details>` chapters, folded by default, opened by click or by `#anchor` hash (useEffect); JSON-LD SoftwareApplication `featureList`.
+**Proof/content:** (1) cover with mono stat strip — `{totalClauses} entries · 7 chapters ↓` / `$0` / `10 minutes`; (2) five seller blocks chosen by paid-conversion research — reminders ("The house reminds you"), warranties ("The claim gets made"), emergency ("Readable in a panic"), handover ("The house comes with its manual"), landlord ("Evidence that holds up") — each ONE headline + ONE line + one illustrative specimen plate; **the plate columns are the designated screenshot slots** — swap for real captures when Jesse provides them (shot list delivered 2026-08-06: dashboard, reminders, asset warranty, emergency on phone, condition report, portfolio, handover, digest email); (3) three-link persona strip; (4) full schedule as `<details>` bars with keyword previews (all 36 entries scannable closed; open on click or `#anchor` hash); (5) attestation.
 
-**Chosen direction:** lifecycle-of-a-home structure (grounded candidate #5, surface seed 62be04b2), re-tiered 2026-08-06 after market research (competitor pattern: 6–8 pillar compression + hub-and-spoke depth; wall-of-text enumeration is the category's failure mode). Anti-data-entry message ("two entries, ten minutes") leads — research found setup dread is the universal objection.
+**Chosen direction:** lifecycle structure (candidate #5, seed 62be04b2) recomposed twice on 2026-08-06 — first to plan+fold after density research, then to seller blocks on Jesse's "still too much reading" ruling. Copy discipline: no paragraphs; headline + ≤1 sentence per section.
 
-**Constraints:** clauses must describe shipped capabilities only — plate scanning stays absent until live; handover copy must not claim private-entry filtering until `loadHandoverReport` honors visibility contexts; pricing facts defer to `/pricing`. PRODUCT.md voice; WCAG 2.2 AA; anchors `#begin #keeping #wired #emergency #sharing #handover #portfolio` are load-bearing (landing links + hash-open behavior) — do not rename.
+**Constraints:** shipped capabilities only (no plate-scan claim; handover privacy copy narrowed pending the visibility-context fix); dollar figures never invented — pricing defers to `/pricing`; "Entries shown are illustrative" note must survive while plates are staged; anchors `#begin…#portfolio` + `#schedule` are load-bearing. PRODUCT.md voice; WCAG 2.2 AA.
 
-**Unresolved:** real product screenshots per pillar would strengthen trust (every strong competitor uses them) — needs a way to capture polished demo-data screenshots; revisit with Jesse.
+**Unresolved:** swap plates for real screenshots when captured (compress, keep LCP fast; label illustrative data).
