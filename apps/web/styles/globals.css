@@ -541,6 +541,34 @@ main [id]{scroll-margin-top:1.25rem}
 .hb-toc-row:hover{background:rgba(227,194,136,0.16);transform:translateX(0.5rem)}
 .hb-toc-row:hover .hb-toc-detail{color:var(--color-brass-deep)}
 
+/* folded schedule chapters (features page) — a <details> leaf wearing the
+   card chrome, since Card renders a <section> and cannot fold */
+.hb-chapter{
+  border:1px solid var(--border-subtle);
+  border-radius:var(--radius-card);
+  padding:18px 24px 18px 28px;
+  background:var(--surface-card);
+  box-shadow:var(--shadow-card);
+}
+.hb-chapter-summary{
+  list-style:none;
+  cursor:pointer;
+  display:flex;align-items:baseline;gap:0.75rem;
+  border-radius:var(--radius-control);
+}
+.hb-chapter-summary::-webkit-details-marker{display:none}
+.hb-chapter-summary:hover .hb-toc-title{color:var(--color-brass-deep)}
+.hb-chapter-caret{display:inline-block;transition:transform 160ms ease}
+.hb-chapter[open]>.hb-chapter-summary .hb-chapter-caret{transform:rotate(90deg)}
+@media (prefers-reduced-motion: reduce){
+  .hb-chapter-caret{transition:none}
+}
+@media (max-width: 640px){
+  .hb-chapter-summary{flex-wrap:wrap;row-gap:0.1rem}
+  .hb-chapter-summary .hb-toc-dots{display:none}
+  .hb-chapter-summary .hb-toc-title{flex:1}
+}
+
 /* folio number — the page reference on any entry */
 .hb-folio{
   font-family:var(--font-mono);font-size:0.66rem;font-weight:600;

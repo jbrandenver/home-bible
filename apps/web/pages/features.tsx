@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { Card } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
@@ -8,17 +9,19 @@ import { softwareApplicationSchema } from '../lib/seo';
 
 /* Direction contract — Schedule A, the features page (Persuade), inside the
    committed "Register of Record" world (see styles/globals.css).
-   THESIS: the complete enumeration of the instrument, told as the life of a
-     home — it refuses the icon-grid features page and the pricing-tier matrix.
+   THESIS: the whole instrument graspable in two viewports — a plan of seven
+     chapters up front, every clause kept but folded one click deep. It
+     refuses both the icon-grid features page and the wall-of-text schedule.
    OWN-WORLD: archive green + laid stock, gilt engraving, Cinzel struck titles,
      seals, folios, dotted leaders; unchanged from the committed world.
-   STORY: a visitor reads their own future — moving day, the keeping years,
-     the 2 a.m. burst pipe, the closing table — finds every capability entered
-     as a numbered clause at the moment of life it serves, and begins free.
-   FIRST VIEWPORT: engraved cover — "Schedule A", struck title, entry count,
-     "Begin your record" primary + demo secondary; schedule of chapters below.
+   STORY: a visitor scans the plan of chapters, recognizes their own life in
+     one (new keys, a rental, a closing), opens that chapter for its entries,
+     and begins free — without reading a single chapter they don't need.
+   FIRST VIEWPORT: compact cover — "Schedule A", struck title, entry count,
+     primary + demo CTAs — with the plan of chapters directly beneath.
    FORM: lifecycle-of-a-home structure (grounded candidate #5, surface seed
-     62be04b2); staging challengers declined for reading clarity. */
+     62be04b2), re-tiered 2026-08-06 to plan + folded chapters after market
+     research on feature-page density; content unchanged. */
 
 type Clause = {
   name: string;
@@ -31,6 +34,7 @@ type Chapter = {
   id: string;
   num: string;
   title: string;
+  benefit: string;
   scene: string;
   seal: { label: string; tone: 'good' | 'attention' };
   clauses: Clause[];
@@ -43,6 +47,7 @@ const chapters: Chapter[] = [
     id: 'begin',
     num: 'I',
     title: 'The Day You Begin',
+    benefit: 'Ten minutes, two entries — the record opens with the answers nobody can find.',
     scene:
       'Moving day, or twenty years in — the record opens the same way: with the answers nobody can find.',
     seal: { label: 'Free register', tone: 'good' },
@@ -79,6 +84,7 @@ const chapters: Chapter[] = [
     id: 'keeping',
     num: 'II',
     title: 'The Years of Keeping',
+    benefit: 'The paper trail an insurer, a buyer, or a warranty claim will one day ask for.',
     scene:
       'The slow decades of ownership — a receipt here, a service call there — entered once, findable forever.',
     seal: { label: 'Free register', tone: 'good' },
@@ -143,6 +149,7 @@ const chapters: Chapter[] = [
     id: 'wired',
     num: 'III',
     title: 'The Wired Home',
+    benefit: 'The smart home written down — so the house stops depending on the one person who set it up.',
     scene:
       'Every smart home has one person who understands it. The record is how the house stops depending on them.',
     seal: { label: 'Free register', tone: 'good' },
@@ -180,6 +187,7 @@ const chapters: Chapter[] = [
     id: 'emergency',
     num: 'IV',
     title: 'The Night It Goes Wrong',
+    benefit: 'Shut-offs and contacts on one sheet, readable in a panic, on any phone.',
     scene:
       'A burst pipe at 2 a.m., a house-sitter with a tripped breaker. This chapter is written to be read in a panic.',
     seal: { label: 'Free register', tone: 'good' },
@@ -200,6 +208,7 @@ const chapters: Chapter[] = [
     id: 'sharing',
     num: 'V',
     title: 'The People Who Share It',
+    benefit: 'Partner, family, house-sitter — invited by email, with roles you set and revoke.',
     scene:
       'The knowledge should belong to the home — not to whoever happens to be standing in it.',
     seal: { label: 'Free register', tone: 'good' },
@@ -225,6 +234,7 @@ const chapters: Chapter[] = [
     id: 'handover',
     num: 'VI',
     title: 'The Day It Changes Hands',
+    benefit: 'A sale, an inheritance, a caretaker — the record moves with the house, in open formats.',
     scene:
       'A sale, an inheritance, a caretaker taking over. The point of the whole instrument is this day.',
     seal: { label: 'Free register', tone: 'good' },
@@ -257,6 +267,7 @@ const chapters: Chapter[] = [
     id: 'portfolio',
     num: 'VII',
     title: 'More Than One Home',
+    benefit: 'A register per rental: condition reports, compliance dates, tenancies — the paper trail.',
     scene:
       'The cabin, a rental, a parent’s house — each place keeps its own complete register.',
     seal: { label: 'Beyond the first home', tone: 'attention' },
@@ -293,6 +304,11 @@ const chapterStarts = chapters.reduce<number[]>((starts, chapter, i) => {
 }, []);
 const totalClauses = chapters.reduce((n, c) => n + c.clauses.length, 0);
 
+const entriesLabel = (i: number): string =>
+  chapters[i].clauses.length === 1
+    ? `entry ${chapterStarts[i]}`
+    : `entries ${chapterStarts[i]}–${chapterStarts[i] + chapters[i].clauses.length - 1}`;
+
 const featuresApplicationSchema = {
   ...softwareApplicationSchema,
   featureList: chapters.flatMap((c) => c.clauses.map((cl) => cl.name))
@@ -307,7 +323,31 @@ const monoLabel: CSSProperties = {
   color: 'var(--text-muted)'
 };
 
+const keywordLine: CSSProperties = {
+  fontFamily: 'var(--font-mono)',
+  fontSize: '0.72rem',
+  fontWeight: 600,
+  letterSpacing: '0.06em',
+  textTransform: 'uppercase',
+  color: 'var(--color-brass-deep)',
+  lineHeight: 1.7
+};
+
 export default function FeaturesPage() {
+  // A chapter linked by hash (from the landing page or the plan) unfolds
+  // itself; everything else stays folded so the schedule reads at a glance.
+  useEffect(() => {
+    const applyHash = () => {
+      const target = document.getElementById(window.location.hash.slice(1));
+      if (target instanceof HTMLDetailsElement) {
+        target.open = true;
+      }
+    };
+    applyHash();
+    window.addEventListener('hashchange', applyHash);
+    return () => window.removeEventListener('hashchange', applyHash);
+  }, []);
+
   return (
     <div style={{ display: 'grid', gap: 28 }}>
       <Seo
@@ -327,7 +367,7 @@ export default function FeaturesPage() {
               justifyContent: 'space-between',
               gap: 12,
               flexWrap: 'wrap',
-              marginBottom: 18
+              marginBottom: 16
             }}
           >
             <span className="hb-registry hb-registry-on-dark">Register of record · Schedule A</span>
@@ -340,18 +380,18 @@ export default function FeaturesPage() {
               fontFamily: 'var(--font-title)',
               textTransform: 'uppercase',
               letterSpacing: '0.02em',
-              fontSize: 'clamp(2rem, 5vw, 3.1rem)',
-              margin: '0 0 12px',
+              fontSize: 'clamp(1.9rem, 4.6vw, 2.9rem)',
+              margin: '0 0 10px',
               lineHeight: 1.08
             }}
           >
             What the record <span style={{ fontWeight: 500, color: 'var(--color-brass-pale)' }}>holds</span>
           </h1>
-          <p style={{ fontSize: 19, maxWidth: 640, marginTop: 0, fontStyle: 'italic' }}>
-            Every capability of the instrument, entered as {totalClauses} clauses — in the order a
-            home needs them, from the day you move in to the day it changes hands.
+          <p style={{ fontSize: 18, maxWidth: 620, marginTop: 0, marginBottom: 0, fontStyle: 'italic' }}>
+            Seven chapters, {totalClauses} entries, one page — open any chapter for its particulars.
+            It begins with two entries and ten minutes, not a weekend of data entry.
           </p>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 22 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 20 }}>
             <ActionLink href="/sign-up">Begin your record — free</ActionLink>
             <ActionLink
               href="/welcome"
@@ -367,126 +407,184 @@ export default function FeaturesPage() {
         </div>
       </Card>
 
-      {/* ── Schedule of chapters ──────────────────────────────────────── */}
-      <Card>
-        <div className="hb-leader" style={{ marginBottom: 6 }}>
-          <h2 style={{ margin: 0 }}>The chapters of a home</h2>
-          <span style={monoLabel}>Schedule A · Contents</span>
+      {/* ── The plan of the instrument — everything at a glance ───────── */}
+      <div style={{ display: 'grid', gap: 16 }}>
+        <div className="hb-leader">
+          <h2 style={{ margin: 0 }}>The record at a glance</h2>
+          <span style={monoLabel}>Schedule A · Plan</span>
         </div>
-        <div style={{ display: 'grid', marginTop: 8 }}>
+        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))' }}>
           {chapters.map((chapter, i) => (
-            <a key={chapter.id} href={`#${chapter.id}`} className="hb-toc-row">
-              <span className="hb-toc-num">{chapter.num}</span>
-              <span className="hb-toc-title">{chapter.title}</span>
-              <span className="hb-toc-dots" aria-hidden="true" />
-              <span className="hb-folio" style={{ minWidth: '6.2rem', textAlign: 'right' }}>
-                {chapter.clauses.length === 1
-                  ? `entry ${chapterStarts[i]}`
-                  : `entries ${chapterStarts[i]}–${chapterStarts[i] + chapter.clauses.length - 1}`}
-              </span>
-            </a>
-          ))}
-        </div>
-        <div className="hb-mrz hb-mrz-paper" style={{ marginTop: 14 }} aria-hidden="true">
-          SCH·A&lt;&lt;ENTRIES·{totalClauses}&lt;&lt;CH·I–VII&lt;&lt;ISSUED·TO·THE·BEARER
-        </div>
-      </Card>
-
-      {/* ── The chapters ──────────────────────────────────────────────── */}
-      {chapters.map((chapter, i) => (
-        <div key={chapter.id} style={{ display: 'contents' }}>
-          <Card id={chapter.id} className="cv-section" aria-labelledby={`${chapter.id}-title`}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                gap: 10,
-                flexWrap: 'wrap',
-                marginBottom: 6
-              }}
-            >
-              <span className="hb-registry">Chapter {chapter.num}</span>
-              <PlateSeal tone={chapter.seal.tone}>{chapter.seal.label}</PlateSeal>
-            </div>
-            <h2 id={`${chapter.id}-title`} style={{ marginTop: 0, marginBottom: 6 }}>
-              {chapter.title}
-            </h2>
-            <p style={{ fontStyle: 'italic', color: 'var(--text-muted)', marginTop: 0, maxWidth: 640 }}>
-              {chapter.scene}
-            </p>
-            <ol start={chapterStarts[i]} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
-              {chapter.clauses.map((clause, j) => (
-                <li
-                  key={clause.name}
-                  style={{
-                    borderTop: '1px solid var(--gilt-line)',
-                    padding: '0.7rem 0',
-                    display: 'grid',
-                    gridTemplateColumns: '3.2rem 1fr',
-                    gap: '0.75rem',
-                    alignItems: 'baseline'
-                  }}
-                >
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      letterSpacing: '0.1em',
-                      color: 'var(--color-brass-deep)'
-                    }}
-                  >
-                    No. {chapterStarts[i] + j}
-                  </span>
-                  <span>
-                    <strong style={{ display: 'block', fontSize: '1.02rem', marginBottom: 2 }}>
-                      {clause.name}
-                    </strong>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
-                      {clause.detail}
-                      {clause.href ? (
-                        <>
-                          {' '}
-                          <Link href={clause.href}>{clause.hrefLabel}</Link>
-                        </>
-                      ) : null}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ol>
-            {chapter.id === 'portfolio' ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: 14, marginBottom: 0 }}>
-                The home you live in is free forever. Additional homes and the Portfolio plan are
-                set out in <Link href="/pricing">the schedule of fees</Link>.
-              </p>
-            ) : null}
-          </Card>
-
-          {/* Mid-schedule attestation — after the chapter read in a panic. */}
-          {chapter.id === 'emergency' ? (
-            <Card tone="dark" className="cv-section">
+            <Card key={chapter.id} interactive>
               <div
                 style={{
                   display: 'flex',
-                  gap: 14,
-                  flexWrap: 'wrap',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  gap: 10,
+                  marginBottom: 6
                 }}
               >
-                <p style={{ margin: 0, maxWidth: 520, color: 'rgba(244,238,221,0.86)', fontStyle: 'italic' }}>
-                  Every entry to this point is in the free register — no card, no trial clock, no
-                  feature held back to sell you later.
-                </p>
-                <ActionLink href="/sign-up">Begin your record — free</ActionLink>
+                <span className="hb-registry">Ch. {chapter.num}</span>
+                {chapter.seal.tone === 'attention' ? (
+                  <PlateSeal tone="attention">{chapter.seal.label}</PlateSeal>
+                ) : null}
               </div>
+              <h3 style={{ marginTop: 0, marginBottom: 6, fontSize: '1.15rem' }}>{chapter.title}</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: 0, marginBottom: 10 }}>
+                {chapter.benefit}
+              </p>
+              <p style={{ ...keywordLine, margin: '0 0 12px' }}>
+                {chapter.clauses.map((cl) => cl.name.replace(/^The /, '')).join(' · ')}
+              </p>
+              <a href={`#${chapter.id}`} className="hb-folio" style={{ textDecoration: 'none' }}>
+                Open {entriesLabel(i)} ↓
+              </a>
             </Card>
-          ) : null}
+          ))}
+
+          {/* The eighth cell: what it costs, in one breath. */}
+          <Card tone="dark">
+            <span className="hb-registry hb-registry-on-dark" style={{ marginBottom: 6, display: 'inline-flex' }}>
+              Terms
+            </span>
+            <h3 style={{ marginTop: 6, marginBottom: 6, fontSize: '1.15rem' }}>
+              Chapters I–VI: free, complete
+            </h3>
+            <p style={{ color: 'rgba(244,238,221,0.82)', fontSize: '0.92rem', marginTop: 0, marginBottom: 12 }}>
+              The home you live in costs nothing, forever — no card, no trial clock, nothing held
+              back. Chapter VII covers additional homes and rentals.
+            </p>
+            <Link href="/pricing" className="hb-folio" style={{ color: 'var(--color-brass-pale)', textDecoration: 'none' }}>
+              The schedule of fees →
+            </Link>
+          </Card>
         </div>
-      ))}
+      </div>
+
+      {/* ── Who keeps one ─────────────────────────────────────────────── */}
+      <Card className="cv-section">
+        <div className="hb-leader" style={{ marginBottom: 14 }}>
+          <h2 style={{ margin: 0 }}>Who this serves</h2>
+          <span style={monoLabel}>Three readers</span>
+        </div>
+        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 14 }}>
+            <h3 style={{ marginTop: 0 }}>Homeowners &amp; families</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: 0 }}>
+              So the next 2 a.m. emergency, insurance claim, or warranty deadline finds the answer
+              already written down — and the house never again depends on the previous owner who
+              left nothing.
+            </p>
+          </div>
+          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 14 }}>
+            <h3 style={{ marginTop: 0 }}>Landlords</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: 0 }}>
+              Time-stamped condition reports, compliance dates, and tenancy records, kept per
+              property — <a href="#portfolio">Chapter VII</a> is yours, priced on{' '}
+              <Link href="/pricing">the schedule of fees</Link>.
+            </p>
+          </div>
+          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 14 }}>
+            <h3 style={{ marginTop: 0 }}>Inspectors &amp; agents</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: 0 }}>
+              Issue buyers a living record at closing — free, forever, for the homeowner who
+              receives it. Their record stays theirs; see{' '}
+              <Link href="/data-promise">our data promise</Link> and{' '}
+              <Link href="/pro">the professional channel</Link>.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* ── The full schedule, folded ─────────────────────────────────── */}
+      <div className="cv-section" style={{ display: 'grid', gap: 14 }}>
+        <div className="hb-leader">
+          <h2 style={{ margin: 0 }}>The full schedule</h2>
+          <span style={monoLabel}>{totalClauses} entries · unfold a chapter</span>
+        </div>
+
+        {chapters.map((chapter, i) => (
+          <details key={chapter.id} id={chapter.id} className="hb-card hb-chapter">
+            <summary className="hb-chapter-summary">
+              <span className="hb-toc-num" style={{ minWidth: '2rem' }}>{chapter.num}</span>
+              <span className="hb-toc-title">{chapter.title}</span>
+              <span className="hb-toc-dots" aria-hidden="true" />
+              <span className="hb-folio" style={{ whiteSpace: 'nowrap' }}>
+                {entriesLabel(i)} <span className="hb-chapter-caret" aria-hidden="true">▸</span>
+              </span>
+            </summary>
+            <div style={{ paddingTop: 12 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  gap: 10,
+                  flexWrap: 'wrap'
+                }}
+              >
+                <p style={{ fontStyle: 'italic', color: 'var(--text-muted)', margin: 0, maxWidth: 640 }}>
+                  {chapter.scene}
+                </p>
+                <PlateSeal tone={chapter.seal.tone}>{chapter.seal.label}</PlateSeal>
+              </div>
+              <ol start={chapterStarts[i]} style={{ listStyle: 'none', margin: '10px 0 0', padding: 0 }}>
+                {chapter.clauses.map((clause, j) => (
+                  <li
+                    key={clause.name}
+                    style={{
+                      borderTop: '1px solid var(--gilt-line)',
+                      padding: '0.7rem 0',
+                      display: 'grid',
+                      gridTemplateColumns: '3.2rem 1fr',
+                      gap: '0.75rem',
+                      alignItems: 'baseline'
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.72rem',
+                        fontWeight: 600,
+                        letterSpacing: '0.1em',
+                        color: 'var(--color-brass-deep)'
+                      }}
+                    >
+                      No. {chapterStarts[i] + j}
+                    </span>
+                    <span>
+                      <strong style={{ display: 'block', fontSize: '1.02rem', marginBottom: 2 }}>
+                        {clause.name}
+                      </strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.95rem' }}>
+                        {clause.detail}
+                        {clause.href ? (
+                          <>
+                            {' '}
+                            <Link href={clause.href}>{clause.hrefLabel}</Link>
+                          </>
+                        ) : null}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+              {chapter.id === 'portfolio' ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: 14, marginBottom: 0 }}>
+                  The home you live in is free forever. Additional homes and the Portfolio plan are
+                  set out in <Link href="/pricing">the schedule of fees</Link>.
+                </p>
+              ) : null}
+            </div>
+          </details>
+        ))}
+
+        <div className="hb-mrz hb-mrz-paper" aria-hidden="true">
+          SCH·A&lt;&lt;ENTRIES·{totalClauses}&lt;&lt;CH·I–VII&lt;&lt;ISSUED·TO·THE·BEARER
+        </div>
+      </div>
 
       {/* ── Attestation ───────────────────────────────────────────────── */}
       <Card tone="dark" className="hb-cover cv-section">
