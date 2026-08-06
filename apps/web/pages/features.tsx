@@ -3,25 +3,28 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { Card } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
-import { PlateSeal } from '../components/PlateRow';
+import { PlateRow, PlateSeal } from '../components/PlateRow';
 import { Seo } from '../components/Seo';
 import { softwareApplicationSchema } from '../lib/seo';
 
 /* Direction contract — Schedule A, the features page (Persuade), inside the
    committed "Register of Record" world (see styles/globals.css).
-   THESIS: the whole instrument graspable in two viewports — a plan of seven
-     chapters up front, every clause kept but folded one click deep. It
-     refuses both the icon-grid features page and the wall-of-text schedule.
+   THESIS: a selling page, not a reading page — five specimen blocks (one
+     headline, one line, one plate each) prove the record at work; the full
+     enumeration survives as folded bars with keyword previews. It refuses
+     the icon grid, the wall of text, and paragraphs anywhere.
    OWN-WORLD: archive green + laid stock, gilt engraving, Cinzel struck titles,
      seals, folios, dotted leaders; unchanged from the committed world.
-   STORY: a visitor scans the plan of chapters, recognizes their own life in
-     one (new keys, a rental, a closing), opens that chapter for its entries,
-     and begins free — without reading a single chapter they don't need.
-   FIRST VIEWPORT: compact cover — "Schedule A", struck title, entry count,
-     primary + demo CTAs — with the plan of chapters directly beneath.
+   STORY: a visitor reads five headlines, sees the product doing its job in
+     the plates, finds their door (owner / landlord / inspector), and begins
+     free; the 36 entries are scannable, never required reading.
+   FIRST VIEWPORT: compact cover — struck title, one italic line, mono stat
+     strip (entries · $0 · 10 minutes), primary + demo CTAs — first seller
+     block cresting beneath.
    FORM: lifecycle-of-a-home structure (grounded candidate #5, surface seed
-     62be04b2), re-tiered 2026-08-06 to plan + folded chapters after market
-     research on feature-page density; content unchanged. */
+     62be04b2), recomposed 2026-08-06 to seller blocks + folded schedule on
+     Jesse's direction (density discipline per market research; plates are
+     the screenshot slots until real captures land). */
 
 type Clause = {
   name: string;
@@ -387,10 +390,29 @@ export default function FeaturesPage() {
           >
             What the record <span style={{ fontWeight: 500, color: 'var(--color-brass-pale)' }}>holds</span>
           </h1>
-          <p style={{ fontSize: 18, maxWidth: 620, marginTop: 0, marginBottom: 0, fontStyle: 'italic' }}>
-            Seven chapters, {totalClauses} entries, one page — open any chapter for its particulars.
-            It begins with two entries and ten minutes, not a weekend of data entry.
+          <p style={{ fontSize: 19, maxWidth: 560, marginTop: 0, marginBottom: 0, fontStyle: 'italic' }}>
+            Everything your home knows, kept for whoever needs it next.
           </p>
+          <div
+            style={{
+              display: 'flex',
+              gap: '10px 28px',
+              flexWrap: 'wrap',
+              marginTop: 18,
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--color-brass-pale)'
+            }}
+          >
+            <a href="#schedule" style={{ color: 'inherit', textDecoration: 'none' }}>
+              {totalClauses} entries · 7 chapters ↓
+            </a>
+            <span>$0 — the home you live in</span>
+            <span>10 minutes to begin</span>
+          </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: 20 }}>
             <ActionLink href="/sign-up">Begin your record — free</ActionLink>
             <ActionLink
@@ -407,98 +429,159 @@ export default function FeaturesPage() {
         </div>
       </Card>
 
-      {/* ── The plan of the instrument — everything at a glance ───────── */}
-      <div style={{ display: 'grid', gap: 16 }}>
-        <div className="hb-leader">
-          <h2 style={{ margin: 0 }}>The record at a glance</h2>
-          <span style={monoLabel}>Schedule A · Plan</span>
-        </div>
-        <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))' }}>
-          {chapters.map((chapter, i) => (
-            <Card key={chapter.id} interactive>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'baseline',
-                  gap: 10,
-                  marginBottom: 6
-                }}
-              >
-                <span className="hb-registry">Ch. {chapter.num}</span>
-                {chapter.seal.tone === 'attention' ? (
-                  <PlateSeal tone="attention">{chapter.seal.label}</PlateSeal>
-                ) : null}
-              </div>
-              <h3 style={{ marginTop: 0, marginBottom: 6, fontSize: '1.15rem' }}>{chapter.title}</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.92rem', marginTop: 0, marginBottom: 10 }}>
-                {chapter.benefit}
-              </p>
-              <p style={{ ...keywordLine, margin: '0 0 12px' }}>
-                {chapter.clauses.map((cl) => cl.name.replace(/^The /, '')).join(' · ')}
-              </p>
-              <a href={`#${chapter.id}`} className="hb-folio" style={{ textDecoration: 'none' }}>
-                Open {entriesLabel(i)} ↓
-              </a>
-            </Card>
-          ))}
+      {/* ── The sellers — five blocks, one line each ──────────────────── */}
+      {/* Text + specimen plate, alternating grounds. The plate column is
+          the screenshot slot: swap each inner leaf for a real product
+          screenshot when captures exist. Entries shown are illustrative. */}
 
-          {/* The eighth cell: what it costs, in one breath. */}
-          <Card tone="dark">
-            <span className="hb-registry hb-registry-on-dark" style={{ marginBottom: 6, display: 'inline-flex' }}>
-              Terms
-            </span>
-            <h3 style={{ marginTop: 6, marginBottom: 6, fontSize: '1.15rem' }}>
-              Chapters I–VI: free, complete
-            </h3>
-            <p style={{ color: 'rgba(244,238,221,0.82)', fontSize: '0.92rem', marginTop: 0, marginBottom: 12 }}>
-              The home you live in costs nothing, forever — no card, no trial clock, nothing held
-              back. Chapter VII covers additional homes and rentals.
-            </p>
-            <Link href="/pricing" className="hb-folio" style={{ color: 'var(--color-brass-pale)', textDecoration: 'none' }}>
-              The schedule of fees →
-            </Link>
-          </Card>
-        </div>
-      </div>
-
-      {/* ── Who keeps one ─────────────────────────────────────────────── */}
+      {/* 1 · Reminders — the recurring-value engine */}
       <Card className="cv-section">
-        <div className="hb-leader" style={{ marginBottom: 14 }}>
-          <h2 style={{ margin: 0 }}>Who this serves</h2>
-          <span style={monoLabel}>Three readers</span>
+        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', alignItems: 'center' }}>
+          <div>
+            <span className="hb-registry" style={{ marginBottom: 10 }}>Chapter II · Maintenance</span>
+            <h2 style={{ marginTop: 8, marginBottom: 8, fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>
+              The house reminds you
+            </h2>
+            <p style={{ color: 'var(--text-muted)', margin: 0, maxWidth: 440 }}>
+              Recurring care and expiry dates surface when they're due — on the record, and in a
+              quiet weekly email.
+            </p>
+          </div>
+          <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-card)', padding: '16px 18px', background: 'var(--surface-page)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={monoLabel}>This week at home</span>
+              <PlateSeal tone="good">On watch</PlateSeal>
+            </div>
+            <PlateRow label="Sat" value="Clear gutters · fall sweep" />
+            <PlateRow label="Due" value="Furnace filter · 90 days since last" />
+            <PlateRow label="Mar" value="Water heater warranty · 90 days left" />
+          </div>
         </div>
-        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 14 }}>
-            <h3 style={{ marginTop: 0 }}>Homeowners &amp; families</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: 0 }}>
-              So the next 2 a.m. emergency, insurance claim, or warranty deadline finds the answer
-              already written down — and the house never again depends on the previous owner who
-              left nothing.
+      </Card>
+
+      {/* 2 · Warranties — the dollar story */}
+      <Card tone="dark" className="cv-section">
+        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', alignItems: 'center' }}>
+          <div>
+            <span className="hb-registry hb-registry-on-dark" style={{ marginBottom: 10 }}>Chapter II · Warranties &amp; receipts</span>
+            <h2 style={{ marginTop: 8, marginBottom: 8, fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>
+              The claim gets made
+            </h2>
+            <p style={{ color: 'rgba(244,238,221,0.82)', margin: 0, maxWidth: 440 }}>
+              Serial, receipt, and expiry live on one entry — so the warranty pays instead of
+              quietly lapsing.
             </p>
           </div>
-          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 14 }}>
-            <h3 style={{ marginTop: 0 }}>Landlords</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: 0 }}>
-              Time-stamped condition reports, compliance dates, and tenancy records, kept per
-              property — <a href="#portfolio">Chapter VII</a> is yours, priced on{' '}
-              <Link href="/pricing">the schedule of fees</Link>.
+          <div style={{ border: '1px solid rgba(227,194,136,0.4)', borderRadius: 'var(--radius-card)', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span className="hb-registry hb-registry-on-dark">Water heater · fol. 12</span>
+              <PlateSeal onDark>Under warranty</PlateSeal>
+            </div>
+            <PlateRow onDark label="Entry" value="Rheem Performance 50" />
+            <PlateRow onDark label="Installed" value="March 2023 · receipt bound" />
+            <PlateRow onDark label="Warranty" value="Through March 2029" />
+          </div>
+        </div>
+      </Card>
+
+      {/* 3 · Emergency — the signature */}
+      <Card className="cv-section">
+        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', alignItems: 'center' }}>
+          <div>
+            <span className="hb-registry" style={{ marginBottom: 10 }}>Chapter IV · Emergency</span>
+            <h2 style={{ marginTop: 8, marginBottom: 8, fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>
+              Readable in a panic
+            </h2>
+            <p style={{ color: 'var(--text-muted)', margin: 0, maxWidth: 440 }}>
+              Shut-offs and contacts on one sheet, on any phone — for whoever is standing in your
+              basement.
             </p>
           </div>
-          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 14 }}>
-            <h3 style={{ marginTop: 0 }}>Inspectors &amp; agents</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: 0 }}>
-              Issue buyers a living record at closing — free, forever, for the homeowner who
-              receives it. Their record stays theirs; see{' '}
-              <Link href="/data-promise">our data promise</Link> and{' '}
-              <Link href="/pro">the professional channel</Link>.
+          <div style={{ maxWidth: 340, justifySelf: 'center', width: '100%', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-card)', padding: '16px 18px', background: 'var(--color-green-deep)', color: 'var(--text-inverse)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span className="hb-registry hb-registry-on-dark">Emergency</span>
+              <PlateSeal onDark>Recorded</PlateSeal>
+            </div>
+            <PlateRow onDark label="Water" value="Basement · left of meter" />
+            <PlateRow onDark label="Panel" value="Garage · behind the door" />
+            <PlateRow onDark label="Gas" value="East side · at the meter" />
+          </div>
+        </div>
+      </Card>
+
+      {/* 4 · Handover — the differentiator */}
+      <Card tone="dark" className="cv-section">
+        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', alignItems: 'center' }}>
+          <div>
+            <span className="hb-registry hb-registry-on-dark" style={{ marginBottom: 10 }}>Chapter VI · Handover</span>
+            <h2 style={{ marginTop: 8, marginBottom: 8, fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>
+              The house comes with its manual
+            </h2>
+            <p style={{ color: 'rgba(244,238,221,0.82)', margin: 0, maxWidth: 440 }}>
+              The whole record — print, PDF, or export — legible to family, a buyer, or the next
+              keeper.
             </p>
+          </div>
+          <div style={{ border: '1px solid rgba(227,194,136,0.4)', borderRadius: 'var(--radius-card)', padding: '16px 18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span className="hb-registry hb-registry-on-dark">Handover · fol. 31</span>
+              <PlateSeal onDark>Issued</PlateSeal>
+            </div>
+            <PlateRow onDark label="Issued to" value="The bearer" />
+            <PlateRow onDark label="Contains" value="Everything they need" />
+            <PlateRow onDark label="Format" value="Print · PDF · open export" />
+          </div>
+        </div>
+      </Card>
+
+      {/* 5 · Landlords — the paid tier */}
+      <Card className="cv-section">
+        <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', alignItems: 'center' }}>
+          <div>
+            <span className="hb-registry" style={{ marginBottom: 10 }}>Chapter VII · The Portfolio</span>
+            <h2 style={{ marginTop: 8, marginBottom: 8, fontSize: 'clamp(1.5rem, 3vw, 2rem)' }}>
+              Evidence that holds up
+            </h2>
+            <p style={{ color: 'var(--text-muted)', margin: '0 0 14px', maxWidth: 440 }}>
+              Condition reports with photographs, compliance dates, tenancies — a register per
+              property.
+            </p>
+            <ActionLink href="/pricing" variant="secondary">The schedule of fees</ActionLink>
+          </div>
+          <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-card)', padding: '16px 18px', background: 'var(--surface-page)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+              <span style={monoLabel}>Unit 2B · move-in report</span>
+              <PlateSeal>Beyond the first home</PlateSeal>
+            </div>
+            <PlateRow label="Kitchen" value="12 photographs · March 1" />
+            <PlateRow label="Gas certificate" value="Renews June" />
+            <PlateRow label="Tenancy" value="March 2026 — present" />
+          </div>
+        </div>
+      </Card>
+
+      <p style={{ ...monoLabel, margin: 0 }}>Entries shown are illustrative.</p>
+
+      {/* ── Three readers, one line each ──────────────────────────────── */}
+      <Card className="cv-section">
+        <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 12 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.02rem' }}>Homeowners &amp; families</h3>
+            <Link href="/sign-up" className="hb-folio" style={{ textDecoration: 'none' }}>Begin free →</Link>
+          </div>
+          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 12 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.02rem' }}>Landlords</h3>
+            <Link href="/pricing" className="hb-folio" style={{ textDecoration: 'none' }}>The Portfolio →</Link>
+          </div>
+          <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 12 }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.02rem' }}>Inspectors &amp; agents</h3>
+            <Link href="/pro" className="hb-folio" style={{ textDecoration: 'none' }}>Issue at closing →</Link>
           </div>
         </div>
       </Card>
 
       {/* ── The full schedule, folded ─────────────────────────────────── */}
-      <div className="cv-section" style={{ display: 'grid', gap: 14 }}>
+      <div id="schedule" className="cv-section" style={{ display: 'grid', gap: 14 }}>
         <div className="hb-leader">
           <h2 style={{ margin: 0 }}>The full schedule</h2>
           <span style={monoLabel}>{totalClauses} entries · unfold a chapter</span>
@@ -512,6 +595,19 @@ export default function FeaturesPage() {
               <span className="hb-toc-dots" aria-hidden="true" />
               <span className="hb-folio" style={{ whiteSpace: 'nowrap' }}>
                 {entriesLabel(i)} <span className="hb-chapter-caret" aria-hidden="true">▸</span>
+              </span>
+              <span
+                className="hb-chapter-kw"
+                style={{
+                  ...keywordLine,
+                  color: 'var(--text-muted)',
+                  fontWeight: 500,
+                  letterSpacing: '0.04em',
+                  flexBasis: '100%',
+                  paddingLeft: '2.75rem'
+                }}
+              >
+                {chapter.clauses.map((cl) => cl.name.replace(/^The /, '')).join(' · ')}
               </span>
             </summary>
             <div style={{ paddingTop: 12 }}>

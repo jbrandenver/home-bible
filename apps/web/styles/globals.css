@@ -560,6 +560,9 @@ main [id]{scroll-margin-top:1.25rem}
 .hb-chapter-summary:hover .hb-toc-title{color:var(--color-brass-deep)}
 .hb-chapter-caret{display:inline-block;transition:transform 160ms ease}
 .hb-chapter[open]>.hb-chapter-summary .hb-chapter-caret{transform:rotate(90deg)}
+/* the closed bar previews its entry names; the open chapter shows them in full */
+.hb-chapter[open]>.hb-chapter-summary .hb-chapter-kw{display:none}
+.hb-chapter-summary{flex-wrap:wrap;row-gap:0.15rem}
 @media (prefers-reduced-motion: reduce){
   .hb-chapter-caret{transition:none}
 }
