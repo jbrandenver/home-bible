@@ -267,6 +267,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
                 </button>
               ) : (
                 <>
+                  <Link href="/features" className="header-action px-3 py-2 rounded">
+                    Features
+                  </Link>
                   <Link href="/pricing" className="header-action px-3 py-2 rounded">
                     Pricing
                   </Link>

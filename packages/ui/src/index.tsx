@@ -97,7 +97,8 @@ export function Card({
   style,
   tone = 'default',
   interactive = false,
-  id
+  id,
+  'aria-labelledby': ariaLabelledBy
 }: {
   children: ReactNode;
   className?: string;
@@ -105,12 +106,14 @@ export function Card({
   tone?: 'default' | 'dark';
   interactive?: boolean;
   id?: string;
+  'aria-labelledby'?: string;
 }) {
   const isDark = tone === 'dark';
 
   return (
     <section
       id={id}
+      aria-labelledby={ariaLabelledBy}
       className={`hb-card ${interactive ? 'hb-card-hover' : ''} ${isDark ? 'brand-hero' : ''} ${className || ''}`.trim()}
       style={{
         border: '1px solid var(--border-subtle)',

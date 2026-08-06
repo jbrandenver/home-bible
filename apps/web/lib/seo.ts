@@ -43,7 +43,7 @@ export const softwareApplicationSchema = {
 };
 
 /** Public routes for the sitemap (authenticated app routes are excluded). */
-export const PUBLIC_ROUTES = ['/', '/pricing', '/data-promise', '/pro', '/privacy', '/terms', '/sign-in', '/sign-up'];
+export const PUBLIC_ROUTES = ['/', '/features', '/pricing', '/data-promise', '/pro', '/privacy', '/terms', '/sign-in', '/sign-up'];
 
 /** App/private path prefixes to keep out of crawlers. */
 export const DISALLOWED_PATHS = [

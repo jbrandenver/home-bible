@@ -28,9 +28,10 @@ import { organizationSchema, websiteSchema, softwareApplicationSchema } from '..
 const contents: { num: string; title: string; detail: string; folio: string; href: string }[] = [
   { num: 'I', title: 'Preamble', detail: 'Why a home needs a record', folio: 'fol. 1', href: '#preamble' },
   { num: 'II', title: 'The Record, Opened', detail: 'Four leaves from a kept home', folio: 'fol. 2', href: '#plates' },
-  { num: 'III', title: 'Who Keeps a Record', detail: 'Owners · Households · Professionals', folio: 'fol. 6', href: '#keepers' },
-  { num: 'IV', title: 'Terms of Keeping', detail: 'Free to begin · Private · Yours', folio: 'fol. 7', href: '#terms' },
-  { num: 'V', title: 'Attestation', detail: 'Begin your record', folio: 'fol. 8', href: '#begin' }
+  { num: 'III', title: 'What the Record Holds', detail: 'Schedule A — every capability, entered', folio: 'Sch. A', href: '#schedule' },
+  { num: 'IV', title: 'Who Keeps a Record', detail: 'Owners · Households · Professionals', folio: 'fol. 6', href: '#keepers' },
+  { num: 'V', title: 'Terms of Keeping', detail: 'Free to begin · Private · Yours', folio: 'fol. 7', href: '#terms' },
+  { num: 'VI', title: 'Attestation', detail: 'Begin your record', folio: 'fol. 8', href: '#begin' }
 ];
 
 const monoLabel: CSSProperties = {
@@ -250,8 +251,7 @@ export default function Home() {
             <h3 style={{ marginTop: 0, marginBottom: 6 }}>Issued to the next keeper</h3>
             <p style={{ color: 'rgba(244,238,221,0.82)' }}>
               When the day comes, produce a clean handover copy for family, a buyer, or a
-              caretaker — the whole record, legible to someone who was never there, with your
-              private notes kept back.
+              caretaker — the whole record, legible to someone who was never there.
             </p>
             <PlateRow onDark label="Issued to" value="The bearer" />
             <PlateRow onDark label="Contains" value="Everything they need · nothing they don't" />
@@ -264,11 +264,44 @@ export default function Home() {
         <p style={{ ...monoLabel, margin: 0 }}>Entries shown are illustrative.</p>
       </div>
 
-      {/* ── III · Who keeps one ───────────────────────────────────────── */}
+      {/* ── III · Schedule A, in brief ────────────────────────────────── */}
+      <Card id="schedule" className="cv-section">
+        <div className="hb-leader" style={{ marginBottom: 6 }}>
+          <h2 style={{ margin: 0 }}>What the record holds</h2>
+          <span style={monoLabel}>Section III · Schedule A</span>
+        </div>
+        <p style={{ color: 'var(--text-muted)', maxWidth: 640, marginTop: 8 }}>
+          The four leaves above are a sample. The full schedule enumerates every capability of the
+          instrument, chapter by chapter, in the order a home needs them.
+        </p>
+        <div style={{ display: 'grid', marginTop: 4 }}>
+          {[
+            { num: 'I', title: 'The Day You Begin', detail: 'Home map · guided first entries · completeness', href: '/features#begin' },
+            { num: 'II', title: 'The Years of Keeping', detail: 'Inventory · warranties · repairs · reminders · recalls', href: '/features#keeping' },
+            { num: 'III', title: 'The Wired Home', detail: 'Devices · networks · automations · the failure check', href: '/features#wired' },
+            { num: 'IV', title: 'The Night It Goes Wrong', detail: 'The emergency sheet, on any phone', href: '/features#emergency' },
+            { num: 'V', title: 'The People Who Share It', detail: 'Roles · view-only access · private entries', href: '/features#sharing' },
+            { num: 'VI', title: 'The Day It Changes Hands', detail: 'Handover pack · export · the professional channel', href: '/features#handover' },
+            { num: 'VII', title: 'More Than One Home', detail: 'Tenancies · condition reports · compliance', href: '/features#portfolio' }
+          ].map((chapter) => (
+            <Link key={chapter.href} href={chapter.href} className="hb-toc-row">
+              <span className="hb-toc-num">{chapter.num}</span>
+              <span className="hb-toc-title">{chapter.title}</span>
+              <span className="hb-toc-dots" aria-hidden="true" />
+              <span className="hb-toc-detail">{chapter.detail}</span>
+            </Link>
+          ))}
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <ActionLink href="/features" variant="secondary">Read the full schedule — every entry</ActionLink>
+        </div>
+      </Card>
+
+      {/* ── IV · Who keeps one ────────────────────────────────────────── */}
       <Card id="keepers" className="cv-section">
         <div className="hb-leader" style={{ marginBottom: 14 }}>
           <h2 style={{ margin: 0 }}>Who keeps a record</h2>
-          <span style={monoLabel}>Section III</span>
+          <span style={monoLabel}>Section IV</span>
         </div>
         <div style={{ display: 'grid', gap: 24, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
           <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 14 }}>
@@ -288,18 +321,20 @@ export default function Home() {
           <div style={{ borderTop: '1px solid var(--gilt-line)', paddingTop: 14 }}>
             <h3 style={{ marginTop: 0 }}>Landlords &amp; professionals</h3>
             <p style={{ color: 'var(--text-muted)', marginBottom: 0 }}>
-              Keep a register per property — tenancies, condition reports, compliance dates — and
-              hand each one over intact when it changes hands.
+              Keep a register per property — <Link href="/features#portfolio">tenancies, condition
+              reports, compliance dates</Link> — and hand each one over intact when it changes
+              hands. Inspectors and agents issue records through{' '}
+              <Link href="/pro">the professional channel</Link>.
             </p>
           </div>
         </div>
       </Card>
 
-      {/* ── IV · Terms of keeping ─────────────────────────────────────── */}
+      {/* ── V · Terms of keeping ──────────────────────────────────────── */}
       <Card id="terms" className="cv-section">
         <div className="hb-leader" style={{ marginBottom: 14 }}>
           <h2 style={{ margin: 0 }}>Terms of keeping</h2>
-          <span style={monoLabel}>Section IV</span>
+          <span style={monoLabel}>Section V</span>
         </div>
         <div style={{ display: 'grid', gap: 4 }}>
           <PlateRow label="Free to begin" value="The home you live in, free forever — no card to start" />
@@ -315,10 +350,10 @@ export default function Home() {
         </p>
       </Card>
 
-      {/* ── V · Attestation ───────────────────────────────────────────── */}
+      {/* ── VI · Attestation ──────────────────────────────────────────── */}
       <Card id="begin" tone="dark" className="hb-cover cv-section">
         <div className="hb-cover-inner" style={{ textAlign: 'center', display: 'grid', justifyItems: 'center', gap: 4 }}>
-          <span className="hb-registry hb-registry-on-dark">Section V · Attestation</span>
+          <span className="hb-registry hb-registry-on-dark">Section VI · Attestation</span>
           <h2
             style={{
               fontFamily: 'var(--font-title)',
