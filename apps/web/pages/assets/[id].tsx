@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { ASSET_TYPES, formatEnumLabel, getWarrantyMeta, safeHttpUrl, toLocalDateString, type VisibilityContext } from '@home-folder/shared';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, ConfirmDialog, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../lib/access';
@@ -80,6 +80,10 @@ export default function AssetDetailPage() {
   const [issueError, setIssueError] = useState('');
   const [trendFlagError, setTrendFlagError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  // Two-step deletion: "Delete Asset" only opens this dialog. window.confirm
+  // proved unreliable (a suppressed dialog returns false and the click dies
+  // silently), so this uses the in-page ConfirmDialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [editName, setEditName] = useState('');
@@ -295,12 +299,14 @@ export default function AssetDetailPage() {
 
   const linkedIssues = useMemo(() => issues.filter((issue) => issue.asset_id === assetId), [issues, assetId]);
 
-  const handleDelete = async () => {
+  const requestDelete = () => {
     if (!asset || !context) return;
+    setFormError('');
+    setConfirmingDelete(true);
+  };
 
-    if (!window.confirm('Delete this asset?')) {
-      return;
-    }
+  const handleDelete = async () => {
+    if (!asset || !context || deleting) return;
 
     setDeleting(true);
     setError('');
@@ -309,6 +315,8 @@ export default function AssetDetailPage() {
       await deleteAssetForContext(context, asset.id);
       router.push('/assets');
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setConfirmingDelete(false);
       setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete asset.');
       setDeleting(false);
     }
@@ -917,7 +925,7 @@ export default function AssetDetailPage() {
 
           {access.loading || access.canWrite ? (
           <button
-            onClick={handleDelete}
+            onClick={requestDelete}
             disabled={deleting}
             style={{
               padding: '10px 16px',
@@ -935,6 +943,21 @@ export default function AssetDetailPage() {
           ) : null}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete ${asset.name}?`}
+        description="This cannot be undone."
+        confirmLabel="Delete asset"
+        cancelLabel="Cancel"
+        busy={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => {
+          if (!deleting) {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
     </>
   );
 }

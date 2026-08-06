@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useState } from 'react';
 import { RECEIPT_CATEGORIES, formatEnumLabel, type ReceiptCategory } from '@home-folder/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
@@ -138,6 +138,10 @@ export default function ReceiptsPage() {
   const [saving, setSaving] = useState(false);
   const [actingReceiptId, setActingReceiptId] = useState<string | null>(null);
   const [actingDocumentId, setActingDocumentId] = useState<string | null>(null);
+  // Two-step deletion: the Delete button only opens a ConfirmDialog; nothing is
+  // removed until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [receiptDeleteTarget, setReceiptDeleteTarget] = useState<ReceiptRow | null>(null);
 
   const [file, setFile] = useState<File | null>(null);
   const [documentTitle, setDocumentTitle] = useState('');
@@ -470,12 +474,22 @@ export default function ReceiptsPage() {
     }
   };
 
-  const deleteReceipt = async (receiptId: string) => {
-    if (!context) return;
+  const requestDeleteReceipt = (receipt: ReceiptRow) => {
+    setError('');
+    setReceiptDeleteTarget(receipt);
+  };
 
-    if (!window.confirm('Delete these receipt details? The original uploaded document will be kept.')) {
+  const cancelDeleteReceipt = () => {
+    if (actingReceiptId !== null) {
       return;
     }
+    setReceiptDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteReceipt = async () => {
+    if (!context || !receiptDeleteTarget || actingReceiptId !== null) return;
+
+    const receiptId = receiptDeleteTarget.id;
 
     setActingReceiptId(receiptId);
     setError('');
@@ -485,7 +499,10 @@ export default function ReceiptsPage() {
       await deleteReceiptForContext(context, receiptId);
       setReceipts((current) => current.filter((receipt) => receipt.id !== receiptId));
       setNotice('Receipt details deleted. The original document was kept.');
+      setReceiptDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setReceiptDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete receipt.');
     } finally {
       setActingReceiptId(null);
@@ -762,7 +779,7 @@ export default function ReceiptsPage() {
                       </Button>
                       <button
                         type="button"
-                        onClick={() => deleteReceipt(receipt.id)}
+                        onClick={() => requestDeleteReceipt(receipt)}
                         disabled={isActing}
                         style={{
                           padding: '10px 14px',
@@ -792,6 +809,21 @@ export default function ReceiptsPage() {
           <ActionLink href="/documents" variant="secondary">Documents</ActionLink>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={receiptDeleteTarget !== null}
+        title={
+          receiptDeleteTarget
+            ? `Delete details for ${receiptDeleteTarget.vendor_name || receiptDeleteTarget.description || 'this receipt'}?`
+            : 'Delete these receipt details?'
+        }
+        description="The original uploaded document will be kept."
+        confirmLabel="Delete receipt details"
+        cancelLabel="Keep details"
+        busy={actingReceiptId !== null && actingReceiptId === receiptDeleteTarget?.id}
+        onConfirm={handleConfirmDeleteReceipt}
+        onCancel={cancelDeleteReceipt}
+      />
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TENANCY_STATUSES, formatCalendarDate, formatEnumLabel, type TenancyStatus } from '@home-folder/shared';
-import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
@@ -54,6 +54,10 @@ export default function TenanciesPage() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Two-step deletion: the Delete button only opens a ConfirmDialog; nothing is
+  // removed until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [tenancyDeleteTarget, setTenancyDeleteTarget] = useState<TenancyRow | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [label, setLabel] = useState('');
@@ -192,10 +196,24 @@ export default function TenanciesPage() {
     }
   };
 
-  const deleteTenancy = async (tenancyId: string) => {
-    if (!window.confirm('Delete this tenancy? Condition reports linked to it will remain, unlinked.')) {
+  const requestDeleteTenancy = (tenancy: TenancyRow) => {
+    setFormError('');
+    setTenancyDeleteTarget(tenancy);
+  };
+
+  const cancelDeleteTenancy = () => {
+    if (deletingId !== null) {
       return;
     }
+    setTenancyDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteTenancy = async () => {
+    if (!tenancyDeleteTarget || deletingId !== null) {
+      return;
+    }
+
+    const tenancyId = tenancyDeleteTarget.id;
 
     setDeletingId(tenancyId);
     setFormError('');
@@ -206,7 +224,10 @@ export default function TenanciesPage() {
       if (editingId === tenancyId) {
         resetForm();
       }
+      setTenancyDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setTenancyDeleteTarget(null);
       setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete tenancy.');
     } finally {
       setDeletingId(null);
@@ -411,7 +432,7 @@ export default function TenanciesPage() {
                         </Button>
                         <button
                           type="button"
-                          onClick={() => deleteTenancy(tenancy.id)}
+                          onClick={() => requestDeleteTenancy(tenancy)}
                           disabled={deletingId === tenancy.id}
                           style={{
                             padding: '8px 12px',
@@ -436,6 +457,17 @@ export default function TenanciesPage() {
           </Card>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={tenancyDeleteTarget !== null}
+        title={tenancyDeleteTarget ? `Delete ${tenancyDeleteTarget.label}?` : 'Delete tenancy?'}
+        description="Condition reports linked to it will remain, unlinked."
+        confirmLabel="Delete tenancy"
+        cancelLabel="Keep tenancy"
+        busy={deletingId !== null && deletingId === tenancyDeleteTarget?.id}
+        onConfirm={handleConfirmDeleteTenancy}
+        onCancel={cancelDeleteTenancy}
+      />
     </>
   );
 }

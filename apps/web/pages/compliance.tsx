@@ -6,7 +6,7 @@ import {
   toLocalDateString,
   type ComplianceObligationType
 } from '@home-folder/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
@@ -273,6 +273,11 @@ export default function CompliancePage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ObligationDraft>(EMPTY_DRAFT);
   const [actingId, setActingId] = useState<string | null>(null);
+  // Two-step removal: the Remove button only opens a ConfirmDialog; nothing is
+  // removed until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [obligationDeleteTarget, setObligationDeleteTarget] =
+    useState<ComplianceObligationRow | null>(null);
   const [templateJurisdiction, setTemplateJurisdiction] = useState('all');
 
   const addFormRef = useRef<HTMLElement>(null);
@@ -461,10 +466,24 @@ export default function CompliancePage() {
     }
   };
 
-  const removeObligation = async (obligation: ComplianceObligationRow) => {
-    if (!window.confirm(`Remove "${obligation.title}"? Attached documents are kept.`)) {
+  const requestRemoveObligation = (obligation: ComplianceObligationRow) => {
+    setError('');
+    setObligationDeleteTarget(obligation);
+  };
+
+  const cancelRemoveObligation = () => {
+    if (actingId !== null) {
       return;
     }
+    setObligationDeleteTarget(null);
+  };
+
+  const handleConfirmRemoveObligation = async () => {
+    if (!obligationDeleteTarget || actingId !== null) {
+      return;
+    }
+
+    const obligation = obligationDeleteTarget;
 
     setActingId(obligation.id);
     setError('');
@@ -474,7 +493,10 @@ export default function CompliancePage() {
       await softDeleteComplianceObligation(obligation.id);
       setObligations((current) => current.filter((item) => item.id !== obligation.id));
       setNotice(`Removed "${obligation.title}".`);
+      setObligationDeleteTarget(null);
     } catch (removeError) {
+      // Close the dialog so the error is readable on the page.
+      setObligationDeleteTarget(null);
       setError(removeError instanceof Error ? removeError.message : 'Failed to remove the obligation.');
     } finally {
       setActingId(null);
@@ -592,7 +614,7 @@ export default function CompliancePage() {
               <Button type="button" variant="secondary" onClick={() => startEditing(obligation)} disabled={isActing}>
                 Edit
               </Button>
-              <Button type="button" variant="secondary" onClick={() => removeObligation(obligation)} disabled={isActing}>
+              <Button type="button" variant="secondary" onClick={() => requestRemoveObligation(obligation)} disabled={isActing}>
                 Remove
               </Button>
             </div>
@@ -831,6 +853,17 @@ export default function CompliancePage() {
           </Card>
         </section>
       </div>
+
+      <ConfirmDialog
+        open={obligationDeleteTarget !== null}
+        title={obligationDeleteTarget ? `Remove ${obligationDeleteTarget.title}?` : 'Remove obligation?'}
+        description="Attached documents are kept."
+        confirmLabel="Remove obligation"
+        cancelLabel="Keep obligation"
+        busy={actingId !== null && actingId === obligationDeleteTarget?.id}
+        onConfirm={handleConfirmRemoveObligation}
+        onCancel={cancelRemoveObligation}
+      />
     </>
   );
 }

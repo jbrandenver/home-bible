@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { formatEnumLabel, PROPERTY_TYPES } from '@home-folder/shared';
-import { PageHeader, Card, Button, Input, Select, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, ConfirmDialog, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { AppLockSettingsCard } from '../components/NativeShell';
 import {
@@ -89,6 +89,15 @@ export default function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [accountError, setAccountError] = useState('');
+  // Confirmations run in-page rather than through window.confirm, which a
+  // browser may suppress — it then returns false, so the action silently does
+  // nothing instead of asking.
+  const [confirmingDeleteAccount, setConfirmingDeleteAccount] = useState(false);
+  const [confirmingDeleteProperty, setConfirmingDeleteProperty] = useState(false);
+  // The archive-size check interrupts an export that is already running, so it
+  // needs an answer mid-flow: the dialog resolves this promise.
+  const [archiveSizePrompt, setArchiveSizePrompt] = useState<string | null>(null);
+  const archiveSizeResolver = useRef<((proceed: boolean) => void) | null>(null);
 
   const [property, setProperty] = useState<PropertySummary | null>(null);
   const [addressLine1, setAddressLine1] = useState('');
@@ -434,6 +443,20 @@ export default function SettingsPage() {
     }
   }
 
+  function askArchiveSizeConfirm(message: string) {
+    return new Promise<boolean>((resolve) => {
+      archiveSizeResolver.current = resolve;
+      setArchiveSizePrompt(message);
+    });
+  }
+
+  function settleArchiveSizeConfirm(proceed: boolean) {
+    const resolve = archiveSizeResolver.current;
+    archiveSizeResolver.current = null;
+    setArchiveSizePrompt(null);
+    resolve?.(proceed);
+  }
+
   async function handleExport(format: 'archive' | 'csv') {
     setExporting(format);
     setExportError('');
@@ -478,8 +501,8 @@ export default function SettingsPage() {
 
         const totalBytes = totalFileSizeBytes(files);
         if (exceedsExportSizeWarning(totalBytes)) {
-          const proceed = window.confirm(
-            `Your uploaded files total about ${formatFileSize(totalBytes)}. The archive is assembled in this browser tab, so a download this size can take a while and use significant memory. Continue?`
+          const proceed = await askArchiveSizeConfirm(
+            `Your uploaded files total about ${formatFileSize(totalBytes)}. The archive is assembled in this browser tab, so a download this size can take a while and use significant memory.`
           );
           if (!proceed) {
             setExportProgress('');
@@ -539,17 +562,18 @@ export default function SettingsPage() {
     setUser(null);
   }
 
-  async function handleDeleteProperty() {
-    if (!property) {
-      return;
-    }
+  function requestDeleteProperty() {
+    setPropertyDeleteError('');
+    setConfirmingDeleteProperty(true);
+  }
 
-    const label = property.nickname || 'this home';
-    if (
-      !window.confirm(
-        `Delete ${label}? Everything recorded in it — rooms, utilities, appliances, documents, reminders, and history — is removed from your account. If your plan is priced per home, the downgrade takes effect at your next billing cycle — nothing is prorated. This cannot be undone.`
-      )
-    ) {
+  function requestDeleteAccount() {
+    setAccountError('');
+    setConfirmingDeleteAccount(true);
+  }
+
+  async function handleDeleteProperty() {
+    if (!property || deletingProperty) {
       return;
     }
 
@@ -565,6 +589,8 @@ export default function SettingsPage() {
       // property switcher must re-resolve now that this home is gone.
       window.location.assign('/dashboard');
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setConfirmingDeleteProperty(false);
       setPropertyDeleteError(
         deleteError instanceof Error ? deleteError.message : 'Failed to delete this home.'
       );
@@ -573,12 +599,13 @@ export default function SettingsPage() {
   }
 
   async function handleDeleteAccount() {
-    if (!window.confirm('Delete your account? This anonymizes your profile, removes memberships, and transfers or soft-deletes homes you own. This cannot be undone.')) {
+    if (deletingAccount) {
       return;
     }
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
+      setConfirmingDeleteAccount(false);
       setAccountError('Supabase is not configured.');
       return;
     }
@@ -610,10 +637,14 @@ export default function SettingsPage() {
         message = error.message;
       }
 
+      // Close the dialog so the error — often a re-authentication prompt — is
+      // readable on the page.
+      setConfirmingDeleteAccount(false);
       setAccountError(message);
       return;
     }
 
+    setConfirmingDeleteAccount(false);
     await signOut();
     setUser(null);
   }
@@ -663,7 +694,7 @@ export default function SettingsPage() {
                     <Button
                       type="button"
                       disabled={deletingAccount}
-                      onClick={handleDeleteAccount}
+                      onClick={requestDeleteAccount}
                       style={{ background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
                     >
                       {deletingAccount ? 'Deleting...' : 'Delete account'}
@@ -1042,7 +1073,7 @@ export default function SettingsPage() {
                       <Button
                         type="button"
                         disabled={deletingProperty}
-                        onClick={handleDeleteProperty}
+                        onClick={requestDeleteProperty}
                         style={{ background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
                       >
                         {deletingProperty ? 'Deleting...' : 'Delete this home'}
@@ -1214,6 +1245,47 @@ export default function SettingsPage() {
             <ActionLink href="/home-map" variant="secondary">Home map</ActionLink>
           </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDeleteProperty}
+        title={`Delete ${property?.nickname || 'this home'}?`}
+        description="Everything recorded in it — rooms, utilities, appliances, documents, reminders, and history — is removed from your account. If your plan is priced per home, the downgrade takes effect at your next billing cycle — nothing is prorated. This cannot be undone."
+        confirmLabel="Delete this home"
+        cancelLabel="Keep home"
+        busy={deletingProperty}
+        onConfirm={handleDeleteProperty}
+        onCancel={() => {
+          if (!deletingProperty) {
+            setConfirmingDeleteProperty(false);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmingDeleteAccount}
+        title="Delete your account?"
+        description="This anonymizes your profile, removes memberships, and transfers or soft-deletes homes you own. This cannot be undone."
+        confirmLabel="Delete account"
+        cancelLabel="Keep account"
+        busy={deletingAccount}
+        onConfirm={handleDeleteAccount}
+        onCancel={() => {
+          if (!deletingAccount) {
+            setConfirmingDeleteAccount(false);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={archiveSizePrompt !== null}
+        title="Continue with this download?"
+        description={archiveSizePrompt || ''}
+        confirmLabel="Continue"
+        cancelLabel="Cancel download"
+        destructive={false}
+        onConfirm={() => settleArchiveSizeConfirm(true)}
+        onCancel={() => settleArchiveSizeConfirm(false)}
+      />
     </>
   );
 }

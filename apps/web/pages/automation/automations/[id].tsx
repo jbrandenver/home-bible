@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AUTOMATION_CRITICALITIES, AUTOMATION_ROUTINE_STATUSES, AUTOMATION_ROUTINE_TYPES, formatEnumLabel, type AutomationCriticality, type AutomationRoutineStatus, type AutomationRoutineType } from '@home-folder/shared';
-import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
 import { ViewOnlyNotice } from '../../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../../lib/access';
@@ -42,6 +42,10 @@ export default function AutomationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
+  // Two-step deletion: "Remove automation" only opens this dialog. window.confirm
+  // proved unreliable (a suppressed dialog returns false and the click dies
+  // silently), so this uses the in-page ConfirmDialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const [addDeviceId, setAddDeviceId] = useState('');
   const [addRole, setAddRole] = useState<'trigger' | 'condition' | 'action' | 'involved'>('action');
@@ -202,14 +206,20 @@ export default function AutomationDetailPage() {
     }
   };
 
-  const remove = async () => {
+  const requestRemove = () => {
     if (!context || !routine) return;
-    if (!window.confirm(`Remove the automation "${routine.name}"?`)) return;
+    setConfirmingDelete(true);
+  };
+
+  const remove = async () => {
+    if (!context || !routine || acting) return;
     setActing(true);
     try {
       await deleteRoutineForContext(context, routine.id);
       router.push('/automation/automations');
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setConfirmingDelete(false);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete automation.');
       setActing(false);
     }
@@ -344,12 +354,27 @@ export default function AutomationDetailPage() {
           {!access.loading && !access.canWrite ? (
             <ViewOnlyNotice role={access.role} action="remove this automation" inline />
           ) : (
-          <Button variant="secondary" onClick={remove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>
+          <Button variant="secondary" onClick={requestRemove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>
             {acting ? 'Working…' : 'Remove automation'}
           </Button>
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Remove the automation ${routine.name}?`}
+        description="This cannot be undone."
+        confirmLabel="Remove automation"
+        cancelLabel="Cancel"
+        busy={acting}
+        onConfirm={remove}
+        onCancel={() => {
+          if (!acting) {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
     </>
   );
 }

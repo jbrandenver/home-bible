@@ -8,7 +8,7 @@ import {
   type ConditionRating,
   type ConditionReportType
 } from '@home-folder/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { usePropertyAccess } from '../../lib/access';
 import { RoomLocationSelect, roomSelectionValue } from '../../components/RoomLocationSelect';
@@ -120,6 +120,11 @@ export default function ConditionReportDetailPage() {
   const [completing, setCompleting] = useState(false);
   const [actingEntryId, setActingEntryId] = useState<string | null>(null);
   const [uploadingKey, setUploadingKey] = useState<string | null>(null);
+  // Two-step confirmation: these buttons only open a ConfirmDialog; nothing
+  // happens until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [entryDeleteTarget, setEntryDeleteTarget] = useState<ConditionReportEntryRow | null>(null);
+  const [completePromptOpen, setCompletePromptOpen] = useState(false);
 
   const [entryRoomId, setEntryRoomId] = useState('');
   const [entryRoomName, setEntryRoomName] = useState('');
@@ -424,10 +429,24 @@ export default function ConditionReportDetailPage() {
     }
   };
 
-  const removeEntry = async (entryId: string) => {
-    if (!window.confirm('Remove this entry? Photos already attached to it stay in Documents.')) {
+  const requestRemoveEntry = (entry: ConditionReportEntryRow) => {
+    setError('');
+    setEntryDeleteTarget(entry);
+  };
+
+  const cancelRemoveEntry = () => {
+    if (actingEntryId !== null) {
       return;
     }
+    setEntryDeleteTarget(null);
+  };
+
+  const handleConfirmRemoveEntry = async () => {
+    if (!entryDeleteTarget || actingEntryId !== null) {
+      return;
+    }
+
+    const entryId = entryDeleteTarget.id;
 
     setActingEntryId(entryId);
     setError('');
@@ -435,7 +454,10 @@ export default function ConditionReportDetailPage() {
     try {
       await deleteEntry(entryId);
       setEntries((current) => current.filter((entry) => entry.id !== entryId));
+      setEntryDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setEntryDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to remove entry.');
     } finally {
       setActingEntryId(null);
@@ -464,13 +486,20 @@ export default function ConditionReportDetailPage() {
     }
   };
 
-  const markCompleted = async () => {
-    if (!report) return;
+  const requestMarkCompleted = () => {
+    setError('');
+    setCompletePromptOpen(true);
+  };
 
-    const confirmed = window.confirm(
-      'Mark this report completed? The completion time is recorded automatically and becomes part of the evidence trail. Entries and photos are locked afterwards.'
-    );
-    if (!confirmed) return;
+  const cancelMarkCompleted = () => {
+    if (completing) {
+      return;
+    }
+    setCompletePromptOpen(false);
+  };
+
+  const handleConfirmMarkCompleted = async () => {
+    if (!report || completing) return;
 
     setCompleting(true);
     setError('');
@@ -478,7 +507,10 @@ export default function ConditionReportDetailPage() {
     try {
       const updated = await completeReport(report.id);
       setReport(updated);
+      setCompletePromptOpen(false);
     } catch (completeError) {
+      // Close the dialog so the error is readable on the page.
+      setCompletePromptOpen(false);
       setError(completeError instanceof Error ? completeError.message : 'Failed to complete report.');
     } finally {
       setCompleting(false);
@@ -836,7 +868,7 @@ export default function ConditionReportDetailPage() {
                           </Button>
                           <button
                             type="button"
-                            onClick={() => removeEntry(entry.id)}
+                            onClick={() => requestRemoveEntry(entry)}
                             disabled={isActing}
                             style={{
                               padding: '8px 12px',
@@ -878,7 +910,7 @@ export default function ConditionReportDetailPage() {
               together with each photo&apos;s capture time — is what makes this packet usable as
               deposit evidence, so entries and photos are locked afterwards.
             </p>
-            <Button type="button" onClick={markCompleted} disabled={completing}>
+            <Button type="button" onClick={requestMarkCompleted} disabled={completing}>
               {completing ? 'Marking completed...' : 'Mark completed'}
             </Button>
           </Card>
@@ -993,6 +1025,29 @@ export default function ConditionReportDetailPage() {
           </footer>
         </article>
       ) : null}
+
+      <ConfirmDialog
+        open={entryDeleteTarget !== null}
+        title={entryDeleteTarget ? `Remove ${entryLabel(entryDeleteTarget)}?` : 'Remove this entry?'}
+        description="Photos already attached to it stay in Documents."
+        confirmLabel="Remove entry"
+        cancelLabel="Keep entry"
+        busy={actingEntryId !== null && actingEntryId === entryDeleteTarget?.id}
+        onConfirm={handleConfirmRemoveEntry}
+        onCancel={cancelRemoveEntry}
+      />
+
+      <ConfirmDialog
+        open={completePromptOpen}
+        title="Mark this report completed?"
+        description="The completion time is recorded automatically and becomes part of the evidence trail. Entries and photos are locked afterwards."
+        confirmLabel="Mark completed"
+        cancelLabel="Cancel"
+        destructive={false}
+        busy={completing}
+        onConfirm={handleConfirmMarkCompleted}
+        onCancel={cancelMarkCompleted}
+      />
 
       <style jsx global>{`
         @media print {

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { PageHeader, Card, Button, EmptyState, Input, Select, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, ConfirmDialog, EmptyState, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import {
   createAssetForContext,
@@ -44,6 +44,10 @@ export default function ToolsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Two-step removal: the Remove button only opens a ConfirmDialog; nothing is
+  // removed until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [toolDeleteTarget, setToolDeleteTarget] = useState<AssetRow | null>(null);
   const [search, setSearch] = useState('');
   const [includeOutdoor, setIncludeOutdoor] = useState(true);
 
@@ -198,17 +202,31 @@ export default function ToolsPage() {
     }
   };
 
-  const handleDelete = async (tool: AssetRow) => {
-    if (!context) return;
-    if (!window.confirm(`Remove “${tool.name}” from the tool record?`)) return;
+  const requestDelete = (tool: AssetRow) => {
+    setError('');
+    setToolDeleteTarget(tool);
+  };
 
-    setDeletingId(tool.id);
+  const cancelDelete = () => {
+    if (deletingId !== null) return;
+    setToolDeleteTarget(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!context || !toolDeleteTarget || deletingId !== null) return;
+
+    const toolId = toolDeleteTarget.id;
+
+    setDeletingId(toolId);
     setError('');
 
     try {
-      await deleteAssetForContext(context, tool.id);
-      setAssets((current) => current.filter((asset) => asset.id !== tool.id));
+      await deleteAssetForContext(context, toolId);
+      setAssets((current) => current.filter((asset) => asset.id !== toolId));
+      setToolDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setToolDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete the tool.');
     } finally {
       setDeletingId(null);
@@ -408,7 +426,7 @@ export default function ToolsPage() {
                         </ActionLink>
                         <Button
                           variant="secondary"
-                          onClick={() => handleDelete(tool)}
+                          onClick={() => requestDelete(tool)}
                           disabled={deletingId === tool.id}
                           style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
                         >
@@ -432,6 +450,17 @@ export default function ToolsPage() {
           </p>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={toolDeleteTarget !== null}
+        title={toolDeleteTarget ? `Remove ${toolDeleteTarget.name}?` : 'Remove tool?'}
+        description="This removes it from the tool record. This cannot be undone."
+        confirmLabel="Remove tool"
+        cancelLabel="Keep tool"
+        busy={deletingId !== null && deletingId === toolDeleteTarget?.id}
+        onConfirm={handleConfirmDelete}
+        onCancel={cancelDelete}
+      />
     </>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationNetworkType } from '@home-folder/shared';
-import { Button, Card, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, EmptyState, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../lib/access';
@@ -45,6 +45,11 @@ export default function AutomationNetworksPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [savedNote, setSavedNote] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Two-step deletion: Remove only opens this dialog. window.confirm proved
+  // unreliable (a suppressed dialog returns false and the click dies silently),
+  // so this uses the in-page ConfirmDialog.
+  const [deleteTarget, setDeleteTarget] = useState<AutomationNetworkRow | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -145,14 +150,32 @@ export default function AutomationNetworksPage() {
     }
   };
 
-  const remove = async (network: AutomationNetworkRow) => {
+  const requestRemove = (network: AutomationNetworkRow) => {
     if (!context) return;
-    if (!window.confirm(`Remove "${network.name}"?`)) return;
+    setError('');
+    setDeleteTarget(network);
+  };
+
+  const cancelRemove = () => {
+    if (deletingId) return;
+    setDeleteTarget(null);
+  };
+
+  const confirmRemove = async () => {
+    if (!context || !deleteTarget || deletingId) return;
+    const id = deleteTarget.id;
+    setDeletingId(id);
+    setError('');
     try {
-      await deleteNetworkForContext(context, network.id);
-      setNetworks((current) => current.filter((n) => n.id !== network.id));
+      await deleteNetworkForContext(context, id);
+      setNetworks((current) => current.filter((n) => n.id !== id));
+      setDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete network.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -269,7 +292,7 @@ export default function AutomationNetworksPage() {
                     {network.is_guest ? <UtilityBadge label="Guest" /> : null}
                     <ActionLink href={`/automation/networks/${network.id}`} variant="secondary">Open</ActionLink>
                     {access.loading || access.canWrite ? (
-                    <Button variant="secondary" onClick={() => remove(network)} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove</Button>
+                    <Button variant="secondary" onClick={() => requestRemove(network)} disabled={deletingId === network.id} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>{deletingId === network.id ? 'Removing…' : 'Remove'}</Button>
                     ) : null}
                   </div>
                 </div>
@@ -278,6 +301,17 @@ export default function AutomationNetworksPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Remove ${deleteTarget.name}?` : 'Remove network?'}
+        description="This cannot be undone."
+        confirmLabel="Remove network"
+        cancelLabel="Cancel"
+        busy={deletingId !== null}
+        onConfirm={confirmRemove}
+        onCancel={cancelRemove}
+      />
     </>
   );
 }

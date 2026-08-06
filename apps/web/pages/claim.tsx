@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useState, type FormEvent } from 'react';
 import { formatEnumLabel } from '@home-folder/shared';
-import { Button, Card, PageHeader } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader } from '@home-folder/ui';
 import { getCurrentUser, isSupabaseConfigured } from '../lib/auth';
 import { setActivePropertyId } from '../lib/properties';
 import {
@@ -47,6 +47,7 @@ export default function ClaimPage() {
   const [claimed, setClaimed] = useState<ClaimedTransfer | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [claiming, setClaiming] = useState(false);
+  const [confirmingClaim, setConfirmingClaim] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -113,13 +114,16 @@ export default function ClaimPage() {
     }
   };
 
+  // In-page confirmation rather than window.confirm, which a browser may
+  // suppress — it then returns false and the claim silently does nothing.
+  const requestClaim = () => {
+    if (!preview || !verifiedCode || claiming) return;
+    setError('');
+    setConfirmingClaim(true);
+  };
+
   const claimRecord = async () => {
     if (!preview || !verifiedCode || claiming) return;
-
-    const confirmed = window.confirm(
-      `Claim “${preview.property_nickname}”? You will become the owner of this entire record — the property, any units, and everything documented inside. Any access the previous owner had shared with others will be removed.`
-    );
-    if (!confirmed) return;
 
     setClaiming(true);
     setError('');
@@ -127,10 +131,13 @@ export default function ClaimPage() {
     try {
       const result = await claimTransfer(verifiedCode);
       setActivePropertyId(result.propertyId);
+      setConfirmingClaim(false);
       setClaimed(result);
       setPreview(null);
       setVerifiedCode('');
     } catch (claimError) {
+      // Close the dialog so the error is readable on the page.
+      setConfirmingClaim(false);
       setError(claimError instanceof Error ? claimError.message : 'Failed to claim the transfer.');
     } finally {
       setClaiming(false);
@@ -226,7 +233,7 @@ export default function ClaimPage() {
                 <p style={{ margin: 0 }}>This transfer has already been claimed.</p>
               ) : (
                 <div>
-                  <Button type="button" onClick={claimRecord} disabled={claiming}>
+                  <Button type="button" onClick={requestClaim} disabled={claiming}>
                     {claiming ? 'Claiming...' : 'Claim this record'}
                   </Button>
                 </div>
@@ -250,6 +257,22 @@ export default function ClaimPage() {
           </div>
         </Card>
       ) : null}
+
+      <ConfirmDialog
+        open={confirmingClaim}
+        title={preview ? `Claim ${preview.property_nickname}?` : 'Claim this record?'}
+        description="You will become the owner of this entire record — the property, any units, and everything documented inside. Any access the previous owner had shared with others will be removed."
+        confirmLabel="Claim record"
+        cancelLabel="Cancel"
+        destructive={false}
+        busy={claiming}
+        onConfirm={claimRecord}
+        onCancel={() => {
+          if (!claiming) {
+            setConfirmingClaim(false);
+          }
+        }}
+      />
     </>
   );
 }

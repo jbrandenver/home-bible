@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useRef, useState } from 'react';
 import { AUTOMATION_NETWORK_TYPES, formatEnumLabel, sortEnumForDisplay, type AutomationNetworkType } from '@home-folder/shared';
-import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
 import { ViewOnlyNotice } from '../../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../../lib/access';
@@ -34,6 +34,10 @@ export default function NetworkDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
+  // Two-step deletion: "Remove network" only opens this dialog. window.confirm
+  // proved unreliable (a suppressed dialog returns false and the click dies
+  // silently), so this uses the in-page ConfirmDialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<Record<string, string | boolean>>({});
   const [locationChoice, setLocationChoice] = useState('');
@@ -163,14 +167,21 @@ export default function NetworkDetailPage() {
     }
   };
 
-  const remove = async () => {
+  const requestRemove = () => {
     if (!context || !network) return;
-    if (!window.confirm(`Remove "${network.name}"?`)) return;
+    setError('');
+    setConfirmingDelete(true);
+  };
+
+  const remove = async () => {
+    if (!context || !network || acting) return;
     setActing(true);
     try {
       await deleteNetworkForContext(context, network.id);
       router.push('/automation/networks');
     } catch (e) {
+      // Close the dialog so the error is readable on the page it points at.
+      setConfirmingDelete(false);
       setError(e instanceof Error ? e.message : 'Failed to delete.');
       setActing(false);
     }
@@ -290,10 +301,25 @@ export default function NetworkDetailPage() {
           {!access.loading && !access.canWrite ? (
             <ViewOnlyNotice role={access.role} action="remove this network" inline />
           ) : (
-          <Button variant="secondary" onClick={remove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove network</Button>
+          <Button variant="secondary" onClick={requestRemove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>Remove network</Button>
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Remove ${network.name}?`}
+        description="This cannot be undone."
+        confirmLabel="Remove network"
+        cancelLabel="Cancel"
+        busy={acting}
+        onConfirm={remove}
+        onCancel={() => {
+          if (!acting) {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
     </>
   );
 }

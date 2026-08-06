@@ -7,7 +7,7 @@ import {
   safeHttpUrl,
   toLocalDateString
 } from '@home-folder/shared';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, ConfirmDialog, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { usePropertyAccess } from '../lib/access';
 import {
@@ -68,6 +68,10 @@ export default function WarrantiesPage() {
   const [recallMatches, setRecallMatches] = useState<RecallMatchRow[]>([]);
   const [recallsAvailable, setRecallsAvailable] = useState(false);
   const [dismissingRecallId, setDismissingRecallId] = useState<string | null>(null);
+  // Two-step dismissal: the Dismiss button only opens a ConfirmDialog; nothing
+  // is dismissed until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [recallDismissTarget, setRecallDismissTarget] = useState<RecallMatchRow | null>(null);
   const [draft, setDraft] = useState({
     purchase_date: '',
     warranty_length_months: '',
@@ -179,24 +183,37 @@ export default function WarrantiesPage() {
     [recallMatches]
   );
 
-  const dismissRecall = async (match: RecallMatchRow) => {
-    const assetName = assetNamesById[match.asset_id] || 'this appliance';
-    const confirmed = window.confirm(
-      `Dismiss this recall notice for ${assetName}? Dismissing only hides the notice from this list — it does not fix or repair the appliance.`
-    );
-    if (!confirmed) {
+  const requestDismissRecall = (match: RecallMatchRow) => {
+    setError('');
+    setRecallDismissTarget(match);
+  };
+
+  const cancelDismissRecall = () => {
+    if (dismissingRecallId !== null) {
+      return;
+    }
+    setRecallDismissTarget(null);
+  };
+
+  const handleConfirmDismissRecall = async () => {
+    if (!recallDismissTarget || dismissingRecallId !== null) {
       return;
     }
 
-    setDismissingRecallId(match.id);
+    const matchId = recallDismissTarget.id;
+
+    setDismissingRecallId(matchId);
     setError('');
 
     try {
-      const updated = await dismissRecallMatch(match.id);
+      const updated = await dismissRecallMatch(matchId);
       setRecallMatches((current) =>
         current.map((item) => (item.id === updated.id ? updated : item))
       );
+      setRecallDismissTarget(null);
     } catch (dismissError) {
+      // Close the dialog so the error is readable on the page.
+      setRecallDismissTarget(null);
       setError(dismissError instanceof Error ? dismissError.message : 'Failed to dismiss recall notice.');
     } finally {
       setDismissingRecallId(null);
@@ -594,7 +611,7 @@ export default function WarrantiesPage() {
                       {access.loading || access.canWrite ? (
                       <Button
                         type="button"
-                        onClick={() => dismissRecall(match)}
+                        onClick={() => requestDismissRecall(match)}
                         disabled={dismissingRecallId === match.id}
                       >
                         {dismissingRecallId === match.id ? 'Dismissing...' : 'Dismiss'}
@@ -663,6 +680,21 @@ export default function WarrantiesPage() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={recallDismissTarget !== null}
+        title={
+          recallDismissTarget
+            ? `Dismiss this recall notice for ${assetNamesById[recallDismissTarget.asset_id] || 'this appliance'}?`
+            : 'Dismiss this recall notice?'
+        }
+        description="Dismissing only hides the notice from this list — it does not fix or repair the appliance."
+        confirmLabel="Dismiss notice"
+        cancelLabel="Keep notice"
+        busy={dismissingRecallId !== null && dismissingRecallId === recallDismissTarget?.id}
+        onConfirm={handleConfirmDismissRecall}
+        onCancel={cancelDismissRecall}
+      />
     </>
   );
 }

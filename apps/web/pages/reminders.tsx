@@ -8,7 +8,7 @@ import {
   REMINDER_STATUSES,
   REMINDER_TYPES
 } from '@home-folder/shared';
-import { PageHeader, Card, Button, UtilityBadge } from '@home-folder/ui';
+import { PageHeader, Card, Button, ConfirmDialog, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
@@ -67,6 +67,10 @@ export default function RemindersPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
+  // Two-step deletion: the Delete button only opens a ConfirmDialog; nothing is
+  // removed until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [reminderDeleteTarget, setReminderDeleteTarget] = useState<ReminderRow | null>(null);
   const [error, setError] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -375,12 +379,22 @@ export default function RemindersPage() {
     }
   };
 
-  const removeReminder = async (id: string) => {
-    if (!context) return;
+  const requestRemoveReminder = (reminder: ReminderRow) => {
+    setError('');
+    setReminderDeleteTarget(reminder);
+  };
 
-    if (!window.confirm('Delete this reminder?')) {
+  const cancelRemoveReminder = () => {
+    if (actingId !== null) {
       return;
     }
+    setReminderDeleteTarget(null);
+  };
+
+  const handleConfirmRemoveReminder = async () => {
+    if (!context || !reminderDeleteTarget || actingId !== null) return;
+
+    const id = reminderDeleteTarget.id;
 
     setActingId(id);
     setError('');
@@ -392,7 +406,11 @@ export default function RemindersPage() {
       if (editingId === id) {
         resetForm();
       }
+
+      setReminderDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setReminderDeleteTarget(null);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete reminder.');
     } finally {
       setActingId(null);
@@ -752,7 +770,7 @@ export default function RemindersPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => removeReminder(reminder.id)}
+                    onClick={() => requestRemoveReminder(reminder)}
                     disabled={actingId === reminder.id}
                     style={{
                       padding: '8px 10px',
@@ -776,6 +794,17 @@ export default function RemindersPage() {
       <div style={{ marginTop: 16 }}>
         <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
       </div>
+
+      <ConfirmDialog
+        open={reminderDeleteTarget !== null}
+        title={reminderDeleteTarget ? `Delete ${reminderDeleteTarget.title}?` : 'Delete reminder?'}
+        description="This cannot be undone."
+        confirmLabel="Delete reminder"
+        cancelLabel="Keep reminder"
+        busy={actingId !== null && actingId === reminderDeleteTarget?.id}
+        onConfirm={handleConfirmRemoveReminder}
+        onCancel={cancelRemoveReminder}
+      />
     </>
   );
 }

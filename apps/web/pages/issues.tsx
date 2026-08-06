@@ -10,7 +10,7 @@ import {
   TREND_FLAG_TYPES,
   toLocalDateString
 } from '@home-folder/shared';
-import { Button, Card, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, EmptyState, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
@@ -101,6 +101,11 @@ export default function IssuesPage() {
   const [savingIssue, setSavingIssue] = useState(false);
   const [savingTrendFlag, setSavingTrendFlag] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Two-step deletion: the Delete buttons only open a ConfirmDialog; nothing is
+  // removed until the dialog is confirmed. window.confirm proved unreliable
+  // (a suppressed dialog returns false and the click dies silently).
+  const [issueDeleteTarget, setIssueDeleteTarget] = useState<IssueRow | null>(null);
+  const [trendFlagDeleteTarget, setTrendFlagDeleteTarget] = useState<TrendFlagRow | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [issueStatusFilter, setIssueStatusFilter] = useState('');
   const [issueSeverityFilter, setIssueSeverityFilter] = useState('');
@@ -500,14 +505,24 @@ export default function IssuesPage() {
     }
   };
 
-  const deleteIssue = async (issueId: string) => {
-    if (!issueContext) {
+  const requestDeleteIssue = (issue: IssueRow) => {
+    setFormError('');
+    setIssueDeleteTarget(issue);
+  };
+
+  const cancelDeleteIssue = () => {
+    if (deletingId !== null) {
+      return;
+    }
+    setIssueDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteIssue = async () => {
+    if (!issueContext || !issueDeleteTarget || deletingId !== null) {
       return;
     }
 
-    if (!window.confirm('Delete this issue?')) {
-      return;
-    }
+    const issueId = issueDeleteTarget.id;
 
     setDeletingId(issueId);
     setFormError('');
@@ -515,21 +530,34 @@ export default function IssuesPage() {
     try {
       await deleteIssueForContext(issueContext, issueId);
       setIssues((currentIssues) => currentIssues.filter((issue) => issue.id !== issueId));
+      setIssueDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setIssueDeleteTarget(null);
       setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete issue.');
     } finally {
       setDeletingId(null);
     }
   };
 
-  const deleteTrendFlag = async (flagId: string) => {
-    if (!trendContext) {
+  const requestDeleteTrendFlag = (flag: TrendFlagRow) => {
+    setFormError('');
+    setTrendFlagDeleteTarget(flag);
+  };
+
+  const cancelDeleteTrendFlag = () => {
+    if (deletingId !== null) {
+      return;
+    }
+    setTrendFlagDeleteTarget(null);
+  };
+
+  const handleConfirmDeleteTrendFlag = async () => {
+    if (!trendContext || !trendFlagDeleteTarget || deletingId !== null) {
       return;
     }
 
-    if (!window.confirm('Delete this trend flag?')) {
-      return;
-    }
+    const flagId = trendFlagDeleteTarget.id;
 
     setDeletingId(flagId);
     setFormError('');
@@ -537,7 +565,10 @@ export default function IssuesPage() {
     try {
       await deleteTrendFlagForContext(trendContext, flagId);
       setTrendFlags((currentFlags) => currentFlags.filter((flag) => flag.id !== flagId));
+      setTrendFlagDeleteTarget(null);
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page.
+      setTrendFlagDeleteTarget(null);
       setFormError(deleteError instanceof Error ? deleteError.message : 'Failed to delete trend.');
     } finally {
       setDeletingId(null);
@@ -947,7 +978,7 @@ export default function IssuesPage() {
                       </select>
                       <button
                         type="button"
-                        onClick={() => deleteIssue(issue.id)}
+                        onClick={() => requestDeleteIssue(issue)}
                         disabled={deletingId === issue.id}
                         style={{
                           ...destructiveButtonStyle,
@@ -1011,7 +1042,7 @@ export default function IssuesPage() {
                       </select>
                       <button
                         type="button"
-                        onClick={() => deleteTrendFlag(flag.id)}
+                        onClick={() => requestDeleteTrendFlag(flag)}
                         disabled={deletingId === flag.id}
                         style={{
                           ...destructiveButtonStyle,
@@ -1031,6 +1062,28 @@ export default function IssuesPage() {
           </Card>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={issueDeleteTarget !== null}
+        title={issueDeleteTarget ? `Delete ${issueDeleteTarget.title}?` : 'Delete issue?'}
+        description="This cannot be undone."
+        confirmLabel="Delete issue"
+        cancelLabel="Keep issue"
+        busy={deletingId !== null && deletingId === issueDeleteTarget?.id}
+        onConfirm={handleConfirmDeleteIssue}
+        onCancel={cancelDeleteIssue}
+      />
+
+      <ConfirmDialog
+        open={trendFlagDeleteTarget !== null}
+        title={trendFlagDeleteTarget ? `Delete ${trendFlagDeleteTarget.title}?` : 'Delete trend flag?'}
+        description="This cannot be undone."
+        confirmLabel="Delete trend flag"
+        cancelLabel="Keep trend flag"
+        busy={deletingId !== null && deletingId === trendFlagDeleteTarget?.id}
+        onConfirm={handleConfirmDeleteTrendFlag}
+        onCancel={cancelDeleteTrendFlag}
+      />
     </>
   );
 }

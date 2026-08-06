@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { formatEnumLabel } from '@home-folder/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader, UtilityBadge } from '@home-folder/ui';
 import {
   assignableRolesFor,
   canEditMember,
@@ -174,6 +174,10 @@ export default function SharingPage() {
   const [transfersLoading, setTransfersLoading] = useState(true);
   const [creatingTransfer, setCreatingTransfer] = useState(false);
   const [revokingTransferId, setRevokingTransferId] = useState('');
+  // Same reasoning as confirmingRemoveId above: these confirmations must not
+  // depend on window.confirm, which a browser may suppress.
+  const [confirmingTransfer, setConfirmingTransfer] = useState(false);
+  const [revokeTransferTarget, setRevokeTransferTarget] = useState('');
   const [transferEmail, setTransferEmail] = useState('');
   const [transferKeepRole, setTransferKeepRole] = useState<'' | TransferKeepRole>('');
   const [transferExpiryDays, setTransferExpiryDays] = useState('14');
@@ -375,14 +379,16 @@ export default function SharingPage() {
     }
   };
 
-  const createTransfer = async (event: FormEvent) => {
+  const requestCreateTransfer = (event: FormEvent) => {
     event.preventDefault();
     if (creatingTransfer || !transferProperty) return;
 
-    const confirmed = window.confirm(
-      `Create a transfer code for “${transferProperty.nickname}”? Whoever claims it becomes the owner of this entire record — the property, any units, and everything documented inside. Every existing share and open invitation is removed when they claim, and a claimed transfer cannot be undone.`
-    );
-    if (!confirmed) return;
+    setTransferError('');
+    setConfirmingTransfer(true);
+  };
+
+  const createTransfer = async () => {
+    if (creatingTransfer || !transferProperty) return;
 
     setCreatingTransfer(true);
     setTransferError('');
@@ -402,20 +408,20 @@ export default function SharingPage() {
         claimUrl: `${window.location.origin}/claim`
       });
       setTransfers(await listPropertyTransfers(transferProperty.id));
+      setConfirmingTransfer(false);
     } catch (createError) {
+      // Close the dialog so the error is readable on the page.
+      setConfirmingTransfer(false);
       setTransferError(createError instanceof Error ? createError.message : 'Failed to create the transfer.');
     } finally {
       setCreatingTransfer(false);
     }
   };
 
-  const revokeTransfer = async (transferId: string) => {
-    if (revokingTransferId || !transferProperty) return;
+  const revokeTransfer = async () => {
+    if (revokingTransferId || !transferProperty || !revokeTransferTarget) return;
 
-    const confirmed = window.confirm(
-      'Revoke this transfer code? The code stops working immediately and the record stays with you.'
-    );
-    if (!confirmed) return;
+    const transferId = revokeTransferTarget;
 
     setRevokingTransferId(transferId);
     setTransferError('');
@@ -423,9 +429,12 @@ export default function SharingPage() {
 
     try {
       await revokePropertyTransfer(transferId);
+      setRevokeTransferTarget('');
       setTransferNotice('Transfer revoked. The code no longer works.');
       setTransfers(await listPropertyTransfers(transferProperty.id));
     } catch (revokeError) {
+      // Close the dialog so the error is readable on the page.
+      setRevokeTransferTarget('');
       setTransferError(revokeError instanceof Error ? revokeError.message : 'Failed to revoke the transfer.');
     } finally {
       setRevokingTransferId('');
@@ -793,7 +802,7 @@ export default function SharingPage() {
                 Units transfer with their building. Switch to the building itself to transfer the whole record.
               </p>
             ) : (
-              <form onSubmit={createTransfer} style={{ display: 'grid', gap: 12 }}>
+              <form onSubmit={requestCreateTransfer} style={{ display: 'grid', gap: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, alignItems: 'start' }}>
                   <label style={{ display: 'grid', gap: 6 }}>
                     <span style={{ fontWeight: 600 }}>Recipient email (optional)</span>
@@ -935,7 +944,10 @@ export default function SharingPage() {
                             type="button"
                             variant="secondary"
                             disabled={revokingTransferId === transfer.id}
-                            onClick={() => revokeTransfer(transfer.id)}
+                            onClick={() => {
+                              setTransferError('');
+                              setRevokeTransferTarget(transfer.id);
+                            }}
                           >
                             {revokingTransferId === transfer.id ? 'Revoking...' : 'Revoke'}
                           </Button>
@@ -969,6 +981,40 @@ export default function SharingPage() {
 
         {preview ? <SharingPreviewPanel preview={preview} /> : null}
       </div>
+
+      <ConfirmDialog
+        open={confirmingTransfer}
+        title={
+          transferProperty
+            ? `Create a transfer code for ${transferProperty.nickname}?`
+            : 'Create a transfer code?'
+        }
+        description="Whoever claims it becomes the owner of this entire record — the property, any units, and everything documented inside. Every existing share and open invitation is removed when they claim, and a claimed transfer cannot be undone."
+        confirmLabel="Create transfer code"
+        cancelLabel="Cancel"
+        busy={creatingTransfer}
+        onConfirm={createTransfer}
+        onCancel={() => {
+          if (!creatingTransfer) {
+            setConfirmingTransfer(false);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={revokeTransferTarget !== ''}
+        title="Revoke this transfer code?"
+        description="The code stops working immediately and the record stays with you."
+        confirmLabel="Revoke code"
+        cancelLabel="Keep code"
+        busy={revokingTransferId !== ''}
+        onConfirm={revokeTransfer}
+        onCancel={() => {
+          if (revokingTransferId === '') {
+            setRevokeTransferTarget('');
+          }
+        }}
+      />
     </>
   );
 }

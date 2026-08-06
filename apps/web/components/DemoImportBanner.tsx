@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, Card } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog } from '@home-folder/ui';
 import {
   clearDemoData,
   createPropertyFromDemoHome,
@@ -33,6 +33,7 @@ export function DemoImportBanner({
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState('');
   const [dismissed, setDismissed] = useState(false);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   useEffect(() => {
     setSummary(summarizeDemoData());
@@ -97,16 +98,11 @@ export function DemoImportBanner({
     }
   }, [propertyId, onImported]);
 
+  // In-page confirmation rather than window.confirm, which a browser may
+  // suppress — it then returns false and the discard silently does nothing.
   const handleDiscard = useCallback(() => {
-    if (
-      !window.confirm(
-        'Discard the demo home stored in this browser? This cannot be undone, and it will not affect anything already saved to your account.'
-      )
-    ) {
-      return;
-    }
-
     clearDemoData();
+    setConfirmingDiscard(false);
     setDismissed(true);
   }, []);
 
@@ -167,10 +163,20 @@ export function DemoImportBanner({
         <Button onClick={handleImport} disabled={importing || propertyId === undefined}>
           {importing ? 'Importing...' : 'Import into my account'}
         </Button>
-        <Button variant="secondary" onClick={handleDiscard} disabled={importing}>
+        <Button variant="secondary" onClick={() => setConfirmingDiscard(true)} disabled={importing}>
           Discard the browser copy
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDiscard}
+        title="Discard the demo home stored in this browser?"
+        description="This cannot be undone, and it will not affect anything already saved to your account."
+        confirmLabel="Discard demo home"
+        cancelLabel="Keep it"
+        onConfirm={handleDiscard}
+        onCancel={() => setConfirmingDiscard(false)}
+      />
     </Card>
   );
 }

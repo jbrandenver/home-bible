@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AUTOMATION_DEVICE_STATUSES, AUTOMATION_POWER_LABELS, AUTOMATION_STATUS_LABELS, formatEnumLabel, type AutomationDeviceStatus } from '@home-folder/shared';
-import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../../components/ActionLink';
 import { ViewOnlyNotice } from '../../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../../lib/access';
@@ -87,6 +87,10 @@ export default function AutomationDeviceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
+  // Two-step deletion: "Remove device" only opens this dialog. window.confirm
+  // proved unreliable (a suppressed dialog returns false and the click dies
+  // silently), so this uses the in-page ConfirmDialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [linked, setLinked] = useState<DeviceLinkedRecords | null>(null);
   const [linkedUtility, setLinkedUtility] = useState<UtilityRow | null>(null);
   const [relatedAutomations, setRelatedAutomations] = useState<Array<{ id: string; name: string }>>([]);
@@ -383,14 +387,20 @@ export default function AutomationDeviceDetailPage() {
     }
   };
 
-  const remove = async () => {
+  const requestRemove = () => {
     if (!context || !device) return;
-    if (!window.confirm(`Remove "${device.nickname || device.name}" from your smart home records?`)) return;
+    setConfirmingDelete(true);
+  };
+
+  const remove = async () => {
+    if (!context || !device || acting) return;
     setActing(true);
     try {
       await deleteDeviceForContext(context, device.id);
       router.push('/automation/devices');
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setConfirmingDelete(false);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete device.');
       setActing(false);
     }
@@ -633,13 +643,28 @@ export default function AutomationDeviceDetailPage() {
           ) : (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <ActionLink href={`/documents?automationDeviceId=${device.id}`} variant="secondary">Add document</ActionLink>
-            <Button variant="secondary" onClick={remove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>
+            <Button variant="secondary" onClick={requestRemove} disabled={acting} style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}>
               {acting ? 'Working…' : 'Remove device'}
             </Button>
           </div>
           )}
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Remove ${device.nickname || device.name}?`}
+        description="This removes it from your smart home records."
+        confirmLabel="Remove device"
+        cancelLabel="Cancel"
+        busy={acting}
+        onConfirm={remove}
+        onCancel={() => {
+          if (!acting) {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
     </>
   );
 }

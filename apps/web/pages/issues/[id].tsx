@@ -7,7 +7,7 @@ import {
   ISSUE_STATUSES,
   ISSUE_TYPES
 } from '@home-folder/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../lib/access';
@@ -110,6 +110,10 @@ export default function IssueDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
+  // Two-step deletion: "Delete issue" only opens this dialog. window.confirm
+  // proved unreliable (a suppressed dialog returns false and the click dies
+  // silently), so this uses the in-page ConfirmDialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
@@ -331,12 +335,14 @@ export default function IssueDetailPage() {
     }
   };
 
-  const deleteIssue = async () => {
+  const requestDeleteIssue = () => {
     if (!context || !issue) return;
+    setError('');
+    setConfirmingDelete(true);
+  };
 
-    if (!window.confirm('Delete this issue?')) {
-      return;
-    }
+  const deleteIssue = async () => {
+    if (!context || !issue || acting) return;
 
     setActing(true);
     setError('');
@@ -345,6 +351,8 @@ export default function IssueDetailPage() {
       await deleteIssueForContext(context, issue.id);
       router.push('/issues');
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setConfirmingDelete(false);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete issue.');
       setActing(false);
     }
@@ -424,7 +432,7 @@ export default function IssueDetailPage() {
             </select>
             <button
               type="button"
-              onClick={deleteIssue}
+              onClick={requestDeleteIssue}
               disabled={acting}
               style={{
                 padding: '10px 14px',
@@ -660,6 +668,21 @@ export default function IssueDetailPage() {
           <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete ${issue.title}?`}
+        description="This cannot be undone."
+        confirmLabel="Delete issue"
+        cancelLabel="Cancel"
+        busy={acting}
+        onConfirm={deleteIssue}
+        onCancel={() => {
+          if (!acting) {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
     </>
   );
 }

@@ -7,7 +7,7 @@ import {
   REPAIR_STATUSES,
   REPAIR_TYPES
 } from '@home-folder/shared';
-import { Button, Card, PageHeader, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, PageHeader, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../../lib/access';
@@ -137,6 +137,10 @@ export default function RepairDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [acting, setActing] = useState(false);
+  // Two-step deletion: "Delete repair" only opens this dialog. window.confirm
+  // proved unreliable (a suppressed dialog returns false and the click dies
+  // silently), so this uses the in-page ConfirmDialog.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [formError, setFormError] = useState('');
   const [notice, setNotice] = useState('');
   const [saving, setSaving] = useState(false);
@@ -399,12 +403,14 @@ export default function RepairDetailPage() {
     }
   };
 
-  const deleteRepair = async () => {
+  const requestDeleteRepair = () => {
     if (!context || !repair) return;
+    setError('');
+    setConfirmingDelete(true);
+  };
 
-    if (!window.confirm('Delete this repair?')) {
-      return;
-    }
+  const deleteRepair = async () => {
+    if (!context || !repair || acting) return;
 
     setActing(true);
     setError('');
@@ -413,6 +419,8 @@ export default function RepairDetailPage() {
       await deleteRepairForContext(context, repair.id);
       router.push('/repairs');
     } catch (deleteError) {
+      // Close the dialog so the error is readable on the page it points at.
+      setConfirmingDelete(false);
       setError(deleteError instanceof Error ? deleteError.message : 'Failed to delete repair.');
       setActing(false);
     }
@@ -509,7 +517,7 @@ export default function RepairDetailPage() {
             </select>
             <button
               type="button"
-              onClick={deleteRepair}
+              onClick={requestDeleteRepair}
               disabled={acting}
               style={{
                 padding: '10px 14px',
@@ -806,6 +814,21 @@ export default function RepairDetailPage() {
           <ActionLink href="/dashboard" variant="secondary">Back to dashboard</ActionLink>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete ${repair.title}?`}
+        description="This cannot be undone."
+        confirmLabel="Delete repair"
+        cancelLabel="Cancel"
+        busy={acting}
+        onConfirm={deleteRepair}
+        onCancel={() => {
+          if (!acting) {
+            setConfirmingDelete(false);
+          }
+        }}
+      />
     </>
   );
 }

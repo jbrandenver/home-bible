@@ -1,7 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { UTILITY_TYPES } from '@home-folder/shared';
-import { Button, Card, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, Input, PageHeader, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { getCurrentUser, getCurrentUserUncached, isSupabaseConfigured } from '../lib/auth';
 import { setDemoActiveProperty } from '../lib/demoStorage';
@@ -49,6 +49,7 @@ export default function WelcomePage() {
   const [error, setError] = useState('');
 
   const [demoSummary, setDemoSummary] = useState<DemoSummary | null>(null);
+  const [confirmingDemoDiscard, setConfirmingDemoDiscard] = useState(false);
   const [property, setProperty] = useState<PropertySummary | null>(null);
   const [nickname, setNickname] = useState('');
   const [propertyType, setPropertyType] = useState<(typeof PROPERTY_TYPES)[number]>('single_family_home');
@@ -156,16 +157,11 @@ export default function WelcomePage() {
     }
   }
 
+  // In-page confirmation rather than window.confirm, which a browser may
+  // suppress — it then returns false and the discard silently does nothing.
   function handleDemoDiscard() {
-    if (
-      !window.confirm(
-        'Discard the home recorded in this browser and start fresh? This cannot be undone.'
-      )
-    ) {
-      return;
-    }
-
     clearDemoData();
+    setConfirmingDemoDiscard(false);
     setDemoSummary(null);
     setStep(property ? 'water' : 'home');
   }
@@ -326,7 +322,7 @@ export default function WelcomePage() {
               <Button onClick={handleDemoImport} disabled={saving}>
                 {saving ? 'Bringing it across...' : 'Yes, bring it into my account'}
               </Button>
-              <Button variant="secondary" onClick={handleDemoDiscard} disabled={saving}>
+              <Button variant="secondary" onClick={() => setConfirmingDemoDiscard(true)} disabled={saving}>
                 Start fresh instead
               </Button>
             </div>
@@ -524,6 +520,16 @@ export default function WelcomePage() {
           </p>
         ) : null}
       </div>
+
+      <ConfirmDialog
+        open={confirmingDemoDiscard}
+        title="Discard the home recorded in this browser and start fresh?"
+        description="This cannot be undone."
+        confirmLabel="Discard and start fresh"
+        cancelLabel="Keep it"
+        onConfirm={handleDemoDiscard}
+        onCancel={() => setConfirmingDemoDiscard(false)}
+      />
     </>
   );
 }

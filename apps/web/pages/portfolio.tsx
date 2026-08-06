@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 import { useRouter } from 'next/router';
-import { Button, Card, Input, PageHeader, getControlStyle } from '@home-folder/ui';
+import { Button, Card, ConfirmDialog, Input, PageHeader, getControlStyle } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { resolveDataContext, type ResolvedDataContext } from '../lib/dataContext';
 import {
@@ -135,6 +135,13 @@ export default function PortfolioPage() {
   const [managingId, setManagingId] = useState<string | null>(null);
   const [manageError, setManageError] = useState('');
   const [manageNotice, setManageNotice] = useState('');
+  // Both actions confirm in-page rather than through window.confirm, which a
+  // browser may suppress — it then returns false and the click dies silently.
+  // Deleting keeps its typed-name ceremony: the confirm button stays inert
+  // until the typed text matches the property's name exactly.
+  const [archiveTarget, setArchiveTarget] = useState<PropertySummary | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PropertySummary | null>(null);
+  const [typedDeleteName, setTypedDeleteName] = useState('');
 
   // Add-units form (one open building at a time).
   const [unitsTargetId, setUnitsTargetId] = useState<string | null>(null);
@@ -230,56 +237,68 @@ export default function PortfolioPage() {
   // Archive: reversible for ARCHIVE_RETENTION_DAYS, billing unchanged.
   // Delete: typed-name confirmation, and the plan note — the downgrade takes
   // effect at the next billing cycle, never prorated.
-  const archiveProperty = async (property: PropertySummary) => {
-    if (!context?.user) return;
-    const confirmed = window.confirm(
-      `Archive "${property.nickname}"? It leaves your active homes and the switcher, but keeps every record and can be restored for ${ARCHIVE_RETENTION_DAYS} days. After that it is deleted automatically. Archiving does not change your plan.`
-    );
-    if (!confirmed) return;
+  // A unit is identified by its unit label; a standalone home by its nickname.
+  const deletePropertyLabel = (property: PropertySummary) =>
+    property.parent_property_id ? property.unit_label || property.nickname : property.nickname;
+
+  const requestArchiveProperty = (property: PropertySummary) => {
+    setManageError('');
+    setArchiveTarget(property);
+  };
+
+  const confirmArchiveProperty = async () => {
+    if (!context?.user || !archiveTarget || managingId !== null) return;
+    const property = archiveTarget;
 
     setManagingId(property.id);
     setManageError('');
     setManageNotice('');
     try {
       await archivePropertyForOwner(property.id, context.user.id);
+      setArchiveTarget(null);
       setManageNotice(`${property.nickname} archived — restorable for ${ARCHIVE_RETENTION_DAYS} days below.`);
       await load();
     } catch (actionError) {
+      // Close the dialog so the error is readable on the page.
+      setArchiveTarget(null);
       setManageError(actionError instanceof Error ? actionError.message : 'Failed to archive this home.');
     } finally {
       setManagingId(null);
     }
   };
 
-  const deleteProperty = async (property: PropertySummary) => {
-    if (!context?.user) return;
+  const requestDeleteProperty = (property: PropertySummary) => {
+    setManageError('');
+    setTypedDeleteName('');
+    setDeleteTarget(property);
+  };
 
-    const label = property.parent_property_id
-      ? property.unit_label || property.nickname
-      : property.nickname;
+  const confirmDeleteProperty = async () => {
+    if (!context?.user || !deleteTarget || managingId !== null) return;
 
-    const typed = window.prompt(
-      `Deleting "${label}" removes everything recorded in it, forever. To confirm, type the name exactly:`
-    );
-    if (typed === null) return;
-    if (typed.trim().toLowerCase() !== label.trim().toLowerCase()) {
+    const property = deleteTarget;
+    const label = deletePropertyLabel(property);
+
+    // Belt and braces: the confirm button is already disabled until the typed
+    // name matches, but never delete on a mismatch even if that is bypassed.
+    if (typedDeleteName.trim().toLowerCase() !== label.trim().toLowerCase()) {
+      setDeleteTarget(null);
       setManageError('The name did not match — nothing was deleted.');
       return;
     }
-
-    const confirmed = window.confirm(
-      `Last check: delete "${label}" permanently? ${property.parent_property_id ? '' : 'A building takes its units with it. '}If your plan is priced per home, the downgrade takes effect at your next billing cycle — nothing is prorated or refunded mid-cycle. This cannot be undone.`
-    );
-    if (!confirmed) return;
 
     setManagingId(property.id);
     setManageError('');
     setManageNotice('');
     try {
       await deletePropertyForOwner(property.id, context.user.id);
+      setDeleteTarget(null);
+      setTypedDeleteName('');
       setManageNotice(`${label} deleted. Any plan change begins at your next billing cycle.`);
       await load();
     } catch (actionError) {
+      // Close the dialog so the error is readable on the page.
+      setDeleteTarget(null);
       setManageError(actionError instanceof Error ? actionError.message : 'Failed to delete this home.');
     } finally {
       setManagingId(null);
@@ -735,7 +754,7 @@ export default function PortfolioPage() {
                                   type="button"
                                   variant="secondary"
                                   disabled={managingId === property.id}
-                                  onClick={() => archiveProperty(property)}
+                                  onClick={() => requestArchiveProperty(property)}
                                 >
                                   Archive
                                 </Button>
@@ -744,7 +763,7 @@ export default function PortfolioPage() {
                                 type="button"
                                 variant="secondary"
                                 disabled={managingId === property.id}
-                                onClick={() => deleteProperty(property)}
+                                onClick={() => requestDeleteProperty(property)}
                                 style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
                               >
                                 Delete
@@ -873,7 +892,7 @@ export default function PortfolioPage() {
                       type="button"
                       variant="secondary"
                       disabled={managingId === property.id}
-                      onClick={() => deleteProperty(property)}
+                      onClick={() => requestDeleteProperty(property)}
                       style={{ color: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
                     >
                       Delete now
@@ -1013,6 +1032,56 @@ export default function PortfolioPage() {
 
         {planCards}
       </div>
+
+      <ConfirmDialog
+        open={archiveTarget !== null}
+        title={archiveTarget ? `Archive ${archiveTarget.nickname}?` : 'Archive home?'}
+        description={`It leaves your active homes and the switcher, but keeps every record and can be restored for ${ARCHIVE_RETENTION_DAYS} days. After that it is deleted automatically. Archiving does not change your plan.`}
+        confirmLabel="Archive home"
+        cancelLabel="Keep active"
+        destructive={false}
+        busy={managingId !== null && managingId === archiveTarget?.id}
+        onConfirm={confirmArchiveProperty}
+        onCancel={() => {
+          if (managingId === null) {
+            setArchiveTarget(null);
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={deleteTarget ? `Delete ${deletePropertyLabel(deleteTarget)} permanently?` : 'Delete home?'}
+        description={`Deleting removes everything recorded in it, forever. ${
+          deleteTarget && !deleteTarget.parent_property_id ? 'A building takes its units with it. ' : ''
+        }If your plan is priced per home, the downgrade takes effect at your next billing cycle — nothing is prorated or refunded mid-cycle. This cannot be undone.`}
+        confirmLabel="Delete permanently"
+        cancelLabel="Keep home"
+        busy={managingId !== null && managingId === deleteTarget?.id}
+        confirmDisabled={
+          !deleteTarget ||
+          typedDeleteName.trim().toLowerCase() !== deletePropertyLabel(deleteTarget).trim().toLowerCase()
+        }
+        onConfirm={confirmDeleteProperty}
+        onCancel={() => {
+          if (managingId === null) {
+            setDeleteTarget(null);
+            setTypedDeleteName('');
+          }
+        }}
+      >
+        <label style={{ display: 'grid', gap: 6 }}>
+          <span style={{ fontWeight: 600 }}>
+            To confirm, type <strong>{deleteTarget ? deletePropertyLabel(deleteTarget) : ''}</strong> exactly:
+          </span>
+          <Input
+            value={typedDeleteName}
+            onChange={(event) => setTypedDeleteName(event.target.value)}
+            disabled={managingId !== null}
+            autoComplete="off"
+          />
+        </label>
+      </ConfirmDialog>
     </>
   );
 }

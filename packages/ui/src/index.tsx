@@ -411,6 +411,9 @@ export function ConfirmDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
+        // The consequence copy is the point of the dialog — a screen reader
+        // must hear it on entry, not only the title.
+        aria-describedby="confirm-dialog-description"
         className="hb-dialog"
         style={{
           width: 'min(420px, 100%)',
@@ -424,7 +427,7 @@ export function ConfirmDialog({
         }}
       >
         <h2 id="confirm-dialog-title" style={{ marginTop: 0 }}>{title}</h2>
-        <p style={{ color: 'var(--text-muted)' }}>{description}</p>
+        <p id="confirm-dialog-description" style={{ color: 'var(--text-muted)' }}>{description}</p>
         {children ? <div style={{ marginBottom: 16 }}>{children}</div> : null}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
           <Button type="button" variant="secondary" disabled={busy} onClick={onCancel}>
