@@ -139,7 +139,12 @@ export default function SignUpPage() {
                 disabled={loading}
                 onClick={async () => {
                   setError('');
-                  const result = await signInWithGoogle();
+                  // Signing up goes through first-run setup, exactly like the
+                  // email path above. Without this the provider sent people
+                  // straight to the dashboard and they never saw the wizard.
+                  const result = await signInWithGoogle(
+                    safeRelativePath(router.query.next, '/welcome')
+                  );
                   if (result.error) {
                     setError(formatAuthError(result.error));
                   }
@@ -155,7 +160,9 @@ export default function SignUpPage() {
                 disabled={loading}
                 onClick={async () => {
                   setError('');
-                  const result = await signInWithApple();
+                  const result = await signInWithApple(
+                    safeRelativePath(router.query.next, '/welcome')
+                  );
                   if (result.error) {
                     setError(formatAuthError(result.error));
                     return;

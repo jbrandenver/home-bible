@@ -1,7 +1,26 @@
-// Home-completeness score + "This Week at Home" digest.
+// What the record holds + "This Week at Home" digest.
+//
 // Pure client-side computation over data every page already loads — no queries,
-// no background jobs, no cost. The score rewards the records that matter most
-// in an emergency or a claim; the digest surfaces what needs attention now.
+// no background jobs, no cost.
+//
+// WHY THIS IS TWO BANDS AND NOT A PERCENTAGE
+// DESIGN.md: "Status is a seal, never a streak." A single 0-100 number looked
+// like a seal and behaved like a streak, for two reasons.
+//
+// First, it could not be finished. Serials, values and photos were ratios over
+// an ever-growing asset count, so 100 receded as you used the product — and,
+// worse, adding an eleventh appliance without a serial number LOWERED the
+// score. The measure actively punished capture, which is the one behaviour the
+// product wants.
+//
+// Second, someone who completed first-run setup perfectly saw 25/100 and a
+// list of failures. That is completion pressure, which the product refuses.
+//
+// So: a finite set of essentials that can genuinely be completed — and is,
+// by the end of the wizard — which earns a struck seal. Then the long tail,
+// reported as plain counts with no denominator and nothing to chase.
+//
+// If someone proposes putting the percentage back, this is the argument.
 
 import type { AssetRow } from './assets';
 import type { DocumentRow } from './documents';
@@ -10,10 +29,17 @@ import type { RepairRow } from './repairs';
 import type { ServiceRecordRow } from './serviceRecords';
 import type { UtilityRow } from './utilities';
 
+/**
+ * `essentials` are finite and completable; `deepening` is open-ended and must
+ * never be shown with a denominator or a target to chase.
+ */
+export type CompletenessGroup = 'essentials' | 'deepening';
+
 export type CompletenessCheck = {
   id: string;
   label: string;
   detail: string;
+  group: CompletenessGroup;
   earned: number;
   possible: number;
   done: boolean;
@@ -21,9 +47,18 @@ export type CompletenessCheck = {
 };
 
 export type CompletenessResult = {
-  score: number; // 0-100
+  /**
+   * Kept internal to this module's consumers for ordering only. Deliberately
+   * not rendered as a percentage — see the header.
+   */
+  score: number;
   checks: CompletenessCheck[];
-  nextActions: CompletenessCheck[]; // top incomplete checks, biggest wins first
+  essentials: CompletenessCheck[];
+  deepening: CompletenessCheck[];
+  /** Every essential recorded. This is what earns the seal. */
+  sealed: boolean;
+  /** Incomplete essentials first; the long tail never outranks them. */
+  nextActions: CompletenessCheck[];
 };
 
 type CompletenessInput = {
@@ -34,9 +69,26 @@ type CompletenessInput = {
   reminders: ReminderRow[];
 };
 
-function ratioPoints(numerator: number, denominator: number, possible: number) {
-  if (denominator <= 0) return 0;
-  return Math.round((numerator / denominator) * possible);
+/** A home has this many systems worth naming before the list is useful. */
+const SYSTEMS_TARGET = 3;
+
+/**
+ * The point at which the long tail stops being scored.
+ *
+ * Fixed, never the current asset count. Dividing by "how many assets you have"
+ * is what made recording an appliance without its serial number reduce the
+ * score — so the more honest you were, the worse you looked.
+ */
+const INVENTORY_TARGET = 10;
+const PAPERS_TARGET = 3;
+
+function ratioPoints(numerator: number, target: number, possible: number) {
+  if (target <= 0) return 0;
+  return Math.min(possible, Math.round((Math.min(numerator, target) / target) * possible));
+}
+
+function countLabel(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 export function computeCompleteness(input: CompletenessInput): CompletenessResult {
@@ -55,116 +107,162 @@ export function computeCompleteness(input: CompletenessInput): CompletenessResul
   );
   const openReminders = reminders.filter((reminder) => reminder.status === 'open').length;
 
-  const checks: CompletenessCheck[] = [
+  const systemsListed = utilities.length;
+
+  // Five things, all reachable in first-run setup, all yes-or-no. This band
+  // exists to be finished.
+  const essentials: CompletenessCheck[] = [
     {
       id: 'rooms',
       label: 'Rooms mapped',
-      detail: roomCount > 0 ? `${roomCount} rooms recorded` : 'Map your floors and rooms',
-      earned: roomCount > 0 ? 15 : 0,
-      possible: 15,
+      detail: roomCount > 0 ? countLabel(roomCount, 'room') : 'Tick what this home has',
+      group: 'essentials',
+      earned: roomCount > 0 ? 20 : 0,
+      possible: 20,
       done: roomCount > 0,
-      href: '/add-rooms'
+      href: '/welcome'
     },
     {
       id: 'water',
       label: 'Water shut-off recorded',
       detail: hasWaterShutoff
-        ? 'Main water shut-off is on file'
+        ? 'On file'
         : 'The one record that matters in a burst-pipe emergency',
-      earned: hasWaterShutoff ? 15 : 0,
-      possible: 15,
+      group: 'essentials',
+      earned: hasWaterShutoff ? 20 : 0,
+      possible: 20,
       done: hasWaterShutoff,
       href: '/add-utility'
     },
     {
       id: 'electrical',
       label: 'Electrical panel recorded',
-      detail: hasElectricalPanel ? 'Panel location is on file' : 'Record where the breaker panel lives',
-      earned: hasElectricalPanel ? 10 : 0,
-      possible: 10,
+      detail: hasElectricalPanel ? 'On file' : 'Record where the breaker panel lives',
+      group: 'essentials',
+      earned: hasElectricalPanel ? 20 : 0,
+      possible: 20,
       done: hasElectricalPanel,
       href: '/add-utility'
     },
     {
-      id: 'inventory',
-      label: 'Inventory started',
+      id: 'systems',
+      label: 'Systems listed',
       detail:
-        assets.length >= 10
-          ? `${assets.length} items recorded`
-          : `${assets.length}/10 items — record the big-ticket things first`,
-      earned: Math.min(15, ratioPoints(assets.length, 10, 15)),
+        systemsListed >= SYSTEMS_TARGET
+          ? countLabel(systemsListed, 'system')
+          : 'Name the boiler, the water heater, the alarms',
+      group: 'essentials',
+      earned: systemsListed >= SYSTEMS_TARGET ? 20 : 0,
+      possible: 20,
+      done: systemsListed >= SYSTEMS_TARGET,
+      href: '/utilities'
+    },
+    {
+      id: 'care',
+      label: 'Care planned',
+      detail:
+        openReminders > 0
+          ? `${countLabel(openReminders, 'reminder')} on the calendar`
+          : 'Put the first seasonal job on the calendar',
+      group: 'essentials',
+      earned: openReminders > 0 ? 20 : 0,
+      possible: 20,
+      done: openReminders > 0,
+      href: '/maintenance'
+    }
+  ];
+
+  // The long tail. Counted, never fractioned — there is no total number of
+  // belongings a home is supposed to have.
+  const deepening: CompletenessCheck[] = [
+    {
+      id: 'inventory',
+      label: 'Belongings recorded',
+      detail:
+        assets.length > 0
+          ? countLabel(assets.length, 'item')
+          : 'Start with the big-ticket things',
+      group: 'deepening',
+      earned: ratioPoints(assets.length, INVENTORY_TARGET, 15),
       possible: 15,
-      done: assets.length >= 10,
+      done: assets.length >= INVENTORY_TARGET,
       href: '/inventory'
     },
     {
       id: 'serials',
-      label: 'Serial numbers logged',
+      label: 'Serial numbers',
       detail:
-        assets.length === 0
-          ? 'Add items first, then capture serials'
-          : `${assetsWithSerial}/${assets.length} items have serials`,
-      earned: ratioPoints(assetsWithSerial, Math.max(assets.length, 1), 10),
+        assetsWithSerial > 0
+          ? countLabel(assetsWithSerial, 'serial number')
+          : 'What an insurer asks for first',
+      group: 'deepening',
+      earned: ratioPoints(assetsWithSerial, INVENTORY_TARGET, 10),
       possible: 10,
-      done: assets.length > 0 && assetsWithSerial === assets.length,
+      done: assetsWithSerial >= INVENTORY_TARGET,
       href: '/inventory'
     },
     {
       id: 'values',
-      label: 'Values recorded',
+      label: 'Values',
       detail:
-        assets.length === 0
-          ? 'Values make the inventory claim-ready'
-          : `${assetsWithValue}/${assets.length} items have values`,
-      earned: ratioPoints(assetsWithValue, Math.max(assets.length, 1), 10),
+        assetsWithValue > 0
+          ? `${countLabel(assetsWithValue, 'item')} valued`
+          : 'Values make the inventory claim-ready',
+      group: 'deepening',
+      earned: ratioPoints(assetsWithValue, INVENTORY_TARGET, 10),
       possible: 10,
-      done: assets.length > 0 && assetsWithValue === assets.length,
+      done: assetsWithValue >= INVENTORY_TARGET,
       href: '/inventory'
     },
     {
       id: 'photos',
-      label: 'Photos attached',
+      label: 'Photographs',
       detail:
-        assets.length === 0
-          ? 'A photo per item is your proof of ownership'
-          : `${assetIdsWithPhotos.size}/${assets.length} items have photos`,
-      earned: ratioPoints(assetIdsWithPhotos.size, Math.max(assets.length, 1), 10),
+        assetIdsWithPhotos.size > 0
+          ? `${countLabel(assetIdsWithPhotos.size, 'item')} photographed`
+          : 'A photo is proof of ownership',
+      group: 'deepening',
+      earned: ratioPoints(assetIdsWithPhotos.size, INVENTORY_TARGET, 10),
       possible: 10,
-      done: assets.length > 0 && assetIdsWithPhotos.size === assets.length,
+      done: assetIdsWithPhotos.size >= INVENTORY_TARGET,
       href: '/inventory'
     },
     {
       id: 'papers',
       label: 'Papers filed',
       detail:
-        documents.length >= 3 ? `${documents.length} documents filed` : 'File manuals, receipts, and insurance papers',
-      earned: Math.min(10, ratioPoints(documents.length, 3, 10)),
+        documents.length > 0
+          ? countLabel(documents.length, 'document')
+          : 'Manuals, receipts, insurance, the closing pack',
+      group: 'deepening',
+      earned: ratioPoints(documents.length, PAPERS_TARGET, 10),
       possible: 10,
-      done: documents.length >= 3,
+      done: documents.length >= PAPERS_TARGET,
       href: '/documents'
-    },
-    {
-      id: 'care',
-      label: 'Care planned',
-      detail:
-        openReminders > 0 ? `${openReminders} open reminders keep care on schedule` : 'Set a first maintenance reminder',
-      earned: openReminders > 0 ? 5 : 0,
-      possible: 5,
-      done: openReminders > 0,
-      href: '/reminders'
     }
   ];
+
+  const checks = [...essentials, ...deepening];
 
   const totalPossible = checks.reduce((sum, check) => sum + check.possible, 0);
   const totalEarned = checks.reduce((sum, check) => sum + check.earned, 0);
   const score = Math.round((totalEarned / totalPossible) * 100);
 
-  const nextActions = checks
-    .filter((check) => !check.done)
-    .sort((a, b) => b.possible - b.earned - (a.possible - a.earned))
-    .slice(0, 3);
+  // Essentials always outrank the tail, however few points separate them:
+  // a missing water shut-off matters more than a tenth photograph.
+  const nextActions = [
+    ...essentials.filter((check) => !check.done),
+    ...deepening.filter((check) => !check.done)
+  ].slice(0, 3);
 
-  return { score, checks, nextActions };
+  return {
+    score,
+    checks,
+    essentials,
+    deepening,
+    sealed: essentials.every((check) => check.done),
+    nextActions
+  };
 }
 
 // ---------- This Week at Home digest ----------

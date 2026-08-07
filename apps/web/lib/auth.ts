@@ -1,4 +1,5 @@
 import type { User } from '@supabase/supabase-js';
+import { safeRelativePath } from '@home-folder/shared';
 import { isNativeApp, nativeAppleAuthorize } from './native';
 import { getSupabaseBrowserClient } from './supabase/client';
 
@@ -294,7 +295,34 @@ export function enabledOAuthProviders(): OAuthProvider[] {
     .filter((entry): entry is OAuthProvider => entry === 'google' || entry === 'apple');
 }
 
-export async function signInWithGoogle(): Promise<AuthResult> {
+/**
+ * Where the provider sends someone back to.
+ *
+ * Signing *in* means the dashboard. Signing *up* means the wizard — and it has
+ * to be passed explicitly, because both pages call the same function. Hard-
+ * coding /dashboard here is what quietly sent every Google and Apple signup
+ * straight past first-run setup while email signups went through it.
+ */
+export const DEFAULT_OAUTH_DESTINATION = '/dashboard';
+
+/**
+ * The in-app path a provider may return to.
+ *
+ * Pure and exported so the open-redirect guard is assertable: the destination
+ * can originate in a `?next=` query string, and this value is handed straight
+ * to the provider as a redirect target.
+ */
+export function oauthDestinationPath(destination: unknown): string {
+  return safeRelativePath(destination, DEFAULT_OAUTH_DESTINATION);
+}
+
+function oauthRedirectTo(destination: string): string {
+  return `${window.location.origin}${oauthDestinationPath(destination)}`;
+}
+
+export async function signInWithGoogle(
+  destination: string = DEFAULT_OAUTH_DESTINATION
+): Promise<AuthResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return { data: null, error: new Error(getSupabaseSetupMessage()) };
@@ -304,7 +332,7 @@ export async function signInWithGoogle(): Promise<AuthResult> {
     provider: 'google',
     // Land back in the app after the provider round-trip. The URL must also be
     // listed in Supabase → Authentication → URL Configuration → Redirect URLs.
-    options: { redirectTo: `${window.location.origin}/dashboard` }
+    options: { redirectTo: oauthRedirectTo(destination) }
   });
 
   return {
@@ -319,7 +347,9 @@ export async function signInWithGoogle(): Promise<AuthResult> {
  * round-trip. On the web it is the standard OAuth redirect. A cancelled native
  * sheet resolves { data: null, error: null }: nothing happened, show nothing.
  */
-export async function signInWithApple(): Promise<AuthResult> {
+export async function signInWithApple(
+  destination: string = DEFAULT_OAUTH_DESTINATION
+): Promise<AuthResult> {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
     return { data: null, error: new Error(getSupabaseSetupMessage()) };
@@ -340,7 +370,7 @@ export async function signInWithApple(): Promise<AuthResult> {
 
   const result = await supabase.auth.signInWithOAuth({
     provider: 'apple',
-    options: { redirectTo: `${window.location.origin}/dashboard` }
+    options: { redirectTo: oauthRedirectTo(destination) }
   });
 
   return { data: result.data, error: result.error };

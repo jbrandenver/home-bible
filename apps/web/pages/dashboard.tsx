@@ -479,20 +479,26 @@ export default function DashboardPage() {
     }
 
     if (!hasProperty) {
+      // Into the wizard, not to /create-property. That route creates the
+      // property and then sends people to add rooms one at a time — the
+      // rooms-first funnel the wizard exists to replace. It stays available
+      // for adding a *second* home, which is a different job.
       return {
         title: 'Start your home record.',
-        description: 'Create the property first. Then map rooms, utilities, assets, maintenance records, and files.',
-        href: '/create-property',
-        action: 'Create property'
+        description:
+          'A few taps: name the home, tick what it has, and we write the rooms for you.',
+        href: '/welcome',
+        action: 'Begin your record'
       };
     }
 
     if (rooms.length === 0) {
       return {
         title: 'No rooms yet — let’s map the house.',
-        description: 'Rooms and spaces are the foundation for utilities, assets, receipts, warranties, repairs, and documents.',
-        href: '/add-rooms',
-        action: 'Add rooms & spaces'
+        description:
+          'Tick what this home has and the rooms are written for you — there is nothing to type.',
+        href: '/welcome',
+        action: 'Map the rooms'
       };
     }
 
@@ -588,72 +594,63 @@ export default function DashboardPage() {
               <Card id="home-record">
                 <div className="hb-leader" style={{ marginBottom: 12 }}>
                   <h2 style={{ margin: 0 }}>Home record</h2>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: 34,
-                      fontWeight: 600,
-                      color:
-                        completeness.score >= 80
-                          ? 'var(--status-good)'
-                          : completeness.score >= 50
-                            ? 'var(--color-brass-deep)'
-                            : 'var(--status-urgent)'
-                    }}
-                  >
-                    {completeness.score}
-                    <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>/100</span>
-                  </span>
-                </div>
-                <div
-                  style={{
-                    height: 8,
-                    borderRadius: 999,
-                    background: 'rgba(44,31,24,0.12)',
-                    overflow: 'hidden',
-                    marginBottom: 14
-                  }}
-                >
-                  <div
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      background:
-                        'linear-gradient(90deg, var(--color-brass-deep), var(--color-brass-pale))',
-                      // Compositor-only fill: scaleX instead of animating width,
-                      // so the meter never triggers layout.
-                      transform: `scaleX(${completeness.score / 100})`,
-                      transformOrigin: 'left',
-                      transition: 'transform 600ms cubic-bezier(0.22,0.9,0.3,1)'
-                    }}
+                  <UtilityBadge
+                    label={completeness.sealed ? 'The record stands' : 'In progress'}
+                    tone={completeness.sealed ? 'good' : 'neutral'}
                   />
                 </div>
-                {completeness.nextActions.length > 0 ? (
+
+                {/* The essentials are finite and can genuinely be finished, so
+                    they are stated as a struck seal rather than a percentage.
+                    See the argument in lib/completeness.ts. */}
+                {completeness.sealed ? (
+                  <p style={{ color: 'var(--status-good)', fontWeight: 600, marginTop: 0 }}>
+                    Everything a stranger would need in an emergency is on file.
+                  </p>
+                ) : (
                   <>
                     <p style={{ color: 'var(--text-muted)', marginTop: 0, marginBottom: 10, fontSize: 14 }}>
-                      Strengthen the record next:
+                      Still to record:
                     </p>
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {completeness.nextActions.map((action) => (
-                        <Link
-                          key={action.id}
-                          href={action.href}
-                          className="hb-toc-row"
-                          style={{ padding: '8px 10px', border: '1px solid var(--border-subtle)' }}
-                        >
-                          <span className="hb-toc-num">+{action.possible - action.earned}</span>
-                          <span style={{ fontWeight: 600 }}>{action.label}</span>
-                          <span className="hb-toc-dots" aria-hidden="true" />
-                          <span className="hb-toc-detail">{action.detail}</span>
-                        </Link>
-                      ))}
+                    <div style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
+                      {completeness.essentials
+                        .filter((check) => !check.done)
+                        .map((check) => (
+                          <Link
+                            key={check.id}
+                            href={check.href}
+                            className="hb-toc-row"
+                            style={{ padding: '8px 10px', border: '1px solid var(--border-subtle)' }}
+                          >
+                            <span style={{ fontWeight: 600 }}>{check.label}</span>
+                            <span className="hb-toc-dots" aria-hidden="true" />
+                            <span className="hb-toc-detail">{check.detail}</span>
+                          </Link>
+                        ))}
                     </div>
                   </>
-                ) : (
-                  <p style={{ color: 'var(--status-good)', fontWeight: 600, margin: 0 }}>
-                    Your home record is complete. Beautifully kept.
-                  </p>
                 )}
+
+                {/* Counts, never fractions: there is no total number of
+                    belongings a home is supposed to have, so there is nothing
+                    here to fall short of. */}
+                <p style={{ color: 'var(--text-muted)', margin: '0 0 8px', fontSize: 14 }}>
+                  The record also holds:
+                </p>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {completeness.deepening.map((check) => (
+                    <Link
+                      key={check.id}
+                      href={check.href}
+                      className="hb-toc-row"
+                      style={{ padding: '8px 10px', border: '1px solid var(--border-subtle)' }}
+                    >
+                      <span style={{ fontWeight: 600 }}>{check.label}</span>
+                      <span className="hb-toc-dots" aria-hidden="true" />
+                      <span className="hb-toc-detail">{check.detail}</span>
+                    </Link>
+                  ))}
+                </div>
               </Card>
 
               <Card id="this-week">
