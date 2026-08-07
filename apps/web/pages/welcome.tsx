@@ -17,9 +17,37 @@ import { getIssueDataContext } from '../lib/issues';
 import { getReminderDataContext } from '../lib/reminders';
 import { getRepairDataContext } from '../lib/repairs';
 import { getServiceRecordDataContext } from '../lib/serviceRecords';
-import { createPropertyForUser, getPrimaryPropertyForUser, type PropertySummary } from '../lib/properties';
+import {
+  createPropertyForUser,
+  getPrimaryPropertyForUser,
+  updatePropertyStructure,
+  type PropertySummary
+} from '../lib/properties';
 import { createUtilityForContext, getUtilityDataContext } from '../lib/utilities';
 import { PROPERTY_TYPES, formatEnumLabel } from '@home-folder/shared';
+import { SpaceGrid } from '../components/SpaceGrid';
+import { CheckList } from '../components/CheckList';
+import { createRoomsForContext, getRoomDataContext } from '../lib/roomsContext';
+import { getRoomsForProperty } from '../lib/rooms';
+import { deriveHasFlags } from '../lib/propertyFlags';
+import { US_STATES, buildSeasonalPlan } from '../lib/seasonalPlan';
+import { selectSeedReminders } from '../lib/seasonalSeed';
+import { createReminderForContext, getRemindersForContext } from '../lib/reminders';
+import {
+  MAX_FLOOR_COUNT,
+  MIN_FLOOR_COUNT,
+  clampFloorCount,
+  expandRoomSelection
+} from '../lib/starterRooms';
+import {
+  DEDICATED_UTILITY_TYPES,
+  defaultSelectionFor,
+  getStarterTemplate,
+  offeredSpacesFor,
+  offeredUtilitiesFor,
+  utilityNameForType,
+  type SpaceSelection
+} from '../lib/starterTemplates';
 
 // First run.
 //
@@ -36,9 +64,29 @@ import { PROPERTY_TYPES, formatEnumLabel } from '@home-folder/shared';
 // 'demo' comes first: somebody who mapped their house before signing up must
 // be asked what to do with that work before being handed a blank wizard that
 // silently ignores it.
-type Step = 'demo' | 'home' | 'water' | 'electrical' | 'done';
+type Step = 'demo' | 'home' | 'spaces' | 'water' | 'electrical' | 'systems' | 'done';
 
-const STEP_ORDER: Step[] = ['home', 'water', 'electrical', 'done'];
+const STEP_ORDER: Step[] = ['home', 'spaces', 'water', 'electrical', 'systems', 'done'];
+
+const STEP_LABELS: Partial<Record<Step, string>> = {
+  home: '1 · Your home',
+  spaces: '2 · Rooms & spaces',
+  water: '3 · Water shut-off',
+  electrical: '4 · Electrical panel',
+  systems: '5 · Systems'
+};
+
+/** The systems grid's starting state for a kind of home and its ticked spaces. */
+function selectionForUtilities(
+  propertyType: (typeof PROPERTY_TYPES)[number],
+  spaces: SpaceSelection
+): Record<string, boolean> {
+  const next: Record<string, boolean> = {};
+  for (const utility of offeredUtilitiesFor(propertyType, spaces)) {
+    next[utility.utility_type] = utility.checked;
+  }
+  return next;
+}
 
 export default function WelcomePage() {
   const router = useRouter();
@@ -57,6 +105,68 @@ export default function WelcomePage() {
   const [waterLocation, setWaterLocation] = useState('');
   const [electricalLocation, setElectricalLocation] = useState('');
   const [recorded, setRecorded] = useState<string[]>([]);
+  // Kept separately from the display names above because the seasonal plan
+  // keys off utility_type, not off what the row is called.
+  const [recordedUtilityTypes, setRecordedUtilityTypes] = useState<string[]>([]);
+
+  // The state is asked for one reason only, and the label says so: it picks the
+  // climate band that times the seasonal care plan. Nothing else reads it.
+  const [stateCode, setStateCode] = useState('');
+  const [spaceSelection, setSpaceSelection] = useState<SpaceSelection>(() =>
+    defaultSelectionFor('single_family_home')
+  );
+  const [floorCount, setFloorCount] = useState(
+    () => getStarterTemplate('single_family_home').defaultFloorCount
+  );
+  const [roomsCreated, setRoomsCreated] = useState(0);
+  const [systemsCreated, setSystemsCreated] = useState(0);
+  const [seededReminders, setSeededReminders] = useState<string[]>([]);
+  const [utilitySelection, setUtilitySelection] = useState<Record<string, boolean>>(() =>
+    selectionForUtilities('single_family_home', defaultSelectionFor('single_family_home'))
+  );
+
+  const offeredSpaces = offeredSpacesFor(propertyType);
+  const insideSpaces = offeredSpaces.filter((space) => space.zone === 'inside');
+  const outsideSpaces = offeredSpaces.filter((space) => space.zone === 'outside');
+  const plannedRooms = expandRoomSelection(propertyType, spaceSelection, floorCount);
+
+  // The water and electrical steps own their two types — they capture a
+  // location, which is the reason for asking at all.
+  const offeredSystems = offeredUtilitiesFor(propertyType, spaceSelection).filter(
+    (utility) => !DEDICATED_UTILITY_TYPES.includes(utility.utility_type)
+  );
+  const checkedSystems = offeredSystems.filter(
+    (utility) => utilitySelection[utility.utility_type]
+  );
+
+  function handlePropertyTypeChange(nextType: (typeof PROPERTY_TYPES)[number]) {
+    setPropertyType(nextType);
+    // A condo has no crawl space and a building has no bedrooms, so the grids
+    // are rebuilt rather than carried across. This runs before either is ever
+    // shown, so nothing a person ticked can be lost here.
+    const nextSpaces = defaultSelectionFor(nextType);
+    setSpaceSelection(nextSpaces);
+    setFloorCount(getStarterTemplate(nextType).defaultFloorCount);
+    setUtilitySelection(selectionForUtilities(nextType, nextSpaces));
+  }
+
+  function handleSpaceChange(key: string, count: number) {
+    setSpaceSelection((current) => {
+      const next = { ...current, [key]: count };
+      // Ticking a basement makes a sump pump worth offering; un-ticking it
+      // takes the offer away again. Anything already decided is preserved.
+      setUtilitySelection((currentUtilities) => {
+        const rebuilt = selectionForUtilities(propertyType, next);
+        for (const key of Object.keys(rebuilt)) {
+          if (key in currentUtilities) {
+            rebuilt[key] = currentUtilities[key];
+          }
+        }
+        return rebuilt;
+      });
+      return next;
+    });
+  }
 
   const supabaseReady = isSupabaseConfigured();
 
@@ -86,6 +196,17 @@ export default function WelcomePage() {
         if (existing) {
           setProperty(existing);
           setNickname(existing.nickname);
+
+          // Match the grid to the home they already recorded, so someone who
+          // comes back to map rooms is not offered a house's set for a condo.
+          const knownType = PROPERTY_TYPES.find((type) => type === existing.property_type);
+          if (knownType) {
+            setPropertyType(knownType);
+            const spaces = defaultSelectionFor(knownType);
+            setSpaceSelection(spaces);
+            setFloorCount(getStarterTemplate(knownType).defaultFloorCount);
+            setUtilitySelection(selectionForUtilities(knownType, spaces));
+          }
         }
 
         // The browser copy is the thing they already spent time on, so it is
@@ -93,7 +214,11 @@ export default function WelcomePage() {
         if (demo.hasAnything) {
           setStep('demo');
         } else if (existing) {
-          setStep('water');
+          // A property with no rooms is someone the dashboard sent here to map
+          // them. Dropping them on the water step instead would be a dead end.
+          const existingRooms = await getRoomsForProperty(existing.id);
+          if (!isMounted) return;
+          setStep(existingRooms.length === 0 ? 'spaces' : 'water');
         }
       } catch {
         // A failed check should not block the flow; the save path re-verifies.
@@ -194,23 +319,172 @@ export default function WelcomePage() {
           id: crypto.randomUUID(),
           nickname: nickname.trim(),
           property_type: propertyType,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          state: stateCode || undefined
         });
-        setStep('water');
+        setStep('spaces');
         return;
       }
 
       const created = await createPropertyForUser(user, {
         nickname: nickname.trim(),
-        property_type: propertyType
+        property_type: propertyType,
+        // Written here rather than through updatePropertyAddress, which
+        // rewrites every address column and can flip address_is_enabled.
+        state: stateCode || null
       });
 
       setProperty(created);
-      setStep('water');
+      setStep('spaces');
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : 'Could not create your home.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  /**
+   * The whole starter set in one submit.
+   *
+   * Rooms first, then the property columns they imply — in that order, so the
+   * flags can never claim a basement that failed to save.
+   */
+  async function handleCreateSpaces() {
+    setSaving(true);
+    setError('');
+
+    try {
+      const drafts = expandRoomSelection(propertyType, spaceSelection, floorCount);
+
+      if (drafts.length === 0) {
+        setStep('water');
+        return;
+      }
+
+      // resolveDataContext confirms against the auth client before concluding
+      // "signed out", so a stale cached null cannot send these to localStorage.
+      const context = await getRoomDataContext();
+      await createRoomsForContext(context, drafts);
+
+      if (context.mode === 'supabase' && context.property) {
+        const flags = deriveHasFlags(drafts);
+        // Never fail the step over this: the rooms are the record, and these
+        // columns are only derived from them.
+        try {
+          await updatePropertyStructure(context.property.id, {
+            floor_count: clampFloorCount(floorCount),
+            ...flags
+          });
+        } catch {
+          /* the rooms landed; the derived columns can be rebuilt any time */
+        }
+      }
+
+      setRoomsCreated(drafts.length);
+      setStep('water');
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : 'Could not save those rooms yet.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /**
+   * Create the ticked systems, then seed the care plan and finish.
+   *
+   * The seed runs whether or not any system was ticked, because the plan is
+   * driven mostly by climate and by the rooms already recorded — a person who
+   * skips this step should still land on a dashboard with something on it.
+   */
+  async function finishSetup(createSystems: boolean) {
+    setSaving(true);
+    setError('');
+
+    const createdTypes: string[] = [];
+
+    try {
+      if (createSystems && checkedSystems.length > 0) {
+        const context = await getUtilityDataContext();
+
+        for (const utility of checkedSystems) {
+          try {
+            await createUtilityForContext(context, {
+              utility_type: utility.utility_type,
+              // Derived from the type — welcome's own water and electrical
+              // steps already do exactly this, and add-utility asking a person
+              // to type what the type already says is the thing being removed.
+              name: utilityNameForType(utility.utility_type),
+              room_id: null,
+              location_notes: null,
+              emergency_notes: null
+            });
+            createdTypes.push(utility.utility_type);
+          } catch {
+            // One system failing must not cost the others, or the care plan.
+          }
+        }
+
+        setSystemsCreated(createdTypes.length);
+      }
+
+      await seedSeasonalCare(createdTypes);
+    } catch (finishError) {
+      setError(
+        finishError instanceof Error ? finishError.message : 'Could not finish setting up.'
+      );
+    } finally {
+      setSaving(false);
+      setStep('done');
+    }
+  }
+
+  /**
+   * Put the first two pieces of care on the calendar.
+   *
+   * This is the payoff arriving before the price: the reason people keep a
+   * home record is that it tells them what needs doing, and that should not
+   * wait until they have entered ten appliances. Two, not twelve months of
+   * them — a wall of chores on day one reads as nagging.
+   */
+  async function seedSeasonalCare(extraUtilityTypes: string[]) {
+    try {
+      const context = await getReminderDataContext();
+
+      // Match against what is actually stored, not component state: a second
+      // tab or a re-run of the wizard must not write a duplicate. Same rule
+      // the /maintenance page applies.
+      const existing = await getRemindersForContext(context);
+      const existingTitles = existing
+        .filter((reminder) => reminder.status !== 'completed' && reminder.status !== 'dismissed')
+        .map((reminder) => reminder.title);
+
+      const plan = buildSeasonalPlan({
+        state: stateCode || null,
+        hasYard: (spaceSelection.yard ?? 0) > 0,
+        hasBasement: (spaceSelection.basement ?? 0) > 0,
+        utilityTypes: [...recordedUtilityTypes, ...extraUtilityTypes],
+        assetTypes: []
+      });
+
+      const seeds = selectSeedReminders(plan, new Date(), existingTitles);
+
+      for (const seed of seeds) {
+        await createReminderForContext(context, {
+          title: seed.title,
+          description: seed.description,
+          reminder_type: 'seasonal',
+          source: 'system_suggestion',
+          due_date: seed.due_date,
+          priority: 'normal'
+        });
+      }
+
+      setSeededReminders(seeds.map((seed) => seed.title));
+    } catch {
+      // A missing care plan is a smaller loss than a failed setup. The
+      // /maintenance page shows the same plan and can add any of it in a tap.
     }
   }
 
@@ -234,6 +508,7 @@ export default function WelcomePage() {
       });
 
       setRecorded((current) => [...current, name]);
+      setRecordedUtilityTypes((current) => [...current, utilityType]);
       setStep(nextStep);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : 'Could not save that yet.');
@@ -287,12 +562,10 @@ export default function WelcomePage() {
 
       <div style={{ display: 'grid', gap: 24 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {STEP_ORDER.slice(0, 3).map((entry, index) => (
+          {STEP_ORDER.slice(0, 5).map((entry, index) => (
             <UtilityBadge
               key={entry}
-              label={
-                entry === 'home' ? '1 · Your home' : entry === 'water' ? '2 · Water shut-off' : '3 · Electrical panel'
-              }
+              label={STEP_LABELS[entry] ?? entry}
               tone={index < stepIndex ? 'good' : 'neutral'}
             />
           ))}
@@ -351,7 +624,7 @@ export default function WelcomePage() {
                 <Select
                   value={propertyType}
                   onChange={(event) =>
-                    setPropertyType(event.target.value as (typeof PROPERTY_TYPES)[number])
+                    handlePropertyTypeChange(event.target.value as (typeof PROPERTY_TYPES)[number])
                   }
                 >
                   {PROPERTY_TYPES.map((type) => (
@@ -361,12 +634,114 @@ export default function WelcomePage() {
                   ))}
                 </Select>
               </label>
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontWeight: 700 }}>State</span>
+                <Select value={stateCode} onChange={(event) => setStateCode(event.target.value)}>
+                  <option value="">Prefer not to say</option>
+                  {US_STATES.map((state) => (
+                    <option key={state.code} value={state.code}>
+                      {state.name}
+                    </option>
+                  ))}
+                </Select>
+                <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+                  Used to time seasonal maintenance — when to think about gutters, or draining an
+                  outside tap. Nothing else reads it, and it never leaves your record.
+                </span>
+              </label>
               <div>
                 <Button type="submit" disabled={saving}>
                   {saving ? 'Creating...' : 'Continue'}
                 </Button>
               </div>
             </form>
+          </Card>
+        ) : null}
+
+        {step === 'spaces' ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>Tick what this home has</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              We have guessed from the kind of home you chose. Correct anything that is wrong and
+              we will write the rooms for you — there is nothing to type. You can add, rename or
+              remove any of them later.
+            </p>
+
+            <div style={{ display: 'grid', gap: 20, maxWidth: 620 }}>
+              <label style={{ display: 'grid', gap: 6, maxWidth: 280 }}>
+                <span style={{ fontWeight: 700 }}>Floors above ground</span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={MIN_FLOOR_COUNT}
+                  max={MAX_FLOOR_COUNT}
+                  step={1}
+                  value={floorCount}
+                  onChange={(event) => setFloorCount(clampFloorCount(Number(event.target.value)))}
+                />
+                <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+                  Not counting the basement. This is the only thing we ask about floors — each
+                  room is put somewhere sensible, and you can move any of them afterwards.
+                </span>
+              </label>
+
+              <SpaceGrid
+                legend="Inside"
+                spaces={insideSpaces}
+                selection={spaceSelection}
+                idPrefix="space-inside"
+                disabled={saving}
+                onChange={handleSpaceChange}
+              />
+
+              <SpaceGrid
+                legend="Outside"
+                spaces={outsideSpaces}
+                selection={spaceSelection}
+                idPrefix="space-outside"
+                disabled={saving}
+                onChange={handleSpaceChange}
+              />
+
+              {/* One announcement of the running total, rather than one per
+                  keypress while somebody holds down "+". */}
+              <p aria-live="polite" style={{ margin: 0, fontWeight: 700 }}>
+                {plannedRooms.length === 0
+                  ? 'No rooms selected.'
+                  : `${plannedRooms.length} ${plannedRooms.length === 1 ? 'room' : 'rooms'} will be added.`}
+              </p>
+
+              <details>
+                <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
+                  See which floor each one goes on
+                </summary>
+                <ul style={{ margin: '10px 0 0', paddingLeft: 20, color: 'var(--text-muted)' }}>
+                  {plannedRooms.map((room) => (
+                    <li key={`${room.floor_name}-${room.name}`}>
+                      {room.name} — {room.floor_name}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <Button type="button" disabled={saving} onClick={handleCreateSpaces}>
+                  {saving
+                    ? 'Writing the rooms...'
+                    : plannedRooms.length === 0
+                      ? 'Continue without rooms'
+                      : `Add ${plannedRooms.length} ${plannedRooms.length === 1 ? 'room' : 'rooms'}`}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={saving}
+                  onClick={() => setStep('water')}
+                >
+                  I'll do this later
+                </Button>
+              </div>
+            </div>
           </Card>
         ) : null}
 
@@ -428,13 +803,65 @@ export default function WelcomePage() {
                   type="button"
                   disabled={saving || !electricalLocation.trim()}
                   onClick={() =>
-                    recordUtility('electrical_panel', 'Electrical panel', electricalLocation, 'done')
+                    recordUtility('electrical_panel', 'Electrical panel', electricalLocation, 'systems')
                   }
                 >
-                  {saving ? 'Saving...' : 'Save and finish'}
+                  {saving ? 'Saving...' : 'Save and continue'}
                 </Button>
-                <Button type="button" variant="secondary" disabled={saving} onClick={() => setStep('done')}>
+                <Button type="button" variant="secondary" disabled={saving} onClick={() => setStep('systems')}>
                   I'll find it later
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ) : null}
+
+        {step === 'systems' ? (
+          <Card>
+            <h2 style={{ marginTop: 0 }}>And which of these does it have?</h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: 4 }}>
+              Just so they exist in the record — nothing to type, and no need to go and look at
+              anything. Knowing a home has a furnace is what lets us tell you when it is worth
+              servicing. You can add where each one lives, and its make and model, whenever you
+              happen to be standing in front of it.
+            </p>
+
+            <div style={{ display: 'grid', gap: 20, maxWidth: 620 }}>
+              <CheckList
+                legend="Systems"
+                items={offeredSystems.map((utility) => ({
+                  key: utility.utility_type,
+                  label: utilityNameForType(utility.utility_type)
+                }))}
+                checked={utilitySelection}
+                idPrefix="system"
+                disabled={saving}
+                onToggle={(key, next) =>
+                  setUtilitySelection((current) => ({ ...current, [key]: next }))
+                }
+              />
+
+              <p aria-live="polite" style={{ margin: 0, fontWeight: 700 }}>
+                {checkedSystems.length === 0
+                  ? 'No systems selected.'
+                  : `${checkedSystems.length} ${checkedSystems.length === 1 ? 'system' : 'systems'} will be added.`}
+              </p>
+
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <Button type="button" disabled={saving} onClick={() => finishSetup(true)}>
+                  {saving
+                    ? 'Finishing...'
+                    : checkedSystems.length === 0
+                      ? 'Finish'
+                      : `Add ${checkedSystems.length} and finish`}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={saving}
+                  onClick={() => finishSetup(false)}
+                >
+                  I'll do this later
                 </Button>
               </div>
             </div>
@@ -449,13 +876,31 @@ export default function WelcomePage() {
                   ? 'That already puts you ahead of most households'
                   : "Your home record is started"}
               </h2>
+              {roomsCreated > 0 ? (
+                <p style={{ color: 'rgba(255,248,234,0.78)' }}>
+                  {roomsCreated} {roomsCreated === 1 ? 'room is' : 'rooms are'} on the map
+                  {systemsCreated > 0
+                    ? `, along with ${systemsCreated} ${systemsCreated === 1 ? 'system' : 'systems'},`
+                    : ''}{' '}
+                  without your typing a word. Everything you record from here — an appliance, a
+                  repair, a receipt — can be filed against one of them.
+                </p>
+              ) : null}
+
+              {seededReminders.length > 0 ? (
+                <p style={{ color: 'rgba(255,248,234,0.78)' }}>
+                  Your care calendar has started: {seededReminders.join(' and ')}
+                  {seededReminders.length > 1 ? ' are' : ' is'} on it. The rest of the year is
+                  already worked out from where you live — nothing is due until it is.
+                </p>
+              ) : null}
               {recorded.length > 0 ? (
                 <p style={{ color: 'rgba(255,248,234,0.78)' }}>
                   You've recorded {recorded.join(' and ')}. Anyone in the house can now find
                   {recorded.length > 1 ? ' them' : ' it'} in an emergency, and both appear
                   automatically on the sheet you hand a repair technician.
                 </p>
-              ) : (
+              ) : roomsCreated > 0 ? null : (
                 <p style={{ color: 'rgba(255,248,234,0.78)' }}>
                   Nothing recorded yet — no problem. The two shut-offs are the best place to start
                   whenever you have five minutes.

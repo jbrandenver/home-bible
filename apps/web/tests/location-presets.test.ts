@@ -135,7 +135,7 @@ describe('indoor presets and custom rooms', () => {
     expect(grouped.indoor.map((p) => p.label)).toContain('Bedroom');
     expect(grouped.indoor.map((p) => p.label)).toContain('Basement');
     // Every indoor preset is flagged indoor so created rooms land on the
-    // "Inside" floor rather than with the yards.
+    // indoor floor rather than with the yards.
     expect(grouped.indoor.every((p) => p.indoor === true)).toBe(true);
     expect(grouped.outdoor.every((p) => !p.indoor)).toBe(true);
   });
@@ -144,6 +144,37 @@ describe('indoor presets and custom rooms', () => {
     const grouped = getGroupedLocationPresets([{ name: 'Kitchen' }, { name: 'back yard' }]);
     expect(grouped.indoor.map((p) => p.label)).not.toContain('Kitchen');
     expect(grouped.outdoor.map((p) => p.label)).not.toContain('Back yard');
+  });
+
+  // Onboarding writes repeated rooms as "Bedroom 1..3". None of those matches
+  // the preset "Bedroom" by name, so it stayed on offer and picking it made a
+  // fourth, unnumbered bedroom.
+  it('hides a preset once numbered instances of it exist', () => {
+    const rooms = [
+      { name: 'Bedroom 1', room_type: 'bedroom' },
+      { name: 'Bedroom 2', room_type: 'bedroom' },
+      { name: 'Bedroom 3', room_type: 'bedroom' }
+    ];
+    expect(getAvailableLocationPresets(rooms).map((p) => p.label)).not.toContain('Bedroom');
+  });
+
+  it('still offers a preset when the numbered room is a different type', () => {
+    const rooms = [{ name: 'Bedroom 1', room_type: 'office' }];
+    expect(getAvailableLocationPresets(rooms).map((p) => p.label)).toContain('Bedroom');
+  });
+
+  // "Front yard" is a different place from "Yard", not the same one counted
+  // twice — sharing a room_type must not hide it.
+  it('keeps distinct presets that merely share a room type', () => {
+    const rooms = [{ name: 'Yard', room_type: 'yard' }];
+    const labels = getAvailableLocationPresets(rooms).map((p) => p.label);
+    expect(labels).toContain('Front yard');
+    expect(labels).toContain('Back yard');
+  });
+
+  it('does not treat a longer name as a numbered instance', () => {
+    const rooms = [{ name: 'Bedroom nook', room_type: 'bedroom' }];
+    expect(getAvailableLocationPresets(rooms).map((p) => p.label)).toContain('Bedroom');
   });
 
   it('round-trips a hand-typed room name through the picker value', () => {

@@ -272,6 +272,54 @@ export async function updatePropertyDetails(propertyId: string, input: PropertyD
   clearCachedProperty();
 }
 
+/**
+ * Write only what the room list implies: the floor count, and the six feature
+ * flags derived from the rooms themselves.
+ *
+ * Narrow on purpose. updatePropertyDetails above writes the whole record, so
+ * calling it from onboarding would blank a returning person's square footage
+ * and year built — the same trap updatePropertyAddress sets for anyone who
+ * only wants to change one field.
+ *
+ * The flags are a derivation, never a second source of truth: rooms are what
+ * a person actually stated, and these follow from them.
+ */
+export async function updatePropertyStructure(
+  propertyId: string,
+  input: {
+    floor_count: number | null;
+    has_garage: boolean;
+    has_basement: boolean;
+    has_attic: boolean;
+    has_crawl_space: boolean;
+    has_yard: boolean;
+    has_shed: boolean;
+  }
+): Promise<void> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    throw new Error('Supabase is not configured');
+  }
+
+  const { error } = await supabase
+    .from('properties')
+    .update({
+      floor_count: toWholeNumber(input.floor_count),
+      has_garage: input.has_garage,
+      has_basement: input.has_basement,
+      has_attic: input.has_attic,
+      has_crawl_space: input.has_crawl_space,
+      has_yard: input.has_yard,
+      has_shed: input.has_shed
+    })
+    .eq('id', propertyId)
+    .is('deleted_at', null);
+
+  if (error) {
+    throw new Error(formatPropertySetupError('save property details', error.message));
+  }
+}
+
 // Soft delete, matching rooms and the delete-account flow: the row keeps its
 // history but disappears from every deleted_at-filtered read. A building takes
 // its units with it — a unit whose parent is gone would be unreachable in the

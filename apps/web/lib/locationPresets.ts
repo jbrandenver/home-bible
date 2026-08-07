@@ -14,8 +14,17 @@ export const LOCATION_PRESET_PREFIX = 'preset:';
 /** Floor/area name used for the created outdoor spaces. */
 const OUTSIDE_AREA = 'Outside';
 
-/** Floor/area name used for indoor spaces created from a preset. */
-const INSIDE_AREA = 'Inside';
+/**
+ * Floor/area name used for indoor spaces created from a preset.
+ *
+ * This used to be "Inside", which is not a floor name the rest of the app
+ * knows: FLOOR_SUGGESTIONS in floorOrder.ts speaks Basement / Main Floor /
+ * Second Floor / Third Floor / Attic / Outside. A preset-created room
+ * therefore landed on a floor nothing else used, and the home map showed two
+ * floor vocabularies side by side. "Main Floor" is the honest default — a
+ * mid-form pick has no floor information anyway, and the room can be moved.
+ */
+const INSIDE_AREA = 'Main Floor';
 
 /** Value that opens the "name a new room" free-text field. */
 export const LOCATION_CUSTOM_VALUE = 'preset:__custom__';
@@ -76,14 +85,44 @@ function normalizeName(name: string) {
   return name.trim().toLowerCase();
 }
 
-/** Presets whose name isn't already taken by one of the property's rooms. */
-export function getAvailableLocationPresets(rooms: Array<{ name: string }>) {
+type RoomForPresets = { name: string; room_type?: string | null };
+
+/**
+ * Does an existing room look like a numbered instance of this preset?
+ *
+ * Onboarding writes repeated rooms as "Bedroom 1", "Bedroom 2", "Bedroom 3".
+ * None of those matches the preset "Bedroom" by name, so the preset stayed on
+ * offer and picking it created a fourth, unnumbered "Bedroom" — a duplicate in
+ * everything but spelling.
+ *
+ * The room type has to match too, so "Front yard" survives a room called
+ * "Yard", which is a different place rather than the same one counted twice.
+ */
+function isNumberedInstanceOf(room: RoomForPresets, presetLabel: string, presetRoomType: string) {
+  if (!room.room_type || room.room_type !== presetRoomType) {
+    return false;
+  }
+
+  const name = normalizeName(room.name);
+  const label = normalizeName(presetLabel);
+
+  return name.startsWith(`${label} `) && /^\d+$/.test(name.slice(label.length + 1));
+}
+
+/** Presets that aren't already covered by one of the property's rooms. */
+export function getAvailableLocationPresets(rooms: Array<RoomForPresets>) {
   const taken = new Set(rooms.map((room) => normalizeName(room.name)));
-  return LOCATION_PRESETS.filter((preset) => !taken.has(normalizeName(preset.label)));
+
+  return LOCATION_PRESETS.filter((preset) => {
+    if (taken.has(normalizeName(preset.label))) {
+      return false;
+    }
+    return !rooms.some((room) => isNumberedInstanceOf(room, preset.label, preset.room_type));
+  });
 }
 
 /** Available presets split for grouped dropdowns. */
-export function getGroupedLocationPresets(rooms: Array<{ name: string }>) {
+export function getGroupedLocationPresets(rooms: Array<RoomForPresets>) {
   const available = getAvailableLocationPresets(rooms);
   return {
     indoor: available.filter((preset) => preset.indoor),
