@@ -5,6 +5,7 @@ import { formatEnumLabel, PROPERTY_TYPES } from '@home-folder/shared';
 import { PageHeader, Card, Button, ConfirmDialog, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { AppLockSettingsCard } from '../components/NativeShell';
+import { DELETE_PHRASE, matchesDeletePhrase, resolveDeleteAction } from '../lib/accountClosure';
 import {
   getCurrentUser,
   isSupabaseConfigured,
@@ -94,7 +95,16 @@ export default function SettingsPage() {
   // Confirmations run in-page rather than through window.confirm, which a
   // browser may suppress — it then returns false, so the action silently does
   // nothing instead of asking.
-  const [confirmingDeleteAccount, setConfirmingDeleteAccount] = useState(false);
+  //
+  // Closing an account is two deliberate confirmations, not one click. Step
+  // 'account' commits to losing the record; only once that is confirmed does
+  // step 'billing' appear to commit to ending the plan. Subscribers see both
+  // in that order; everyone else sees 'account' alone and never a billing
+  // step for a plan they do not hold.
+  const [deleteStep, setDeleteStep] = useState<'closed' | 'account' | 'billing'>('closed');
+  // Typed ceremony on step one, so the destructive button cannot be reached by
+  // a stray click or a mis-tap on a phone.
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [confirmingDeleteProperty, setConfirmingDeleteProperty] = useState(false);
   // The archive-size check interrupts an export that is already running, so it
   // needs an answer mid-flow: the dialog resolves this promise.
@@ -576,7 +586,41 @@ export default function SettingsPage() {
 
   function requestDeleteAccount() {
     setAccountError('');
-    setConfirmingDeleteAccount(true);
+    setDeleteConfirmText('');
+    setDeleteStep('account');
+  }
+
+  const deletePhraseMatches = matchesDeletePhrase(deleteConfirmText);
+
+  /**
+   * Step one is confirmed. A subscriber goes on to confirm the billing before
+   * anything happens; everyone else has nothing left to agree to, so the
+   * deletion runs now. The decision itself lives in lib/accountClosure so the
+   * ordering rule can be tested rather than inferred from this component.
+   */
+  function handleConfirmAccountStep() {
+    if (deletingAccount) {
+      return;
+    }
+
+    const resolved = resolveDeleteAction({
+      step: deleteStep,
+      typed: deleteConfirmText,
+      hasSubscription: Boolean(planInfo?.hasSubscription)
+    });
+
+    if (resolved.action === 'advance') {
+      setDeleteStep(resolved.next);
+    } else if (resolved.action === 'delete') {
+      void handleDeleteAccount();
+    }
+  }
+
+  function closeDeleteFlow() {
+    if (!deletingAccount) {
+      setDeleteStep('closed');
+      setDeleteConfirmText('');
+    }
   }
 
   async function handleDeleteProperty() {
@@ -612,7 +656,7 @@ export default function SettingsPage() {
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
-      setConfirmingDeleteAccount(false);
+      setDeleteStep('closed');
       setAccountError('Supabase is not configured.');
       return;
     }
@@ -646,12 +690,14 @@ export default function SettingsPage() {
 
       // Close the dialog so the error — often a re-authentication prompt — is
       // readable on the page.
-      setConfirmingDeleteAccount(false);
+      setDeleteStep('closed');
+      setDeleteConfirmText('');
       setAccountError(message);
       return;
     }
 
-    setConfirmingDeleteAccount(false);
+    setDeleteStep('closed');
+    setDeleteConfirmText('');
     await signOut();
     setUser(null);
   }
@@ -1282,17 +1328,55 @@ export default function SettingsPage() {
         }}
       />
 
+      {/* Step one of two: the record itself. Nothing is cancelled or deleted
+          here — confirming only advances a subscriber to the billing step. */}
       <ConfirmDialog
-        open={confirmingDeleteAccount}
-        title="Delete your account?"
-        description="This anonymizes your profile, removes memberships, and transfers or soft-deletes homes you own. This cannot be undone."
-        confirmLabel="Delete account"
+        open={deleteStep === 'account'}
+        title="Close your account?"
+        description={
+          planInfo?.hasSubscription
+            ? 'This anonymizes your profile, removes memberships, and transfers or soft-deletes homes you own. It cannot be undone. Next you will confirm ending your paid plan — nothing is cancelled or deleted until you do.'
+            : 'This anonymizes your profile, removes memberships, and transfers or soft-deletes homes you own. It cannot be undone.'
+        }
+        confirmLabel={planInfo?.hasSubscription ? 'Continue to billing' : 'Close account'}
         cancelLabel="Keep account"
+        // Free accounts delete straight from this step, so it needs the busy
+        // state too; subscribers only advance here and never linger.
+        busy={deletingAccount}
+        confirmDisabled={!deletePhraseMatches}
+        onConfirm={handleConfirmAccountStep}
+        onCancel={closeDeleteFlow}
+      >
+        <div style={{ display: 'grid', gap: 6 }}>
+          <label htmlFor="delete-confirm-phrase" style={{ fontWeight: 600 }}>
+            Type {DELETE_PHRASE} to continue
+          </label>
+          <Input
+            id="delete-confirm-phrase"
+            value={deleteConfirmText}
+            autoComplete="off"
+            onChange={(event) => setDeleteConfirmText(event.target.value)}
+          />
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '0.9rem' }}>
+            Consider downloading your data first — once this is done the record is gone.
+          </p>
+        </div>
+      </ConfirmDialog>
+
+      {/* Step two of two, subscribers only: ending the money. Confirming here
+          is what actually runs the deletion, and the server cancels the
+          subscription before it erases anything. */}
+      <ConfirmDialog
+        open={deleteStep === 'billing'}
+        title="End your plan and close the account?"
+        description="Your subscription is cancelled immediately, so you are not charged again. The remainder of the period already paid for is not refunded. Your account is closed in the same step — if the cancellation fails, nothing is deleted and you keep both."
+        confirmLabel="Cancel plan and close account"
+        cancelLabel="Go back"
         busy={deletingAccount}
         onConfirm={handleDeleteAccount}
         onCancel={() => {
           if (!deletingAccount) {
-            setConfirmingDeleteAccount(false);
+            setDeleteStep('account');
           }
         }}
       />
