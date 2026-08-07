@@ -210,11 +210,18 @@ Deno.serve(async (request) => {
         expiresAt = subscriptionExpiry(periodEnd);
       }
 
+      // The customer id is what lets the app open this person's billing later
+      // without asking which email they paid with (045). Without it the only
+      // route back is Stripe's email-matching portal, which reports "no
+      // payments on file" whenever the paying address differs from the login.
+      const customerId = typeof session.customer === 'string' ? session.customer : null;
+
       const { error: grantError } = await supabase.from('entitlements').insert({
         user_id: userId,
         product_key: productKey,
         provider: 'stripe',
         provider_checkout_id: session.id,
+        provider_customer_id: customerId,
         provider_payment_intent_id:
           typeof session.payment_intent === 'string' ? session.payment_intent : null,
         provider_subscription_id: subscriptionId,

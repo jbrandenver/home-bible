@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import { Card } from '@home-folder/ui';
@@ -5,7 +6,7 @@ import { ActionLink } from '../components/ActionLink';
 import { PlateRow, PlateSeal } from '../components/PlateRow';
 import { Seo } from '../components/Seo';
 import { getCurrentUser } from '../lib/auth';
-import { getBillingPortalUrl, getPerHomeCheckoutUrl, getPortfolioCheckoutUrl } from '../lib/entitlements';
+import { getPerHomeCheckoutUrl, getPortfolioCheckoutUrl } from '../lib/entitlements';
 import { useIsNativeApp } from '../lib/native';
 
 /* Schedule of fees — the register's pricing page (Persuade). Same direction
@@ -62,7 +63,6 @@ export default function PricingPage() {
   const nativeApp = useIsNativeApp();
   const perHomeCheckout = nativeApp ? null : getPerHomeCheckoutUrl(userId);
   const portfolioCheckout = nativeApp ? null : getPortfolioCheckoutUrl(userId);
-  const billingPortal = nativeApp ? null : getBillingPortalUrl();
 
   return (
     <div style={{ display: 'grid', gap: 28 }}>
@@ -278,12 +278,15 @@ export default function PricingPage() {
       {/* Both subscription entries above promise "Cancel: Any time". This is
           where that promise is actually kept. Hidden in the native app for the
           same reason checkout is: plan changes are not offered there. */}
-      {signedIn && !nativeApp && billingPortal ? (
+      {signedIn && !nativeApp ? (
         <p style={{ ...monoLabel, margin: 0, textAlign: 'center' }}>
           Already on a plan ·{' '}
-          <a href={billingPortal} style={{ color: 'inherit' }}>
+          {/* Points at Settings rather than the emailed portal link: from there
+              the session is minted for the signed-in customer directly, so
+              nobody has to remember which address they paid with. */}
+          <Link href="/settings" style={{ color: 'inherit' }}>
             Manage or cancel it
-          </a>
+          </Link>
         </p>
       ) : null}
 
