@@ -35,13 +35,21 @@ $4.99/mo each; the Portfolio boundary is the *fourth* home or the first
 building, because that's where a portfolio starts and where
 roll-ups/compliance become the daily tool.
 
-> **Enforcement lag (deliberate):** `FREE_PROPERTY_ALLOWANCE` in
-> `apps/web/lib/entitlements.ts` still allows 2 free properties. Do not
-> tighten it until the $4.99/home Stripe product and entitlement exist —
-> blocking a second home with nothing to buy would only lose signups, and
-> the lag errs in the customer's favor. Stripe work needed: a $4.99/mo
-> per-home recurring price, a per-home entitlement, and the $9.99 pro-binder
-> one-time price.
+> **Enforcement (live since 2026-08-06):** the ladder is enforced in both
+> places. `FREE_PROPERTY_ALLOWANCE` in `apps/web/lib/entitlements.ts` and
+> `public.free_property_allowance()` are both **1**, and
+> `public.property_allowance_for()` **caps the `additional_home` contribution
+> at 2** — without that cap, stacked $4.99 subscriptions undercut the plan they
+> are meant to lead into ($24.95/mo for six homes against $29 unlimited), and
+> the fourth home would never require Portfolio.
+>
+> Nobody lost a home when this landed: migration 035's check is INSERT-only and
+> never re-tests existing rows, so the ladder only ever governs the *next* home.
+>
+> Still true when changing these: keep the client and database values in step,
+> and ship the client side FIRST. A UI offering the paid step while the
+> database is still lenient costs nothing; the reverse blocks a customer with
+> an explanation the page has not caught up to.
 
 ## Why these numbers
 

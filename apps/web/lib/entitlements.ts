@@ -58,33 +58,34 @@ export function recordEntitlementDownload(context: string): void {
   }
 }
 
-// DELIBERATE LAG — this value does not state the current pricing rule.
+// The fee ladder, in three rungs (docs/PRICING_AND_PLANS.md, ruled 2026-07-31
+// and reaffirmed 2026-08-06):
 //
-// The 2026-07-31 ruling (docs/PRICING_AND_PLANS.md) is that Free is ONE home;
-// homes 2-3 are $4.99/mo each and Portfolio starts at the fourth door or the
-// first building. /pricing already says exactly that. This stays at 2 so that
-// nobody is blocked from a second home while the fee ladder is only half
-// switched on — the lag errs in the customer's favour.
+//   home 1        free, forever
+//   homes 2 and 3 $4.99/mo each, one additional_home subscription per home
+//   home 4+       the Portfolio plan
 //
-// As of 2026-08-06 the plumbing this lag was waiting on EXISTS:
-//   * the $4.99 link is live (NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK),
-//   * stripe-webhook treats 'additional_home' as a subscription product, and
-//   * property_allowance_for() already computes
-//     free_property_allowance() + count(active 'additional_home').
+// The cap is the part that is easy to miss. Without it, per-home subscriptions
+// stack without limit and undercut the plan they are supposed to lead to: five
+// of them is $24.95/mo for six homes, against $29 for unlimited. So the number
+// of additional_home subscriptions that can count is capped at two, in the
+// database as well as here.
 //
-// So closing the lag is now a one-line change in two places rather than a
-// build. It is left open on purpose because it is a revenue decision, not a
-// cleanup, and because no 'additional_home' entitlement has ever been written
-// (the payment link's product_key metadata is unverified — that exact gotcha
-// bit us before). Verify a real $4.99 checkout produces an entitlement row
-// FIRST; a link whose metadata is missing takes the money and grants nothing.
+// This value is mirrored by public.free_property_allowance(); the database one
+// decides what is actually permitted, this one only decides what the UI offers.
+// Change them in the same deploy, and ship this side FIRST — a UI that offers
+// the paid step while the database is still lenient costs nothing, whereas the
+// reverse blocks a customer with an explanation the page has not caught up to.
 //
-// When flipping it: change this to 1 AND public.free_property_allowance() to
-// 1 in the same deploy. The database value is what permits or refuses the
-// insert (035); this one only decides when the UI offers an upgrade. Existing
-// owners keep every home they already have — 035's check is INSERT-only and
-// deliberately never re-tests existing rows.
-export const FREE_PROPERTY_ALLOWANCE = 2;
+// Existing homes are never re-checked (035 is INSERT-only), so tightening this
+// never takes a home away from someone who already has it.
+export const FREE_PROPERTY_ALLOWANCE = 1;
+
+/** How many $4.99 homes can be stacked before the Portfolio plan is required. */
+export const MAX_PER_HOME_ADDITIONS = 2;
+
+/** The most homes reachable without the Portfolio plan: the free one plus the paid two. */
+export const MAX_HOMES_WITHOUT_PORTFOLIO = FREE_PROPERTY_ALLOWANCE + MAX_PER_HOME_ADDITIONS;
 
 // Stripe Payment Links, configured the same way as the one-time products in
 // docs/ACTIVATION_RUNBOOK.md. Absent until Jesse activates the Stripe
@@ -161,7 +162,12 @@ export async function createBillingPortalSession(): Promise<string | null> {
   }
 }
 
+/** Which rung adding one more home lands on: nothing to buy, the $4.99 step, or the plan. */
+export type PortfolioUpgradePath = 'none' | 'per_home' | 'portfolio';
+
 export type PortfolioAccess = {
+  /** What to offer for the NEXT home. See the fee ladder above. */
+  upgradePath: PortfolioUpgradePath;
   hasPlan: boolean;
   paymentsConfigured: boolean;
   propertyCount: number;
@@ -179,11 +185,25 @@ export function evaluatePortfolioAccess(input: {
   propertyCount: number;
 }): PortfolioAccess {
   const withinFreeAllowance = input.propertyCount < FREE_PROPERTY_ALLOWANCE;
+
+  // Which rung of the ladder adding one more home lands on. Offering Portfolio
+  // to someone adding their second home would be quoting $29 for something
+  // that costs $4.99 — the middle rung has to be named explicitly, or the UI
+  // silently skips it.
+  const upgradePath: PortfolioUpgradePath = input.hasPlan
+    ? 'none'
+    : withinFreeAllowance
+      ? 'none'
+      : input.propertyCount < MAX_HOMES_WITHOUT_PORTFOLIO
+        ? 'per_home'
+        : 'portfolio';
+
   return {
     hasPlan: input.hasPlan,
     paymentsConfigured: input.paymentsConfigured,
     propertyCount: input.propertyCount,
     withinFreeAllowance,
+    upgradePath,
     requiresUpgradeToAdd: input.paymentsConfigured && !input.hasPlan && !withinFreeAllowance
   };
 }
