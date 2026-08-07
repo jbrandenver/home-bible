@@ -79,6 +79,113 @@ Deno.serve(async (request) => {
     );
   }
 
+  // ---------------------------------------------------------------------
+  // Billing comes down BEFORE any data does.
+  //
+  // Deleting the account used to leave the Stripe subscription running: the
+  // card kept being charged every month for a login that no longer existed,
+  // and the customer's only remaining move was a chargeback. Neither this
+  // function nor delete_account_data touched Stripe or entitlements at all.
+  //
+  // Order is deliberate and is the whole safety property. Cancelling first
+  // means the failure mode is "account still exists, still billing" — visible,
+  // recoverable, and the customer can try again. Deleting first would make the
+  // failure mode "account gone, still billing", which is exactly the bug and
+  // is unrecoverable from the customer's side.
+  //
+  // Fail closed: any subscription we cannot prove is cancelled aborts the
+  // deletion entirely.
+  // ---------------------------------------------------------------------
+  const { data: liveSubs, error: subsError } = await serviceClient
+    .from('entitlements')
+    .select('id, product_key, provider_subscription_id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .not('provider_subscription_id', 'is', null);
+
+  if (subsError) {
+    console.error('delete-account: could not read entitlements', {
+      code: subsError.code,
+      message: subsError.message
+    });
+    return json(
+      { error: 'Could not check your billing before deleting. Please try again.' },
+      500,
+      cors
+    );
+  }
+
+  const subscriptions = liveSubs ?? [];
+
+  if (subscriptions.length > 0) {
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+    if (!stripeKey) {
+      // An unconfigured key is not a reason to proceed — proceeding is what
+      // silently keeps charging someone.
+      console.error('delete-account: STRIPE_SECRET_KEY missing with live subscriptions', {
+        count: subscriptions.length
+      });
+      return json(
+        {
+          error:
+            'Your plan could not be cancelled, so your account was left untouched. Please contact support.'
+        },
+        503,
+        cors
+      );
+    }
+
+    for (const entitlement of subscriptions) {
+      const subscriptionId = String(entitlement.provider_subscription_id);
+      const cancelled = await cancelSubscription(subscriptionId, stripeKey);
+
+      if (!cancelled.ok) {
+        console.error('delete-account: subscription cancel failed', {
+          subscription: subscriptionId,
+          status: cancelled.status,
+          message: cancelled.message
+        });
+        return json(
+          {
+            error:
+              'Your plan could not be cancelled, so your account was left untouched and you have not been charged anything new. Please try again or contact support.'
+          },
+          502,
+          cors
+        );
+      }
+
+      // Revoke locally too. If the customer.subscription.deleted webhook is
+      // slow or lost, the entitlement would otherwise outlive the account.
+      const { error: revokeError } = await serviceClient
+        .from('entitlements')
+        .update({ status: 'revoked', revoked_at: new Date().toISOString() })
+        .eq('id', entitlement.id)
+        .select('id');
+
+      if (revokeError) {
+        // Stripe has already stopped charging, which is the part that costs
+        // money, so this does not abort. Logged loudly because the row is now
+        // out of step with Stripe until the webhook lands.
+        console.error('delete-account: entitlement revoke failed after Stripe cancel', {
+          entitlement: entitlement.id,
+          message: revokeError.message
+        });
+      }
+    }
+
+    await serviceClient.rpc('log_audit_event', {
+      p_event_type: 'billing.cancelled_on_account_deletion',
+      p_payload: {
+        user_id: userId,
+        subscriptions: subscriptions.map((s) => s.provider_subscription_id),
+        product_keys: subscriptions.map((s) => s.product_key)
+      },
+      p_severity: 'alert',
+      p_actor: userId
+    });
+  }
+
   // One transaction: properties are transferred or closed, memberships are
   // released, and the profile is anonymised — all of it, or none of it.
   const { data: summary, error: dataError } = await serviceClient.rpc('delete_account_data', {
@@ -124,6 +231,60 @@ Deno.serve(async (request) => {
 
   return json({ ok: true, ...(summary ?? {}) }, 200, cors);
 });
+
+/**
+ * Cancel one subscription immediately, via the REST API rather than the SDK —
+ * this function has no other reason to pull Stripe in.
+ *
+ * Immediate, not at period end: the account is about to stop existing, so
+ * leaving a subscription running until the renewal date would bill for access
+ * nobody can use. The confirm dialog says this in as many words before the
+ * customer commits, including that the rest of the period is not refunded.
+ *
+ * A subscription Stripe no longer has, or has already cancelled, counts as
+ * success — the goal is "this is not going to charge anyone again", and both
+ * of those satisfy it. Anything else is a failure and aborts the deletion.
+ */
+async function cancelSubscription(
+  subscriptionId: string,
+  stripeKey: string
+): Promise<{ ok: true } | { ok: false; status: number; message: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${stripeKey}`,
+        'Stripe-Version': '2024-06-20'
+      }
+    });
+  } catch (error) {
+    // Network failure: we cannot claim the subscription is cancelled.
+    return { ok: false, status: 0, message: error instanceof Error ? error.message : 'network error' };
+  }
+
+  if (response.ok) {
+    return { ok: true };
+  }
+
+  let payload: { error?: { code?: string; message?: string } } = {};
+  try {
+    payload = await response.json();
+  } catch {
+    // Body was not JSON; the status alone decides below.
+  }
+
+  // Already gone from Stripe's side.
+  if (response.status === 404 || payload.error?.code === 'resource_missing') {
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    status: response.status,
+    message: payload.error?.message ?? `HTTP ${response.status}`
+  };
+}
 
 function json(body: Record<string, unknown>, status = 200, cors: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
