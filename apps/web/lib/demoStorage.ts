@@ -3,6 +3,13 @@ export type DemoProperty = {
   nickname: string;
   property_type: string;
   created_at: string;
+  /**
+   * Two-letter state code. Optional because it arrived after the first demo
+   * properties were written, and localStorage is never migrated — a visitor
+   * from before this existed keeps working and simply resolves to the 'mixed'
+   * climate band, exactly as they did yesterday.
+   */
+  state?: string;
 };
 
 export type DemoRoom = {

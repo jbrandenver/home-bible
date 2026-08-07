@@ -18,6 +18,14 @@ export type PlateScanResult = {
   manufacture_year: number | null;
   confidence: PlateScanConfidence;
   notes: string | null;
+  /**
+   * How much of the allowance is spent, as the server counts it. The endpoint
+   * has always returned these; the client used to discard them, which meant a
+   * bulk walkthrough could only discover the cap by hitting it. Null when the
+   * response predates them or omits them.
+   */
+  scans_used: number | null;
+  scan_cap: number | null;
 };
 
 // Slightly smaller than the photo pipeline's 1600px: 1568px is the largest
@@ -42,6 +50,17 @@ function trimmedOrNull(value: unknown): string | null {
 function identifierOrNull(value: unknown): string | null {
   const trimmed = trimmedOrNull(value);
   return trimmed ? trimmed.replace(/\s+/g, '').toUpperCase() : null;
+}
+
+// A usage count is a non-negative whole number or nothing. Anything else means
+// the field is absent or malformed, and a wrong count would misreport how much
+// allowance someone has left.
+function countOrNull(value: unknown): number | null {
+  const numeric = typeof value === 'number' ? value : NaN;
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return null;
+  }
+  return Math.floor(numeric);
 }
 
 function yearOrNull(value: unknown): number | null {
@@ -83,8 +102,22 @@ export function normalizePlateScan(raw: unknown): PlateScanResult {
     serial_number: identifierOrNull(source.serial_number),
     manufacture_year: yearOrNull(source.manufacture_year),
     confidence,
-    notes: trimmedOrNull(source.notes)
+    notes: trimmedOrNull(source.notes),
+    scans_used: countOrNull(source.scans_used),
+    scan_cap: countOrNull(source.scan_cap)
   };
+}
+
+/**
+ * Scans left, or null when the server did not say. Never negative: an
+ * over-count (a log row written for a scan the client never saw) must read as
+ * "none left", not as a negative number on screen.
+ */
+export function scansRemaining(result: Pick<PlateScanResult, 'scans_used' | 'scan_cap'>): number | null {
+  if (result.scans_used === null || result.scan_cap === null) {
+    return null;
+  }
+  return Math.max(0, result.scan_cap - result.scans_used);
 }
 
 async function loadBitmap(file: File): Promise<ImageBitmap | HTMLImageElement> {

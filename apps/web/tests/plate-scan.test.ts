@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePlateScan } from '../lib/plateScan';
+import { normalizePlateScan, scansRemaining } from '../lib/plateScan';
 
 describe('normalizePlateScan', () => {
   it('trims the brand and keeps it as printed (case preserved)', () => {
@@ -59,6 +59,36 @@ describe('normalizePlateScan', () => {
       expect(result.manufacture_year).toBeNull();
       expect(result.confidence).toBe('low');
       expect(result.notes).toBeNull();
+      expect(result.scans_used).toBeNull();
+      expect(result.scan_cap).toBeNull();
     }
+  });
+
+  it('carries the scan allowance through', () => {
+    const result = normalizePlateScan({ scans_used: 6, scan_cap: 30 });
+    expect(result.scans_used).toBe(6);
+    expect(result.scan_cap).toBe(30);
+  });
+
+  it('rejects allowance values that are not whole non-negative numbers', () => {
+    expect(normalizePlateScan({ scans_used: -1, scan_cap: 30 }).scans_used).toBeNull();
+    expect(normalizePlateScan({ scans_used: '6', scan_cap: 30 }).scans_used).toBeNull();
+    expect(normalizePlateScan({ scans_used: 6.7, scan_cap: 30 }).scans_used).toBe(6);
+  });
+});
+
+describe('scansRemaining', () => {
+  it('reports what is left', () => {
+    expect(scansRemaining({ scans_used: 6, scan_cap: 30 })).toBe(24);
+    expect(scansRemaining({ scans_used: 30, scan_cap: 30 })).toBe(0);
+  });
+
+  it('is null when the server did not say', () => {
+    expect(scansRemaining({ scans_used: null, scan_cap: 30 })).toBeNull();
+    expect(scansRemaining({ scans_used: 6, scan_cap: null })).toBeNull();
+  });
+
+  it('never goes negative', () => {
+    expect(scansRemaining({ scans_used: 33, scan_cap: 30 })).toBe(0);
   });
 });

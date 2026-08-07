@@ -40,6 +40,16 @@ const FREE_SCAN_CAP = 30;
 // cannot run up an unbounded bill.
 const PORTFOLIO_SCAN_CAP = 1000;
 
+// The allowance counts scans that actually returned something. A photo the
+// model could not read gave the person nothing, so charging them for it is
+// simply wrong — and in a bulk walkthrough, bad lighting could otherwise eat a
+// third of the free tier before a single appliance was recorded.
+//
+// Failed attempts still cost a real API call, so they are bounded separately:
+// total attempts may reach this multiple of the allowance. That keeps a broken
+// camera, or a retry loop, from running up an unbounded bill.
+const ATTEMPT_CEILING_MULTIPLIER = 1.5;
+
 const PLATE_SCHEMA = {
   type: 'object',
   properties: {
@@ -165,13 +175,22 @@ Deno.serve(async (request) => {
 
   // Enforce the cap with the service role, next to the key — plate_scans is
   // service-role-write-only precisely so the quota cannot be reset client-side.
-  const { count, error: countError } = await supabase
-    .from('plate_scans')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', userId);
+  const [okScans, allAttempts] = await Promise.all([
+    supabase
+      .from('plate_scans')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('status', 'ok'),
+    supabase.from('plate_scans').select('id', { count: 'exact', head: true }).eq('user_id', userId)
+  ]);
 
-  if (countError || count === null) {
-    console.error('analyze-plate: could not count scans', { code: countError?.code });
+  const count = okScans.count;
+  const attempts = allAttempts.count;
+
+  if (okScans.error || count === null || allAttempts.error || attempts === null) {
+    console.error('analyze-plate: could not count scans', {
+      code: okScans.error?.code ?? allAttempts.error?.code
+    });
     return json({ error: 'Could not check your scan allowance. Try again in a moment.' }, 500, corsHeaders(request));
   }
 
@@ -192,7 +211,22 @@ Deno.serve(async (request) => {
       {
         error: portfolioEntitlement
           ? 'You have hit the scan safety ceiling. Get in touch and we will raise it.'
-          : `You have used all ${FREE_SCAN_CAP} free data-plate scans. The Portfolio plan includes many more.`
+          : `You have used all ${FREE_SCAN_CAP} free data-plate scans. The Portfolio plan includes many more.`,
+        scans_used: count,
+        scan_cap: cap
+      },
+      429,
+      corsHeaders(request)
+    );
+  }
+
+  if (attempts >= Math.ceil(cap * ATTEMPT_CEILING_MULTIPLIER)) {
+    return json(
+      {
+        error:
+          'Too many scans have failed on this account for us to keep trying. Enter the details by hand, or get in touch.',
+        scans_used: count,
+        scan_cap: cap
       },
       429,
       corsHeaders(request)

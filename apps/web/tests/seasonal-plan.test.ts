@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  US_STATES,
   buildSeasonalPlan,
   climateBandForState,
   type SeasonalPlanInput
@@ -130,5 +131,34 @@ describe('buildSeasonalPlan', () => {
 
   it('is deterministic — the same profile yields the same plan', () => {
     expect(buildSeasonalPlan(TYPICAL_HOME)).toEqual(buildSeasonalPlan(TYPICAL_HOME));
+  });
+});
+
+describe('US_STATES', () => {
+  it('covers the 50 states plus DC', () => {
+    expect(US_STATES).toHaveLength(51);
+  });
+
+  it('has no duplicate codes', () => {
+    expect(new Set(US_STATES.map((state) => state.code)).size).toBe(US_STATES.length);
+  });
+
+  it('is sorted by display name', () => {
+    const names = US_STATES.map((state) => state.name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+  });
+
+  it('formats display names for humans', () => {
+    expect(US_STATES.find((state) => state.code === 'NY')?.name).toBe('New York');
+    expect(US_STATES.find((state) => state.code === 'DC')?.name).toBe('District of Columbia');
+  });
+
+  // The whole point of deriving the list: every option a person can pick must
+  // resolve to a real band, never silently fall back to 'mixed'.
+  it('every offered code resolves through climateBandForState', () => {
+    for (const state of US_STATES) {
+      expect(climateBandForState(state.code)).not.toBeUndefined();
+      expect(climateBandForState(state.name)).toBe(climateBandForState(state.code));
+    }
   });
 });

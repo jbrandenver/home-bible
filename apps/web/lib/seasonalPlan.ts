@@ -61,6 +61,33 @@ const STATE_NAME_TO_CODE: Record<string, string> = {
   wisconsin: 'WI', wyoming: 'WY'
 };
 
+// "District of Columbia", not "District Of Columbia".
+const LOWERCASE_WORDS_IN_STATE_NAME = new Set(['of']);
+
+function toStateDisplayName(value: string) {
+  return value
+    .split(' ')
+    .map((word, index) =>
+      index > 0 && LOWERCASE_WORDS_IN_STATE_NAME.has(word)
+        ? word
+        : word.charAt(0).toUpperCase() + word.slice(1)
+    )
+    .join(' ');
+}
+
+/**
+ * The states a person can pick from, as `{code, name}`.
+ *
+ * Derived from STATE_NAME_TO_CODE rather than written out a second time: if the
+ * picker and the band resolver ever drifted, someone would choose a state and
+ * silently get the 'mixed' plan.
+ */
+export const US_STATES: ReadonlyArray<{ code: string; name: string }> = Object.entries(
+  STATE_NAME_TO_CODE
+)
+  .map(([name, code]) => ({ code, name: toStateDisplayName(name) }))
+  .sort((a, b) => a.name.localeCompare(b.name));
+
 export function climateBandForState(state: string | null | undefined): ClimateBand {
   const cleaned = (state ?? '').trim();
   if (!cleaned) {

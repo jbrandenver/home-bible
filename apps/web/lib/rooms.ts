@@ -205,6 +205,70 @@ async function getOrCreateFloorForProperty(propertyId: string, floorName: string
   return createdFloor as FloorRow;
 }
 
+export type PendingRoomRow = {
+  property_id: string;
+  floor_id: string | null;
+  name: string;
+  room_type: string;
+  sort_order: number;
+};
+
+/** The floor a draft lands on when it names none. Matches getOrCreateFloorForProperty. */
+export const DEFAULT_FLOOR_NAME = 'Main Floor';
+
+/**
+ * Which of these drafts are actually new rows, and what they look like on the
+ * wire. Pure so it can be tested without a database: the duplicate rule here
+ * has to match migration 015's partial unique index on
+ * (property_id, floor, lower(trim(name)), room_type) exactly, or a bulk insert
+ * of a generated starter set fails as a whole.
+ *
+ * Drafts are also deduplicated against each other, not just against what is
+ * already stored — a starter set that offered "Bathroom" twice on one floor
+ * would otherwise collapse in the database rather than here.
+ */
+export function planRoomInserts(
+  propertyId: string,
+  existingRooms: ReadonlyArray<Pick<RoomRow, 'name' | 'room_type' | 'floor_id'>>,
+  drafts: ReadonlyArray<RoomDraft>,
+  floorIdByLowerName: ReadonlyMap<string, string>
+): PendingRoomRow[] {
+  const duplicateKey = (name: string, roomType: string, floorId: string | null) =>
+    `${name.trim().toLowerCase()}::${roomType}::${floorId || 'null'}`;
+
+  const seenKeys = new Set(
+    existingRooms.map((room) => duplicateKey(room.name, room.room_type, room.floor_id || null))
+  );
+
+  const pendingRows: PendingRoomRow[] = [];
+
+  for (const draft of drafts) {
+    const name = draft.name.trim();
+    if (!name) {
+      continue;
+    }
+
+    const floorName = draft.floor_name.trim() || DEFAULT_FLOOR_NAME;
+    const floorId = floorIdByLowerName.get(floorName.toLowerCase()) || null;
+    const key = duplicateKey(name, draft.room_type, floorId);
+
+    if (seenKeys.has(key)) {
+      continue;
+    }
+
+    seenKeys.add(key);
+    pendingRows.push({
+      property_id: propertyId,
+      floor_id: floorId,
+      name,
+      room_type: draft.room_type,
+      sort_order: 0
+    });
+  }
+
+  return pendingRows;
+}
+
 export async function createRoomsForProperty(propertyId: string, drafts: RoomDraft[]) {
   const supabase = getSupabaseBrowserClient();
   if (!supabase) {
@@ -274,38 +338,41 @@ export async function createRoomsForProperty(propertyId: string, drafts: RoomDra
     .eq('property_id', propertyId)
     .is('deleted_at', null);
 
-  const duplicateKey = (name: string, roomType: string, floorId: string | null) =>
-    `${name.trim().toLowerCase()}::${roomType}::${floorId || 'null'}`;
-
-  const existingKeys = new Set(
-    ((existingRooms ?? []) as RoomRow[]).map((room) => duplicateKey(room.name, room.room_type, room.floor_id || null))
+  const floorIdByLowerName = new Map(
+    Array.from(floorByLowerName.entries()).map(([key, floor]) => [key, floor.id])
   );
 
-  const pendingRows: Array<{ property_id: string; floor_id: string | null; name: string; room_type: string; sort_order: number }> = [];
+  const pendingRows = planRoomInserts(
+    propertyId,
+    (existingRooms ?? []) as RoomRow[],
+    drafts,
+    floorIdByLowerName
+  );
 
-  for (const draft of drafts) {
-    const floor = floorByLowerName.get((draft.floor_name.trim() || 'Main Floor').toLowerCase());
-    const floorId = floor?.id || null;
-    const key = duplicateKey(draft.name, draft.room_type, floorId);
-
-    if (existingKeys.has(key)) {
-      continue;
-    }
-
-    existingKeys.add(key);
-    pendingRows.push({
-      property_id: propertyId,
-      floor_id: floorId,
-      name: draft.name.trim(),
-      room_type: draft.room_type,
-      sort_order: 0
-    });
+  if (pendingRows.length === 0) {
+    return getRoomsForProperty(propertyId);
   }
 
-  for (const row of pendingRows) {
-    const { error } = await supabase.from('rooms').insert(row);
-    if (error && (!('code' in error) || error.code !== '23505')) {
-      throw new Error(error.message || 'Failed to create rooms');
+  // One request, not one per room. Onboarding generates a whole starter set at
+  // once, and a dozen sequential inserts is a visible stall on the wizard's
+  // most important screen. Duplicates are already filtered above, so the array
+  // insert succeeds outright in the normal case.
+  const { error: batchError } = await supabase.from('rooms').insert(pendingRows);
+
+  if (batchError) {
+    const isDuplicate = 'code' in batchError && batchError.code === '23505';
+    if (!isDuplicate) {
+      throw new Error(batchError.message || 'Failed to create rooms');
+    }
+
+    // A genuine race — another tab or session inserted one of these between our
+    // read and our write. An array insert is all-or-nothing, so fall back to a
+    // row at a time and let the rest land.
+    for (const row of pendingRows) {
+      const { error } = await supabase.from('rooms').insert(row);
+      if (error && (!('code' in error) || error.code !== '23505')) {
+        throw new Error(error.message || 'Failed to create rooms');
+      }
     }
   }
 
