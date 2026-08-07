@@ -238,12 +238,12 @@ What I need from you:
   docs/PORTFOLIO.md. Until then the landlord features run ungated on purpose.
   A third Payment Link (`pro_binder`, one-time, $15–25) covers the pro
   channel — same section of the runbook.
-- **(New, 2026-07-30) Anthropic API key for the data-plate scanner.** You
-  approved the vision feature; the `analyze-plate` function is deployed and
-  inert until you run `supabase secrets set ANTHROPIC_API_KEY=sk-ant-...`
-  (create the key at console.anthropic.com). Cost ~$3–5 per 1,000 scans,
-  capped server-side (30 free / 1,000 with Portfolio). Runbook §D has the
-  smoke test.
+- ~~**(New, 2026-07-30) Anthropic API key for the data-plate scanner.**~~
+  **DONE — key set, verified 2026-08-06.** `plate_scans` holds a `status='ok'`
+  row from 2026-08-05 01:12 UTC, which is only written after a successful
+  vision call; the inert function 503s long before that insert. Scanning is
+  live. Cost ~$3–5 per 1,000 scans, capped server-side (30 free / 1,000 with
+  Portfolio).
 
 Two things worth knowing before you commit:
 - Selling **US-only avoids EU/UK VAT entirely**, which has no de-minimis
