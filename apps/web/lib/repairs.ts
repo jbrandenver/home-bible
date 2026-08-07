@@ -74,12 +74,25 @@ export type RepairDataContext = {
   property: PropertySummary | null;
 };
 
-// Contractor contacts and costs are NOT selectable from the base table —
-// migration 031 revoked them so guest-class roles cannot read them with an
-// API client. Full-household roles get them merged back in via the
-// get_repairs_private_fields RPC below.
-const REPAIR_SELECT =
-  'id, property_id, room_id, asset_id, utility_id, title, description, repair_type, status, priority, reported_date, completed_date, scheduled_date, scheduled_window, notes, created_at, updated_at, deleted_at';
+// The columns migrations 031 and 043 withheld from the `authenticated` grant,
+// so guest-class roles cannot read them with an API client. Full-household
+// roles get them back through get_repairs_private_fields. Exported so a test
+// can assert REPAIR_SELECT never names one again.
+export const REPAIR_PRIVATE_COLUMNS = [
+  'contractor_name',
+  'contractor_phone',
+  'contractor_email',
+  'estimated_cost',
+  'actual_cost',
+  'description',
+  'notes'
+] as const;
+
+// Selecting any REPAIR_PRIVATE_COLUMNS entry here would 403 for every caller,
+// not just guests — the grant is gone for `authenticated` as a whole. Add new
+// private columns to the RPC and to the list above, never to this string.
+export const REPAIR_SELECT =
+  'id, property_id, room_id, asset_id, utility_id, title, repair_type, status, priority, reported_date, completed_date, scheduled_date, scheduled_window, created_at, updated_at, deleted_at';
 
 type RepairPrivateFields = {
   repair_id: string;
@@ -88,6 +101,8 @@ type RepairPrivateFields = {
   contractor_email: string | null;
   estimated_cost: number | null;
   actual_cost: number | null;
+  description: string | null;
+  notes: string | null;
 };
 
 // Merge the privileged columns back into rows. Guests (and any RPC failure)
@@ -122,7 +137,9 @@ async function mergePrivateFields(rows: RepairRow[]): Promise<RepairRow[]> {
       contractor_phone: fields.contractor_phone,
       contractor_email: fields.contractor_email,
       estimated_cost: fields.estimated_cost,
-      actual_cost: fields.actual_cost
+      actual_cost: fields.actual_cost,
+      description: fields.description,
+      notes: fields.notes
     };
   });
 }

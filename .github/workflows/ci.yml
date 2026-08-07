@@ -26,4 +26,13 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      # Boots the build just made and asserts every important route still
+      # renders. typecheck/lint/vitest all pass while a page throws on render,
+      # and `next build` succeeds for routes it never prerenders — this is the
+      # only step that proves the pages actually come up.
+      - run: pnpm smoke
       - run: pnpm security:audit
+      # Keeps the postcss/sharp overrides honest: a new advisory in a
+      # production dependency fails the build rather than waiting for the next
+      # manual audit.
+      - run: pnpm audit --prod

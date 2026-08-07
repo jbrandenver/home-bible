@@ -1,0 +1,7 @@
+# `next lint` knew these were build output; the plain ESLint CLI does not.
+.next
+.open-next
+out
+node_modules
+next-env.d.ts
+public/sw.js

@@ -6,13 +6,14 @@
     "dev": "next dev",
     "build": "next build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "next lint",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx --max-warnings=0",
     "test": "vitest run",
     "start": "next start",
     "build:worker": "opennextjs-cloudflare build",
     "preview:worker": "opennextjs-cloudflare preview",
     "deploy:worker": "opennextjs-cloudflare deploy",
-    "verify:csp": "node scripts/verify-csp.mjs"
+    "verify:csp": "node scripts/verify-csp.mjs",
+    "smoke": "node scripts/smoke-routes.mjs"
   },
   "dependencies": {
     "@home-folder/shared": "workspace:*",

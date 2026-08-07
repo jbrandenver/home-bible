@@ -11,11 +11,26 @@
 # powerful script on the origin and it was the one response with neither MIME
 # enforcement nor transport pinning. Rules cascade, so the per-path
 # Cache-Control blocks below still apply.
+# Permissions-Policy and CSP added 2026-08-06 to match next.config.js. The
+# worker-rendered routes had both; these responses had neither, so /sw.js —
+# the most powerful script on the origin — was the one script the origin
+# served with no CSP at all.
+#
+# This CSP is deliberately TIGHTER than the rendered-route policy and is not
+# a copy of it. These paths serve static assets, not the app: no inline
+# script is involved, so there is no 'unsafe-inline' here (the rendered-route
+# policy only carries it for Cloudflare's injected inline script — see
+# docs/SECURITY.md), and no Supabase origin, because nothing served from here
+# talks to Supabase. sw.js is same-origin only by construction: its fetch
+# handler returns early on `url.origin !== self.location.origin`, so
+# default-src 'self' cannot break it.
 /*
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
 
 /_next/static/*
   Cache-Control: public, max-age=31536000, immutable

@@ -25,7 +25,9 @@ import {
 } from '../lib/properties';
 import {
   FREE_PROPERTY_ALLOWANCE,
+  getBillingPortalUrl,
   getPortfolioCheckoutUrl,
+  hasEntitlement,
   hasPortfolioPlan,
   recordEntitlementDownload
 } from '../lib/entitlements';
@@ -137,6 +139,9 @@ export default function SettingsPage() {
     homes: number;
     hasPlan: boolean;
     paymentsConfigured: boolean;
+    // Any recurring charge at all, Portfolio or per-home. Someone paying
+    // $4.99/mo needs the cancel path just as much as a Portfolio subscriber.
+    hasSubscription: boolean;
   } | null>(null);
 
   const [exporting, setExporting] = useState<'archive' | 'csv' | null>(null);
@@ -189,15 +194,17 @@ export default function SettingsPage() {
       }
 
       try {
-        const [list, hasPlan] = await Promise.all([
+        const [list, hasPlan, hasPerHome] = await Promise.all([
           listPropertiesForUser(user.id),
-          hasPortfolioPlan()
+          hasPortfolioPlan(),
+          hasEntitlement('additional_home')
         ]);
         if (isMounted) {
           setPlanInfo({
             homes: list.length,
             hasPlan,
-            paymentsConfigured: Boolean(getPortfolioCheckoutUrl(null))
+            paymentsConfigured: Boolean(getPortfolioCheckoutUrl(null)),
+            hasSubscription: hasPlan || hasPerHome
           });
         }
       } catch {
@@ -752,10 +759,24 @@ export default function SettingsPage() {
                     Portfolio plan.
                   </p>
                 )}
+                {planInfo.hasSubscription && !getBillingPortalUrl() ? (
+                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                    To change your card or cancel, email{' '}
+                    <a href="mailto:support@ourhomefolder.com?subject=Billing">support@ourhomefolder.com</a> and
+                    we&rsquo;ll take care of it. Your records stay exportable either way.
+                  </p>
+                ) : null}
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   {!planInfo.hasPlan && planInfo.paymentsConfigured && planInfo.homes > FREE_PROPERTY_ALLOWANCE ? (
                     <ActionLink href={getPortfolioCheckoutUrl(user.id) || '/pricing'}>
                       Get the Portfolio plan
+                    </ActionLink>
+                  ) : null}
+                  {/* Only for people who actually pay: a billing link shown to a
+                      free user leads to a portal with nothing in it. */}
+                  {planInfo.hasSubscription && getBillingPortalUrl() ? (
+                    <ActionLink href={getBillingPortalUrl() as string} variant="secondary">
+                      Manage billing
                     </ActionLink>
                   ) : null}
                   <ActionLink href="/portfolio" variant="secondary">Open portfolio</ActionLink>

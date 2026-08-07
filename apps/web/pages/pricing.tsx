@@ -5,7 +5,7 @@ import { ActionLink } from '../components/ActionLink';
 import { PlateRow, PlateSeal } from '../components/PlateRow';
 import { Seo } from '../components/Seo';
 import { getCurrentUser } from '../lib/auth';
-import { getPerHomeCheckoutUrl, getPortfolioCheckoutUrl } from '../lib/entitlements';
+import { getBillingPortalUrl, getPerHomeCheckoutUrl, getPortfolioCheckoutUrl } from '../lib/entitlements';
 import { useIsNativeApp } from '../lib/native';
 
 /* Schedule of fees — the register's pricing page (Persuade). Same direction
@@ -62,6 +62,7 @@ export default function PricingPage() {
   const nativeApp = useIsNativeApp();
   const perHomeCheckout = nativeApp ? null : getPerHomeCheckoutUrl(userId);
   const portfolioCheckout = nativeApp ? null : getPortfolioCheckoutUrl(userId);
+  const billingPortal = nativeApp ? null : getBillingPortalUrl();
 
   return (
     <div style={{ display: 'grid', gap: 28 }}>
@@ -273,6 +274,18 @@ export default function PricingPage() {
           </div>
         </div>
       </Card>
+
+      {/* Both subscription entries above promise "Cancel: Any time". This is
+          where that promise is actually kept. Hidden in the native app for the
+          same reason checkout is: plan changes are not offered there. */}
+      {signedIn && !nativeApp && billingPortal ? (
+        <p style={{ ...monoLabel, margin: 0, textAlign: 'center' }}>
+          Already on a plan ·{' '}
+          <a href={billingPortal} style={{ color: 'inherit' }}>
+            Manage or cancel it
+          </a>
+        </p>
+      ) : null}
 
       <p style={{ ...monoLabel, margin: 0, textAlign: 'center' }}>
         Questions about the schedule ·{' '}
