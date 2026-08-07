@@ -110,6 +110,27 @@ export function getPerHomeCheckoutUrl(userId: string | null): string | null {
   return buildPaymentLinkUrl(process.env.NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK, userId);
 }
 
+/**
+ * Stripe's hosted customer portal, where a subscriber changes their card,
+ * downloads invoices, or cancels.
+ *
+ * /pricing promises "Cancel: Any time" in two places, so a customer must have
+ * somewhere to go and do it. This is the no-code portal login link: the
+ * customer enters the email they paid with and Stripe sends them a one-time
+ * link. That deliberately avoids storing a Stripe customer id against the
+ * account and avoids an edge function to mint portal sessions — there is no
+ * per-user secret involved and nothing here can be forged into someone else's
+ * billing, because Stripe authenticates the email itself.
+ *
+ * No fallback URL on purpose. Unlike the payment links, guessing wrong here
+ * would send a paying customer somewhere that cannot cancel their plan; absent
+ * config renders no button at all, and the UI says to email support instead.
+ */
+export function getBillingPortalUrl(): string | null {
+  const base = process.env.NEXT_PUBLIC_STRIPE_BILLING_PORTAL_URL;
+  return base && /^https:\/\//i.test(base) ? base : null;
+}
+
 export type PortfolioAccess = {
   hasPlan: boolean;
   paymentsConfigured: boolean;

@@ -240,6 +240,26 @@ portfolio features stay visible but ungated (deliberate: never gate users
 behind a checkout that does not exist), and the upgrade card says "not yet
 available".
 
+**4. Open the customer portal (required before taking recurring money).**
+/pricing promises "Cancel: Any time" on both subscription entries, and
+Settings → Plan shows a **Manage billing** button to anyone holding a
+`portfolio_plan` or `additional_home` entitlement. Both are wired to
+`NEXT_PUBLIC_STRIPE_BILLING_PORTAL_URL` and **both stay hidden until it is
+set** — until then Settings tells subscribers to email support instead, which
+is a real cancel path but a manual one.
+
+In Stripe: **Settings → Billing → Customer portal**. Turn on cancellation,
+payment-method updates and invoice history, save, then copy the
+`https://billing.stripe.com/p/login/…` link and set it in the host env. This
+is the no-code portal: customers enter the email they paid with and Stripe
+sends a one-time link, so there is no Stripe customer id to store and nothing
+per-user to keep secret.
+
+Verify by opening the link in a private window and entering a test
+customer's email — you should reach a portal that can cancel. There is
+deliberately no fallback URL in `next.config.js`: a wrong guess would send a
+paying customer somewhere that cannot cancel their plan.
+
 Extra tests worth running for subscriptions:
 - Complete a subscription checkout → entitlement row with
   `provider_subscription_id` set and `expires_at` ≈ one month + 3 days out.

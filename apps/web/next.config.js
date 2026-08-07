@@ -88,6 +88,16 @@ const stripePaymentLinks = {
   NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK:
     process.env.NEXT_PUBLIC_STRIPE_PRO_BINDER_PAYMENT_LINK ||
     'https://buy.stripe.com/5kQcN62iAfNUewTdFP6Zy02',
+  // The hosted customer portal login page, where subscribers change their card,
+  // fetch invoices, or cancel — /pricing promises "Cancel: Any time" twice, so
+  // the promise needs somewhere to land. Deliberately has NO fallback value:
+  // a wrong guess here sends a paying customer somewhere that cannot cancel
+  // their plan, so absent config renders no button and the UI points at
+  // support instead. Jesse: create it under Stripe Settings -> Billing ->
+  // Customer portal, then set this to the https://billing.stripe.com/p/login/…
+  // link it gives you. See docs/ACTIVATION_RUNBOOK.md.
+  NEXT_PUBLIC_STRIPE_BILLING_PORTAL_URL:
+    process.env.NEXT_PUBLIC_STRIPE_BILLING_PORTAL_URL || '',
 };
 
 const nextConfig = {
