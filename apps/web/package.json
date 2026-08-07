@@ -12,7 +12,8 @@
     "build:worker": "opennextjs-cloudflare build",
     "preview:worker": "opennextjs-cloudflare preview",
     "deploy:worker": "opennextjs-cloudflare deploy",
-    "verify:csp": "node scripts/verify-csp.mjs"
+    "verify:csp": "node scripts/verify-csp.mjs",
+    "smoke": "node scripts/smoke-routes.mjs"
   },
   "dependencies": {
     "@home-folder/shared": "workspace:*",

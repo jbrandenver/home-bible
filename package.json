@@ -12,6 +12,7 @@
     "typecheck": "pnpm --filter @home-folder/web typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm --filter @home-folder/web test",
+    "smoke": "pnpm --filter @home-folder/web smoke",
     "security:audit": "bash scripts/security-cost-audit.sh"
   },
   "devDependencies": {
