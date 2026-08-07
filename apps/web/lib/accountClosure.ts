@@ -13,7 +13,45 @@
  * is exactly how it would otherwise happen.
  */
 
+import { getSupabaseBrowserClient } from './supabase/client';
+
 export type DeleteStep = 'closed' | 'account' | 'billing';
+
+/**
+ * A closure already booked in for the end of the paid period.
+ *
+ * Read straight from account_closures, which RLS limits to the caller's own
+ * row (046), so this cannot surface anyone else's pending closure.
+ */
+export type ScheduledClosure = { scheduledFor: string };
+
+export async function getScheduledClosure(): Promise<ScheduledClosure | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('account_closures')
+    .select('scheduled_for')
+    .maybeSingle();
+
+  if (error || !data || typeof data.scheduled_for !== 'string') {
+    return null;
+  }
+
+  return { scheduledFor: data.scheduled_for };
+}
+
+/** How the banner reads. Deliberately a date, not "in 23 days" — people plan against dates. */
+export function formatClosureDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    return 'the end of your billing period';
+  }
+
+  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
 
 export const DELETE_PHRASE = 'DELETE';
 

@@ -5,7 +5,14 @@ import { formatEnumLabel, PROPERTY_TYPES } from '@home-folder/shared';
 import { PageHeader, Card, Button, ConfirmDialog, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { AppLockSettingsCard } from '../components/NativeShell';
-import { DELETE_PHRASE, matchesDeletePhrase, resolveDeleteAction } from '../lib/accountClosure';
+import {
+  DELETE_PHRASE,
+  formatClosureDate,
+  getScheduledClosure,
+  matchesDeletePhrase,
+  resolveDeleteAction,
+  type ScheduledClosure
+} from '../lib/accountClosure';
 import {
   getCurrentUser,
   isSupabaseConfigured,
@@ -149,6 +156,15 @@ export default function SettingsPage() {
   const [openingPortal, setOpeningPortal] = useState(false);
   const [portalError, setPortalError] = useState('');
 
+  // A closure already booked for the end of the paid period. Non-null means
+  // the account is counting down and the banner replaces the delete card.
+  const [scheduledClosure, setScheduledClosure] = useState<ScheduledClosure | null>(null);
+  const [keepingAccount, setKeepingAccount] = useState(false);
+  // Scheduled by default: a subscriber keeps the period they already paid for.
+  // Immediate exists for people who want their data gone now rather than at a
+  // billing convenience — privacy requests especially.
+  const [closureMode, setClosureMode] = useState<'scheduled' | 'immediate'>('scheduled');
+
   const [planInfo, setPlanInfo] = useState<{
     homes: number;
     hasPlan: boolean;
@@ -208,10 +224,11 @@ export default function SettingsPage() {
       }
 
       try {
-        const [list, hasPlan, hasPerHome] = await Promise.all([
+        const [list, hasPlan, hasPerHome, closure] = await Promise.all([
           listPropertiesForUser(user.id),
           hasPortfolioPlan(),
-          hasEntitlement('additional_home')
+          hasEntitlement('additional_home'),
+          getScheduledClosure()
         ]);
         if (isMounted) {
           setPlanInfo({
@@ -220,6 +237,7 @@ export default function SettingsPage() {
             paymentsConfigured: Boolean(getPortfolioCheckoutUrl(null)),
             hasSubscription: hasPlan || hasPerHome
           });
+          setScheduledClosure(closure);
         }
       } catch {
         if (isMounted) {
@@ -699,8 +717,12 @@ export default function SettingsPage() {
     setDeletingAccount(true);
     setAccountError('');
 
-    const { error } = await supabase.functions.invoke('delete-account', {
-      method: 'POST'
+    // A subscriber closing normally keeps the period they paid for; the
+    // immediate path is the explicit "I want it gone now" choice.
+    const mode = closureMode;
+    const { data, error } = await supabase.functions.invoke('delete-account', {
+      method: 'POST',
+      body: { mode }
     });
 
     setDeletingAccount(false);
@@ -733,8 +755,45 @@ export default function SettingsPage() {
 
     setDeleteStep('closed');
     setDeleteConfirmText('');
+
+    // Scheduled: the account is still theirs until the date, so they stay
+    // signed in and the banner takes over. Only a real deletion signs out.
+    const scheduledFor = (data as { scheduled_for?: unknown } | null)?.scheduled_for;
+    if (typeof scheduledFor === 'string') {
+      setScheduledClosure({ scheduledFor });
+      return;
+    }
+
     await signOut();
     setUser(null);
+  }
+
+  /** Put both halves back: the pending deletion and the Stripe cancellation. */
+  async function handleKeepAccount() {
+    if (keepingAccount) {
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      return;
+    }
+
+    setKeepingAccount(true);
+    setAccountError('');
+
+    const { error } = await supabase.functions.invoke('cancel-account-closure', {
+      method: 'POST'
+    });
+
+    setKeepingAccount(false);
+
+    if (error) {
+      setAccountError('Could not keep your account. Please try again or contact support.');
+      return;
+    }
+
+    setScheduledClosure(null);
   }
 
   const supabaseReady = isSupabaseConfigured();
@@ -773,21 +832,47 @@ export default function SettingsPage() {
                   </Button>
                 </div>
                 <div style={{ display: 'grid', gap: 8, borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
-                  <strong>Delete account</strong>
-                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                    Deletes the auth account, anonymizes the profile, removes memberships, and transfers or soft-deletes owned homes.
-                  </p>
-                  {accountError ? <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{accountError}</p> : null}
-                  <div>
-                    <Button
-                      type="button"
-                      disabled={deletingAccount}
-                      onClick={requestDeleteAccount}
-                      style={{ background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
-                    >
-                      {deletingAccount ? 'Deleting...' : 'Delete account'}
-                    </Button>
-                  </div>
+                  {scheduledClosure ? (
+                    <>
+                      {/* Counting down. The record is still theirs and still
+                          fully usable until the date they paid through, so this
+                          reads as a standing instruction they can withdraw —
+                          not as an account already gone. */}
+                      <strong>This account closes on {formatClosureDate(scheduledClosure.scheduledFor)}</strong>
+                      <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                        Your plan is set to end then, and everything here is deleted on that day.
+                        Until then nothing changes — the record stays complete and usable, and you
+                        can still export it. Change your mind any time before the date.
+                      </p>
+                      {accountError ? <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{accountError}</p> : null}
+                      <div>
+                        <Button type="button" disabled={keepingAccount} onClick={handleKeepAccount}>
+                          {keepingAccount ? 'Restoring...' : 'Keep my account'}
+                        </Button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <strong>Close account</strong>
+                      <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                        Deletes the auth account, anonymizes the profile, removes memberships, and transfers or soft-deletes owned homes.
+                        {planInfo?.hasSubscription
+                          ? ' On a paid plan this happens at the end of the period you have already paid for.'
+                          : ''}
+                      </p>
+                      {accountError ? <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{accountError}</p> : null}
+                      <div>
+                        <Button
+                          type="button"
+                          disabled={deletingAccount}
+                          onClick={requestDeleteAccount}
+                          style={{ background: 'var(--status-urgent)', borderColor: 'var(--status-urgent)' }}
+                        >
+                          {deletingAccount ? 'Closing...' : 'Close account'}
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             ) : (
@@ -1406,9 +1491,11 @@ export default function SettingsPage() {
           subscription before it erases anything. */}
       <ConfirmDialog
         open={deleteStep === 'billing'}
-        title="End your plan and close the account?"
-        description="Your subscription is cancelled immediately, so you are not charged again. The remainder of the period already paid for is not refunded. Your account is closed in the same step — if the cancellation fails, nothing is deleted and you keep both."
-        confirmLabel="Cancel plan and close account"
+        title="When should the account close?"
+        description="Your plan will not renew either way. The only question is whether you keep the time you have already paid for."
+        confirmLabel={
+          closureMode === 'scheduled' ? 'Close at the end of my period' : 'Close now and forfeit the rest'
+        }
         cancelLabel="Go back"
         busy={deletingAccount}
         onConfirm={handleDeleteAccount}
@@ -1417,7 +1504,55 @@ export default function SettingsPage() {
             setDeleteStep('account');
           }
         }}
-      />
+      >
+        {/* Two genuinely different intents, so they are a choice rather than a
+            buried checkbox: keep what you paid for, or have it gone today. */}
+        <div style={{ display: 'grid', gap: 10 }}>
+          {(
+            [
+              {
+                value: 'scheduled' as const,
+                title: 'At the end of my billing period',
+                blurb:
+                  'Recommended. Your plan stops renewing, and everything stays exactly as it is until the period you paid for runs out. You can change your mind until then.'
+              },
+              {
+                value: 'immediate' as const,
+                title: 'Now, and delete everything today',
+                blurb:
+                  'Your plan is cancelled at once and the record is deleted immediately. The rest of the period you paid for is not refunded, and this cannot be undone.'
+              }
+            ]
+          ).map((option) => (
+            <label
+              key={option.value}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr',
+                gap: 10,
+                alignItems: 'start',
+                border: '1px solid var(--border-subtle)',
+                borderRadius: 'var(--radius-card)',
+                padding: 12,
+                cursor: 'pointer'
+              }}
+            >
+              <input
+                type="radio"
+                name="closure-mode"
+                value={option.value}
+                checked={closureMode === option.value}
+                onChange={() => setClosureMode(option.value)}
+                style={{ marginTop: 4 }}
+              />
+              <span>
+                <strong style={{ display: 'block' }}>{option.title}</strong>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.92rem' }}>{option.blurb}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={archiveSizePrompt !== null}

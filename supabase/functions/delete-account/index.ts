@@ -79,6 +79,21 @@ Deno.serve(async (request) => {
     );
   }
 
+  // Closing can wait for the end of the period the customer already paid for.
+  // 'scheduled' is what the current app sends for a subscriber; 'immediate'
+  // is the explicit "I want it gone now" choice, and is also what an older
+  // client that sends no body at all gets, which is the behaviour it expects.
+  let mode: 'scheduled' | 'immediate' = 'immediate';
+  try {
+    const body = await request.json();
+    if (body && body.mode === 'scheduled') {
+      mode = 'scheduled';
+    }
+  } catch {
+    // No body, or not JSON. Immediate is the safe reading: it is what every
+    // caller before this change meant.
+  }
+
   // ---------------------------------------------------------------------
   // Billing comes down BEFORE any data does.
   //
@@ -116,6 +131,98 @@ Deno.serve(async (request) => {
   }
 
   const subscriptions = liveSubs ?? [];
+
+  // ---------------------------------------------------------------------
+  // Scheduled close: keep the time they bought.
+  //
+  // Stripe is told to stop at the period end rather than now, and the closure
+  // is recorded for process_due_account_closures() to action on the day. The
+  // account stays fully usable until then — it was paid for — and the customer
+  // can still change their mind. Nothing is erased in this branch.
+  //
+  // Only meaningful for a subscriber: with no subscription there is no period
+  // to wait for, so those fall through to the immediate path below.
+  // ---------------------------------------------------------------------
+  if (mode === 'scheduled' && subscriptions.length > 0) {
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+    if (!stripeKey) {
+      console.error('delete-account: STRIPE_SECRET_KEY missing, cannot schedule');
+      return json(
+        { error: 'Could not schedule your closure. Please try again or contact support.' },
+        503,
+        cors
+      );
+    }
+
+    let latestPeriodEnd: number | null = null;
+
+    for (const entitlement of subscriptions) {
+      const subscriptionId = String(entitlement.provider_subscription_id);
+      const scheduled = await scheduleSubscriptionCancel(subscriptionId, stripeKey);
+
+      if (!scheduled.ok) {
+        console.error('delete-account: could not schedule cancel', {
+          subscription: subscriptionId,
+          status: scheduled.status,
+          message: scheduled.message
+        });
+        return json(
+          {
+            error:
+              'Could not schedule your closure, so nothing has changed. Please try again or contact support.'
+          },
+          502,
+          cors
+        );
+      }
+
+      // Several subscriptions: close after the last one runs out, so no paid
+      // period is ever cut short.
+      if (scheduled.periodEnd && (!latestPeriodEnd || scheduled.periodEnd > latestPeriodEnd)) {
+        latestPeriodEnd = scheduled.periodEnd;
+      }
+    }
+
+    // Stripe should always give a period end; if it somehow did not, fall back
+    // to a month out rather than scheduling a deletion for right now.
+    const scheduledFor = latestPeriodEnd
+      ? new Date(latestPeriodEnd * 1000).toISOString()
+      : new Date(Date.now() + 31 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { error: closureError } = await serviceClient
+      .from('account_closures')
+      .upsert(
+        {
+          user_id: userId,
+          scheduled_for: scheduledFor,
+          requested_at: new Date().toISOString(),
+          provider_subscription_id: String(subscriptions[0].provider_subscription_id)
+        },
+        { onConflict: 'user_id' }
+      )
+      .select('user_id');
+
+    if (closureError) {
+      console.error('delete-account: could not record closure', {
+        code: closureError.code,
+        message: closureError.message
+      });
+      return json(
+        { error: 'Could not schedule your closure. Please try again or contact support.' },
+        500,
+        cors
+      );
+    }
+
+    await serviceClient.rpc('log_audit_event', {
+      p_event_type: 'account.closure_scheduled',
+      p_payload: { user_id: userId, scheduled_for: scheduledFor },
+      p_severity: 'alert',
+      p_actor: userId
+    });
+
+    return json({ ok: true, scheduled: true, scheduled_for: scheduledFor }, 200, cors);
+  }
 
   if (subscriptions.length > 0) {
     const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
@@ -284,6 +391,64 @@ async function cancelSubscription(
     status: response.status,
     message: payload.error?.message ?? `HTTP ${response.status}`
   };
+}
+
+/**
+ * Tell Stripe to stop this subscription at the end of the paid period rather
+ * than now, and report when that period ends.
+ *
+ * Matches how the customer portal is configured to cancel (`at_period_end`),
+ * so both routes out of a plan behave the same way. Reversible on purpose:
+ * cancel-account-closure sets the same flag back to false.
+ */
+async function scheduleSubscriptionCancel(
+  subscriptionId: string,
+  stripeKey: string
+): Promise<
+  { ok: true; periodEnd: number | null } | { ok: false; status: number; message: string }
+> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://api.stripe.com/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${stripeKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Stripe-Version': '2024-06-20'
+        },
+        body: new URLSearchParams({ cancel_at_period_end: 'true' })
+      }
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      status: 0,
+      message: error instanceof Error ? error.message : 'network error'
+    };
+  }
+
+  const payload = (await response.json().catch(() => ({}))) as {
+    current_period_end?: number;
+    items?: { data?: Array<{ current_period_end?: number }> };
+    error?: { message?: string };
+  };
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      message: payload.error?.message ?? `HTTP ${response.status}`
+    };
+  }
+
+  // Newer API versions carry the period on the subscription item rather than
+  // the subscription, so read both before giving up.
+  const periodEnd =
+    payload.current_period_end ?? payload.items?.data?.[0]?.current_period_end ?? null;
+
+  return { ok: true, periodEnd };
 }
 
 function json(body: Record<string, unknown>, status = 200, cors: Record<string, string> = {}) {
