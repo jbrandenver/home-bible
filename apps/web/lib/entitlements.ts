@@ -58,9 +58,32 @@ export function recordEntitlementDownload(context: string): void {
   }
 }
 
-// A homeowner's normal life fits in the free tier: the home plus one more
-// place (a rental, the cabin, a parent's house). The Portfolio plan starts
-// where a portfolio starts — at the third door or the first building.
+// DELIBERATE LAG — this value does not state the current pricing rule.
+//
+// The 2026-07-31 ruling (docs/PRICING_AND_PLANS.md) is that Free is ONE home;
+// homes 2-3 are $4.99/mo each and Portfolio starts at the fourth door or the
+// first building. /pricing already says exactly that. This stays at 2 so that
+// nobody is blocked from a second home while the fee ladder is only half
+// switched on — the lag errs in the customer's favour.
+//
+// As of 2026-08-06 the plumbing this lag was waiting on EXISTS:
+//   * the $4.99 link is live (NEXT_PUBLIC_STRIPE_PER_HOME_PAYMENT_LINK),
+//   * stripe-webhook treats 'additional_home' as a subscription product, and
+//   * property_allowance_for() already computes
+//     free_property_allowance() + count(active 'additional_home').
+//
+// So closing the lag is now a one-line change in two places rather than a
+// build. It is left open on purpose because it is a revenue decision, not a
+// cleanup, and because no 'additional_home' entitlement has ever been written
+// (the payment link's product_key metadata is unverified — that exact gotcha
+// bit us before). Verify a real $4.99 checkout produces an entitlement row
+// FIRST; a link whose metadata is missing takes the money and grants nothing.
+//
+// When flipping it: change this to 1 AND public.free_property_allowance() to
+// 1 in the same deploy. The database value is what permits or refuses the
+// insert (035); this one only decides when the UI offers an upgrade. Existing
+// owners keep every home they already have — 035's check is INSERT-only and
+// deliberately never re-tests existing rows.
 export const FREE_PROPERTY_ALLOWANCE = 2;
 
 // Stripe Payment Links, configured the same way as the one-time products in

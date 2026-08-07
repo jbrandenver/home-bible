@@ -114,7 +114,7 @@ These are binding regardless of the refresh.
   The *typefaces* are open to change; the *self-hosting* is not — a CDN
   webfont is a regression, it was deliberately removed for performance and
   privacy.
-- **Stack.** Next.js 14 (Pages Router), React 18, TypeScript.
+- **Stack.** Next.js 15 (Pages Router), React 19, TypeScript.
 - **Supabase** backs persistence, with RLS-enforced sharing roles. Demo mode
   falls back to `localStorage` when Supabase is unconfigured or signed out.
 - **Cost governance** — see `docs/COST_GOVERNANCE.md` before adding any paid
