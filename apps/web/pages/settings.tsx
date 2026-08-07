@@ -25,6 +25,7 @@ import {
   type PropertyType
 } from '../lib/properties';
 import {
+  createBillingPortalSession,
   FREE_PROPERTY_ALLOWANCE,
   getBillingPortalUrl,
   getPortfolioCheckoutUrl,
@@ -144,6 +145,9 @@ export default function SettingsPage() {
 
   const [deletingProperty, setDeletingProperty] = useState(false);
   const [propertyDeleteError, setPropertyDeleteError] = useState('');
+
+  const [openingPortal, setOpeningPortal] = useState(false);
+  const [portalError, setPortalError] = useState('');
 
   const [planInfo, setPlanInfo] = useState<{
     homes: number;
@@ -584,6 +588,37 @@ export default function SettingsPage() {
     setConfirmingDeleteProperty(true);
   }
 
+  /**
+   * Straight into this customer's billing. The session is minted server-side
+   * from their own entitlement rows, so there is no email step and no way to
+   * land on the wrong customer.
+   *
+   * Falls back to the emailed portal link rather than failing: someone trying
+   * to cancel must never hit a dead end, even if that route then asks which
+   * address they paid with. Only if there is no fallback either do we say so.
+   */
+  async function handleManageBilling() {
+    if (openingPortal) {
+      return;
+    }
+
+    setOpeningPortal(true);
+    setPortalError('');
+
+    const sessionUrl = await createBillingPortalSession();
+    const destination = sessionUrl ?? getBillingPortalUrl();
+
+    if (!destination) {
+      setOpeningPortal(false);
+      setPortalError(
+        'Could not open your billing. Email support@ourhomefolder.com and we will sort it out.'
+      );
+      return;
+    }
+
+    window.location.href = destination;
+  }
+
   function requestDeleteAccount() {
     setAccountError('');
     setDeleteConfirmText('');
@@ -812,6 +847,9 @@ export default function SettingsPage() {
                     we&rsquo;ll take care of it. Your records stay exportable either way.
                   </p>
                 ) : null}
+                {portalError ? (
+                  <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{portalError}</p>
+                ) : null}
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                   {!planInfo.hasPlan && planInfo.paymentsConfigured && planInfo.homes > FREE_PROPERTY_ALLOWANCE ? (
                     <ActionLink href={getPortfolioCheckoutUrl(user.id) || '/pricing'}>
@@ -820,10 +858,10 @@ export default function SettingsPage() {
                   ) : null}
                   {/* Only for people who actually pay: a billing link shown to a
                       free user leads to a portal with nothing in it. */}
-                  {planInfo.hasSubscription && getBillingPortalUrl() ? (
-                    <ActionLink href={getBillingPortalUrl() as string} variant="secondary">
-                      Manage billing
-                    </ActionLink>
+                  {planInfo.hasSubscription ? (
+                    <Button type="button" variant="secondary" disabled={openingPortal} onClick={handleManageBilling}>
+                      {openingPortal ? 'Opening...' : 'Manage billing'}
+                    </Button>
                   ) : null}
                   <ActionLink href="/portfolio" variant="secondary">Open portfolio</ActionLink>
                   <ActionLink href="/pricing" variant="secondary">See pricing</ActionLink>

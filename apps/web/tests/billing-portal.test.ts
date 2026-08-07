@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { getBillingPortalUrl } from '../lib/entitlements';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createBillingPortalSession, getBillingPortalUrl } from '../lib/entitlements';
+import * as supabaseClient from '../lib/supabase/client';
 
 const ORIGINAL = process.env.NEXT_PUBLIC_STRIPE_BILLING_PORTAL_URL;
 
@@ -45,5 +46,57 @@ describe('billing portal url', () => {
     const url = 'https://billing.stripe.com/p/login/test_abc123';
     process.env.NEXT_PUBLIC_STRIPE_BILLING_PORTAL_URL = url;
     expect(getBillingPortalUrl()).toBe(url);
+  });
+});
+
+// The session route replaces the email step: the edge function resolves which
+// Stripe customer to open from the caller's own entitlement rows, so the
+// address someone paid with no longer has to match the one they log in with.
+// The returned URL decides a navigation, so it is checked before it is used.
+describe('billing portal session', () => {
+  function mockInvoke(result: unknown) {
+    vi.spyOn(supabaseClient, 'getSupabaseBrowserClient').mockReturnValue({
+      functions: { invoke: () => Promise.resolve(result) }
+    } as unknown as ReturnType<typeof supabaseClient.getSupabaseBrowserClient>);
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('returns the session url the function issued', async () => {
+    mockInvoke({ data: { url: 'https://billing.stripe.com/p/session/live_xyz' }, error: null });
+    await expect(createBillingPortalSession()).resolves.toBe(
+      'https://billing.stripe.com/p/session/live_xyz'
+    );
+  });
+
+  it('refuses a redirect anywhere but Stripe', async () => {
+    // A tampered or wrong response must not become an open redirect just
+    // because it arrived from our own function.
+    for (const url of [
+      'https://evil.example/p/session/x',
+      'http://billing.stripe.com/p/session/x',
+      'javascript:alert(1)',
+      'https://stripe.com.evil.example/x'
+    ]) {
+      mockInvoke({ data: { url }, error: null });
+      await expect(createBillingPortalSession()).resolves.toBeNull();
+    }
+  });
+
+  it('returns null when the function errors or has no customer', async () => {
+    // Null is what routes the caller to the emailed-link fallback rather than
+    // dead-ending someone who is trying to cancel.
+    mockInvoke({ data: null, error: { message: 'no_customer' } });
+    await expect(createBillingPortalSession()).resolves.toBeNull();
+
+    mockInvoke({ data: {}, error: null });
+    await expect(createBillingPortalSession()).resolves.toBeNull();
+  });
+
+  it('returns null rather than throwing when Supabase is unconfigured', async () => {
+    vi.spyOn(supabaseClient, 'getSupabaseBrowserClient').mockReturnValue(null);
+    await expect(createBillingPortalSession()).resolves.toBeNull();
   });
 });

@@ -111,24 +111,54 @@ export function getPerHomeCheckoutUrl(userId: string | null): string | null {
 }
 
 /**
- * Stripe's hosted customer portal, where a subscriber changes their card,
- * downloads invoices, or cancels.
+ * The emailed no-code portal link — now the FALLBACK, not the main route.
  *
- * /pricing promises "Cancel: Any time" in two places, so a customer must have
- * somewhere to go and do it. This is the no-code portal login link: the
- * customer enters the email they paid with and Stripe sends them a one-time
- * link. That deliberately avoids storing a Stripe customer id against the
- * account and avoids an edge function to mint portal sessions — there is no
- * per-user secret involved and nothing here can be forged into someone else's
- * billing, because Stripe authenticates the email itself.
+ * It authenticates by email, which is exactly its weakness: it only works when
+ * the address someone paid with matches the one they log in with. When it does
+ * not, Stripe truthfully reports "no payments on file" about a different
+ * customer record and the customer concludes their subscription is missing.
+ * openBillingPortal() below resolves the real customer instead; this stays as
+ * the safety net for anyone whose purchase predates provider_customer_id (045)
+ * and for the case where the session call fails outright.
  *
- * No fallback URL on purpose. Unlike the payment links, guessing wrong here
- * would send a paying customer somewhere that cannot cancel their plan; absent
- * config renders no button at all, and the UI says to email support instead.
+ * No fallback URL on purpose. Guessing wrong here would send a paying customer
+ * somewhere that cannot cancel their plan.
  */
 export function getBillingPortalUrl(): string | null {
   const base = process.env.NEXT_PUBLIC_STRIPE_BILLING_PORTAL_URL;
   return base && /^https:\/\//i.test(base) ? base : null;
+}
+
+/**
+ * Open this customer's billing directly, with no email step.
+ *
+ * The billing-portal function resolves which Stripe customer to open from the
+ * caller's own entitlement rows, keyed on the user id in their verified JWT —
+ * nothing about whose billing to open crosses the wire, so a caller cannot ask
+ * for someone else's.
+ *
+ * Returns the URL to send the browser to, or null when there is nothing to
+ * open. Never throws: the caller falls back to the emailed link, and a
+ * customer who wants to cancel must never hit a dead end.
+ */
+export async function createBillingPortalSession(): Promise<string | null> {
+  const supabase = getSupabaseBrowserClient();
+  if (!supabase) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('billing-portal', { method: 'POST' });
+    if (error || !data || typeof (data as { url?: unknown }).url !== 'string') {
+      return null;
+    }
+
+    const url = (data as { url: string }).url;
+    // Only ever follow Stripe's own host — this value decides a navigation.
+    return /^https:\/\/[a-z0-9-]+\.stripe\.com\//i.test(url) ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 export type PortfolioAccess = {
