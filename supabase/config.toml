@@ -430,6 +430,12 @@ verify_jwt = false
 [functions.billing-portal]
 verify_jwt = true
 
+# Signed-in users only, same reasoning as billing-portal: WHOSE pending closure
+# to call off is taken from the verified token, never from the request, so the
+# gateway check is part of the authorization and not just a gate.
+[functions.cancel-account-closure]
+verify_jwt = true
+
 # Called by pg_cron, which cannot present a user JWT. Protected instead by the
 # RECALL_CRON_SECRET shared secret checked inside the handler; refuses with a
 # 503 while that secret is unset.

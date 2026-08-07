@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DELETE_PHRASE,
+  formatClosureDate,
   matchesDeletePhrase,
   resolveDeleteAction,
   type DeleteStep
@@ -55,5 +56,21 @@ describe('account closure flow', () => {
     expect(matchesDeletePhrase('  DeLeTe  ')).toBe(true);
     expect(matchesDeletePhrase('delete my account')).toBe(false);
     expect(matchesDeletePhrase('')).toBe(false);
+  });
+});
+
+// The banner states the day the record goes. Someone deciding whether to
+// change their mind is planning against a date, so a bad value must degrade to
+// something still true rather than to "Invalid Date".
+describe('closure date', () => {
+  it('renders a real date', () => {
+    const rendered = formatClosureDate('2026-09-08T01:21:18.000Z');
+    expect(rendered).toMatch(/2026/);
+    expect(rendered).not.toMatch(/Invalid/i);
+  });
+
+  it('falls back to plain words rather than showing Invalid Date', () => {
+    expect(formatClosureDate('not-a-date')).toBe('the end of your billing period');
+    expect(formatClosureDate('')).toBe('the end of your billing period');
   });
 });
