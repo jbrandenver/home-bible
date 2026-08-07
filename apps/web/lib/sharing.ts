@@ -3,6 +3,7 @@ import {
   HANDOVER_SECTION_LABELS,
   loadHandoverReport,
   type HandoverReportData,
+  type HandoverReportType,
   type HandoverSection
 } from './handover';
 import { getSupabaseSetupMessage } from './auth';
@@ -529,10 +530,20 @@ function applyRoleFilters(role: SharingRole, data: HandoverReportData): Handover
   return sanitizedData;
 }
 
+// Guest-class roles read the record through the matching visibility context,
+// so entries kept for the personal archive never reach them. Household roles
+// (owner, co-owner, editor, viewer) see the whole record, which is what being
+// in the household means.
+const REPORT_TYPE_BY_ROLE: Partial<Record<SharingRole, HandoverReportType>> = {
+  insurance_view: 'insurance',
+  buyer_preview: 'buyer',
+  maintenance_guest: 'maintenance'
+};
+
 export async function loadSharingPreview(role: SharingRole): Promise<SharingPreview> {
   const profile = ROLE_PROFILES[role];
   const loaded = await loadHandoverReport({
-    reportType: role === 'insurance_view' ? 'insurance' : role === 'buyer_preview' ? 'buyer' : 'personal_archive',
+    reportType: REPORT_TYPE_BY_ROLE[role] || 'personal_archive',
     sections: profile.reportSections
   });
   const data = applyRoleFilters(role, loaded);
