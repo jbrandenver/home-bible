@@ -35,7 +35,9 @@ import {
   createBillingPortalSession,
   FREE_PROPERTY_ALLOWANCE,
   getBillingPortalUrl,
+  getPerHomeCheckoutUrl,
   getPortfolioCheckoutUrl,
+  MAX_HOMES_WITHOUT_PORTFOLIO,
   hasEntitlement,
   hasPortfolioPlan,
   recordEntitlementDownload
@@ -902,9 +904,11 @@ export default function SettingsPage() {
                     label={
                       planInfo.hasPlan
                         ? 'Portfolio plan'
-                        : planInfo.homes > FREE_PROPERTY_ALLOWANCE
+                        : planInfo.homes > MAX_HOMES_WITHOUT_PORTFOLIO
                           ? 'Portfolio scale'
-                          : 'Free plan'
+                          : planInfo.homes > FREE_PROPERTY_ALLOWANCE
+                            ? 'Additional homes'
+                            : 'Free plan'
                     }
                   />
                 </div>
@@ -912,17 +916,22 @@ export default function SettingsPage() {
                   <p style={{ color: 'var(--text-muted)', margin: 0 }}>
                     You&rsquo;re on the Portfolio plan — every landlord tool is included.
                   </p>
-                ) : planInfo.paymentsConfigured && planInfo.homes > FREE_PROPERTY_ALLOWANCE ? (
+                ) : planInfo.homes > MAX_HOMES_WITHOUT_PORTFOLIO ? (
                   <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                    With more than {FREE_PROPERTY_ALLOWANCE} homes, the Portfolio plan covers
-                    the landlord tools you&rsquo;re using.
+                    Past {MAX_HOMES_WITHOUT_PORTFOLIO} homes the Portfolio plan takes over, and
+                    covers the landlord tools you&rsquo;re using.
+                  </p>
+                ) : planInfo.homes > FREE_PROPERTY_ALLOWANCE ? (
+                  <p style={{ color: 'var(--text-muted)', margin: 0 }}>
+                    Your first home is free; each one after that is $4.99 a month, up to{' '}
+                    {MAX_HOMES_WITHOUT_PORTFOLIO} in all. From the{' '}
+                    {MAX_HOMES_WITHOUT_PORTFOLIO + 1}th, the Portfolio plan covers everything.
                   </p>
                 ) : (
                   <p style={{ color: 'var(--text-muted)', margin: 0 }}>
-                    Paid plans aren&rsquo;t live yet — everything, including the Portfolio
-                    tools for multiple homes, is currently included free. When payments
-                    launch, keeping more than {FREE_PROPERTY_ALLOWANCE} homes will use the
-                    Portfolio plan.
+                    Your home&rsquo;s record is free, forever. A second or third home is $4.99 a
+                    month each; from the {MAX_HOMES_WITHOUT_PORTFOLIO + 1}th, the Portfolio plan
+                    covers unlimited homes.
                   </p>
                 )}
                 {planInfo.hasSubscription && !getBillingPortalUrl() ? (
@@ -936,9 +945,16 @@ export default function SettingsPage() {
                   <p style={{ color: 'var(--status-urgent)', margin: 0 }}>{portalError}</p>
                 ) : null}
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                  {!planInfo.hasPlan && planInfo.paymentsConfigured && planInfo.homes > FREE_PROPERTY_ALLOWANCE ? (
+                  {/* Offer the rung they are actually on. Quoting $29 to
+                      someone adding their second home would be selling them the
+                      wrong thing at six times the price. */}
+                  {!planInfo.hasPlan && planInfo.paymentsConfigured && planInfo.homes >= MAX_HOMES_WITHOUT_PORTFOLIO ? (
                     <ActionLink href={getPortfolioCheckoutUrl(user.id) || '/pricing'}>
                       Get the Portfolio plan
+                    </ActionLink>
+                  ) : !planInfo.hasPlan && planInfo.paymentsConfigured && planInfo.homes >= FREE_PROPERTY_ALLOWANCE ? (
+                    <ActionLink href={getPerHomeCheckoutUrl(user.id) || '/pricing'}>
+                      Add a home — $4.99 a month
                     </ActionLink>
                   ) : null}
                   {/* Only for people who actually pay: a billing link shown to a

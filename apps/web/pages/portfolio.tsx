@@ -25,6 +25,7 @@ import {
 } from '../lib/portfolio';
 import {
   FREE_PROPERTY_ALLOWANCE,
+  MAX_HOMES_WITHOUT_PORTFOLIO,
   evaluatePortfolioAccess,
   getPortfolioCheckoutUrl,
   hasPortfolioPlan,
@@ -499,10 +500,11 @@ export default function PortfolioPage() {
         <Card>
           <h2 style={{ marginTop: 0 }}>The Portfolio plan</h2>
           <p style={subtleText}>
-            The free record covers {FREE_PROPERTY_ALLOWANCE} properties. Your account holds{' '}
-            {access?.propertyCount ?? properties.length} — adding a building or more units is part
-            of the Portfolio plan, a recurring plan that covers multi-property roll-ups, the
-            compliance calendar, and condition reports.
+            Your first home is free and homes two and three are $4.99 a month each. Your account
+            holds {access?.propertyCount ?? properties.length} — past{' '}
+            {MAX_HOMES_WITHOUT_PORTFOLIO}, adding a building or more units is part of the
+            Portfolio plan, a recurring plan that covers multi-property roll-ups, the compliance
+            calendar, and condition reports.
           </p>
           {checkoutUrl ? (
             <a href={checkoutUrl} className="action-link" style={getControlStyle({ variant: 'primary' })}>
@@ -517,8 +519,9 @@ export default function PortfolioPage() {
           <p style={{ ...subtleText, marginBottom: 0 }}>
             Multi-property roll-ups, the compliance calendar, and condition reports belong to a
             recurring Portfolio plan. Checkout is not yet available, so while it is being set up
-            everything here stays open — the free record otherwise covers{' '}
-            {FREE_PROPERTY_ALLOWANCE} properties.
+            everything here stays open — the ladder is otherwise one free home, $4.99 a month for
+            homes two and three, and the Portfolio plan from the{' '}
+            {MAX_HOMES_WITHOUT_PORTFOLIO + 1}th.
           </p>
         </Card>
       ) : null}

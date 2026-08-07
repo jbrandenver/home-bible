@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildPortfolioOverview, type PortfolioAssetRow, type PortfolioComplianceRow, type PortfolioData, type PortfolioReminderRow, type PortfolioRepairRow } from '../lib/portfolio';
 import { sortPortfolio, type PropertySummary } from '../lib/properties';
-import { FREE_PROPERTY_ALLOWANCE, evaluatePortfolioAccess } from '../lib/entitlements';
+import {
+  evaluatePortfolioAccess,
+  FREE_PROPERTY_ALLOWANCE,
+  MAX_HOMES_WITHOUT_PORTFOLIO,
+  MAX_PER_HOME_ADDITIONS
+} from '../lib/entitlements';
 
 // All pure functions: no supabase client, no network, no browser. Dates are
 // pinned via todayIso so horizon math is deterministic.
@@ -310,7 +315,38 @@ describe('evaluatePortfolioAccess', () => {
       paymentsConfigured: true,
       propertyCount: 5,
       withinFreeAllowance: false,
+      upgradePath: 'portfolio',
       requiresUpgradeToAdd: true
     });
+  });
+
+  // The fee ladder: one free home, $4.99/mo each for homes two and three, and
+  // the Portfolio plan from the fourth. The middle rung is the part worth
+  // pinning — quoting $29 to someone adding their second home would be selling
+  // them the wrong thing at six times the price.
+  it('offers the rung the next home actually lands on', () => {
+    const at = (propertyCount: number, hasPlan = false) =>
+      evaluatePortfolioAccess({ hasPlan, paymentsConfigured: true, propertyCount }).upgradePath;
+
+    expect(at(0)).toBe('none'); // first home is free
+    expect(at(1)).toBe('per_home'); // adding the second
+    expect(at(2)).toBe('per_home'); // adding the third
+    expect(at(3)).toBe('portfolio'); // adding the fourth
+    expect(at(9)).toBe('portfolio');
+  });
+
+  it('offers nothing to someone already on the Portfolio plan', () => {
+    for (const propertyCount of [0, 1, 3, 40]) {
+      expect(
+        evaluatePortfolioAccess({ hasPlan: true, paymentsConfigured: true, propertyCount }).upgradePath
+      ).toBe('none');
+    }
+  });
+
+  it('keeps the ladder consistent with the constants', () => {
+    // Guards against someone changing one number and not the other.
+    expect(MAX_HOMES_WITHOUT_PORTFOLIO).toBe(FREE_PROPERTY_ALLOWANCE + MAX_PER_HOME_ADDITIONS);
+    expect(FREE_PROPERTY_ALLOWANCE).toBe(1);
+    expect(MAX_HOMES_WITHOUT_PORTFOLIO).toBe(3);
   });
 });

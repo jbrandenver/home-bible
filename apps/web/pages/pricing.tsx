@@ -17,9 +17,9 @@ import { useIsNativeApp } from '../lib/native';
    additional home through the third, Portfolio $29/mo unlimited from the
    fourth, pro binders $9.99 one-time. If a number changes, change the Stripe
    products, the doc, and this page together so the page never contradicts
-   the bill. NOTE: enforcement is soft until the Stripe products exist —
-   lib/entitlements.ts still allows 2 free properties, which only ever errs
-   in the customer's favor. Checkout buttons light up when the Payment Link
+   the bill. Enforcement is LIVE as of 2026-08-06: one free home, $4.99/mo
+   each for homes two and three (capped there), Portfolio from the fourth —
+   in lib/entitlements.ts and in the database, which is the real gate. Checkout buttons light up when the Payment Link
    env vars are set on the Worker build (NEXT_PUBLIC_STRIPE_PER_HOME_
    PAYMENT_LINK, NEXT_PUBLIC_STRIPE_PORTFOLIO_PAYMENT_LINK); until then
    signed-in readers are told checkout has not opened, in plain words. */
