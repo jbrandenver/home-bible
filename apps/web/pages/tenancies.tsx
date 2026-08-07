@@ -6,6 +6,7 @@ import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
 import { formatCentsAsCurrency } from '../lib/conditionReports';
 import { resolveDataContext, type ResolvedDataContext } from '../lib/dataContext';
+import { tenancyStatusForDates } from '../lib/derivations';
 import {
   createTenancy,
   listTenancies,
@@ -66,6 +67,9 @@ export default function TenanciesPage() {
   const [endDate, setEndDate] = useState('');
   const [depositDollars, setDepositDollars] = useState('');
   const [status, setStatus] = useState<TenancyStatus>('active');
+  // Once someone sets the status themselves, editing a date must not overrule
+  // them — a tenancy can be ended early without the end date moving.
+  const [statusChosenByHand, setStatusChosenByHand] = useState(false);
   const [depositReturnedOn, setDepositReturnedOn] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -113,6 +117,7 @@ export default function TenanciesPage() {
     setEndDate('');
     setDepositDollars('');
     setStatus('active');
+    setStatusChosenByHand(false);
     setDepositReturnedOn('');
     setNotes('');
   };
@@ -125,6 +130,9 @@ export default function TenanciesPage() {
     setEndDate(tenancy.end_date || '');
     setDepositDollars(centsToDollarsField(tenancy.deposit_amount_cents));
     setStatus(tenancy.status);
+    // A saved status is somebody's decision, not a default: editing a date on
+    // an existing tenancy must not silently rewrite it.
+    setStatusChosenByHand(true);
     setDepositReturnedOn(tenancy.deposit_returned_on || '');
     setNotes(tenancy.notes || '');
     setFormError('');
@@ -317,17 +325,47 @@ export default function TenanciesPage() {
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
               <label style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontWeight: 600 }}>Start date</span>
-                <input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} style={fieldStyle} />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(event) => {
+                    setStartDate(event.target.value);
+                    // The enum is literally upcoming | active | ended, so the
+                    // dates already answer this. Only moved for someone who
+                    // has not set it themselves.
+                    if (!statusChosenByHand) {
+                      setStatus(tenancyStatusForDates(event.target.value, endDate, new Date()));
+                    }
+                  }}
+                  style={fieldStyle}
+                />
               </label>
 
               <label style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontWeight: 600 }}>End date</span>
-                <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} style={fieldStyle} />
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(event) => {
+                    setEndDate(event.target.value);
+                    if (!statusChosenByHand) {
+                      setStatus(tenancyStatusForDates(startDate, event.target.value, new Date()));
+                    }
+                  }}
+                  style={fieldStyle}
+                />
               </label>
 
               <label style={{ display: 'grid', gap: 6 }}>
                 <span style={{ fontWeight: 600 }}>Status</span>
-                <select value={status} onChange={(event) => setStatus(event.target.value as TenancyStatus)} style={fieldStyle}>
+                <select
+                  value={status}
+                  onChange={(event) => {
+                    setStatus(event.target.value as TenancyStatus);
+                    setStatusChosenByHand(true);
+                  }}
+                  style={fieldStyle}
+                >
                   {TENANCY_STATUSES.map((value) => (
                     <option key={value} value={value}>{formatEnumLabel(value)}</option>
                   ))}

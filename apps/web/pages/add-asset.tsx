@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { ASSET_TYPES, formatEnumLabel, type VisibilityContext } from '@home-folder/shared';
 import { PageHeader, Card, Button } from '@home-folder/ui';
 import { VisibilityContextPicker } from '../components/VisibilityContextPicker';
+import { PlateScanButton } from '../components/PlateScanButton';
 import {
   createAssetForContext,
   getAssetDataContext,
@@ -10,7 +11,7 @@ import {
   type AssetDataMode
 } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
-import { scanPlatePhoto, type PlateScanResult } from '../lib/plateScan';
+import { type PlateScanResult } from '../lib/plateScan';
 import { createReminderForContext, getReminderDataContext } from '../lib/reminders';
 import { getRoomsForProperty } from '../lib/rooms';
 import { formatRoomLocation } from '../lib/roomLabels';
@@ -52,10 +53,11 @@ export default function AddAssetPage() {
   const [loading, setLoading] = useState(false);
   const [roomsLoading, setRoomsLoading] = useState(true);
 
-  const scanInputRef = useRef<HTMLInputElement | null>(null);
-  const [scanBusy, setScanBusy] = useState(false);
-  const [scanError, setScanError] = useState('');
-  const [scanResult, setScanResult] = useState<PlateScanResult | null>(null);
+  // Controlled so a successful scan can reveal the fields it just filled.
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  // A data plate states when it was made, which is a decent prompt for a
+  // purchase date nobody remembers. Kept as a hint, never written as one.
+  const [manufactureYear, setManufactureYear] = useState<number | null>(null);
 
   const [form, setForm] = useState<AssetFormData>({
     asset_type: 'appliance',
@@ -141,34 +143,21 @@ export default function AddAssetPage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Data-plate scan: photo → brand/model/serial prefilled. The scan only
-  // prefills — the user always reviews before saving, because vision models
-  // can misread stamped or worn labels.
-  const handleScanFile = async (file: File | undefined) => {
-    if (!file) {
-      return;
-    }
+  // The scan only prefills — a person always reviews before saving, because
+  // vision models can misread stamped or worn labels.
+  const handleScanned = (result: PlateScanResult) => {
+    setManufactureYear(result.manufacture_year);
+    setForm((prev) => ({
+      ...prev,
+      brand: result.brand ?? prev.brand,
+      model: result.model_number ?? prev.model,
+      serial_number: result.serial_number ?? prev.serial_number
+    }));
 
-    setScanBusy(true);
-    setScanError('');
-
-    try {
-      const result = await scanPlatePhoto(file);
-      setScanResult(result);
-      setForm((prev) => ({
-        ...prev,
-        brand: result.brand ?? prev.brand,
-        model: result.model_number ?? prev.model,
-        serial_number: result.serial_number ?? prev.serial_number
-      }));
-    } catch (scanFailure) {
-      setScanResult(null);
-      setScanError(scanFailure instanceof Error ? scanFailure.message : 'Could not scan that photo.');
-    } finally {
-      setScanBusy(false);
-      if (scanInputRef.current) {
-        scanInputRef.current.value = '';
-      }
+    // Those three fields live inside the collapsed section. A scan that filled
+    // them silently would be worse than no scan at all.
+    if (result.brand || result.model_number || result.serial_number) {
+      setDetailsOpen(true);
     }
   };
 
@@ -281,48 +270,13 @@ export default function AddAssetPage() {
           ) : null}
         </Card>
 
-        {dataMode === 'supabase' ? (
-          <Card>
-            <h2 style={{ marginTop: 0, marginBottom: 4 }}>Scan the data plate</h2>
-            <p style={{ marginTop: 0, color: 'var(--text-muted)' }}>
-              Take a photo of the appliance label and the brand, model, and serial number are filled in
-              for you. Check the details against the label — scanning can misread.
-            </p>
-            <input
-              ref={scanInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              style={{ display: 'none' }}
-              onChange={(event) => handleScanFile(event.target.files?.[0])}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={scanBusy}
-              onClick={() => scanInputRef.current?.click()}
-            >
-              {scanBusy ? 'Reading the label…' : 'Scan the data plate'}
-            </Button>
-            {scanError ? (
-              <p style={{ marginBottom: 0, color: 'var(--status-urgent)', fontSize: '0.875rem' }}>{scanError}</p>
-            ) : null}
-            {scanResult && !scanError ? (
-              <p
-                style={{
-                  marginBottom: 0,
-                  fontSize: '0.875rem',
-                  color: scanResult.confidence === 'high' ? 'var(--status-good)' : 'var(--color-clay)'
-                }}
-              >
-                {scanResult.confidence === 'high'
-                  ? 'Details filled in below. Give them a once-over before saving.'
-                  : `Details filled in below with ${scanResult.confidence} confidence — double-check each field against the label.`}
-                {scanResult.notes ? ` ${scanResult.notes}` : ''}
-              </p>
-            ) : null}
-          </Card>
-        ) : null}
+        <Card>
+          <h2 style={{ marginTop: 0, marginBottom: 4 }}>Scan the data plate</h2>
+          <PlateScanButton
+            signedIn={dataMode === 'supabase'}
+            onScanned={handleScanned}
+          />
+        </Card>
 
         <Card>
           <form onSubmit={handleSubmit}>
@@ -393,6 +347,29 @@ export default function AddAssetPage() {
               </div>
             </div>
 
+            {/*
+              Everything below is optional and was on screen by default, which
+              made recording a fridge look like a twenty-one field job. Folded
+              away, the form asks for four things — and the scan button above
+              fills most of the rest from a photo of the data plate.
+
+              A native <details>: it is keyboard-operable, announces its own
+              expanded state, and is findable by in-page search when open.
+            */}
+            <details
+              open={detailsOpen}
+              onToggle={(event) => setDetailsOpen((event.target as HTMLDetailsElement).open)}
+              style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 16 }}
+            >
+              <summary style={{ cursor: 'pointer', fontWeight: 700 }}>
+                More details
+                <span style={{ display: 'block', fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.875rem' }}>
+                  Make and model, purchase, warranty, manuals, notes — all optional, and all
+                  addable later from the item&rsquo;s own page.
+                </span>
+              </summary>
+
+              <div style={{ display: 'grid', gap: 16, marginTop: 16 }}>
             {/* Details Section */}
             <div>
               <h3 style={{ marginBottom: 12 }}>Product details</h3>
@@ -446,9 +423,9 @@ export default function AddAssetPage() {
                     onChange={(e) => handleInputChange('purchase_date', e.target.value)}
                     style={inputStyles.input as React.CSSProperties}
                   />
-                  {scanResult?.manufacture_year ? (
+                  {manufactureYear ? (
                     <p style={{ margin: '4px 0 0', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                      The data plate suggests it was manufactured in {scanResult.manufacture_year} — a hint
+                      The data plate suggests it was manufactured in {manufactureYear} — a hint
                       if you don’t remember the purchase date.
                     </p>
                   ) : null}
@@ -569,6 +546,8 @@ export default function AddAssetPage() {
                 </div>
               </div>
             </div>
+              </div>
+            </details>
 
             {/* Form Actions */}
             <div style={{ display: 'flex', gap: 12, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>

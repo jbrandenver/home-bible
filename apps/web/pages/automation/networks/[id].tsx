@@ -15,6 +15,7 @@ import {
 } from '../../../lib/automation';
 import { getRoomsForProperty } from '../../../lib/rooms';
 import { formatRoomLocation } from '../../../lib/roomLabels';
+import { NetworkDetailFields } from '../../../components/NetworkDetailFields';
 
 type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
@@ -241,24 +242,11 @@ export default function NetworkDetailPage() {
               {/* Migration 012 defined these columns and no form ever wrote them.
                   They are what someone needs to rebuild the network after a
                   router dies (launch review 2026-07-31). */}
-              <details>
-                <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Equipment and addressing</summary>
-                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 12 }}>
-                  <label><span>Router model</span><Input value={String(form.router_model ?? '')} onChange={(e) => set('router_model', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Modem</span><Input value={String(form.modem ?? '')} onChange={(e) => set('modem', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Mesh system</span><Input value={String(form.mesh_system ?? '')} onChange={(e) => set('mesh_system', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Access points</span><Input value={String(form.access_points ?? '')} onChange={(e) => set('access_points', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Gateway address</span><Input value={String(form.gateway ?? '')} onChange={(e) => set('gateway', e.target.value)} placeholder="192.168.1.1" style={{ marginTop: 6 }} /></label>
-                  <label><span>Subnet</span><Input value={String(form.subnet ?? '')} onChange={(e) => set('subnet', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>VLAN</span><Input value={String(form.vlan ?? '')} onChange={(e) => set('vlan', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>DHCP range</span><Input value={String(form.dhcp_range ?? '')} onChange={(e) => set('dhcp_range', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Backup internet</span><Input value={String(form.backup_internet ?? '')} onChange={(e) => set('backup_internet', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Battery backup (UPS)</span><Input value={String(form.ups_backup ?? '')} onChange={(e) => set('ups_backup', e.target.value)} style={{ marginTop: 6 }} /></label>
-                </div>
-                <label style={{ display: 'block', marginTop: 12 }}><span>DNS notes</span><textarea value={String(form.dns_notes ?? '')} onChange={(e) => set('dns_notes', e.target.value)} style={{ width: '100%', minHeight: 54, marginTop: 6, padding: 10 }} /></label>
-                <label style={{ display: 'block', marginTop: 12 }}><span>Security notes (reference only — never a password)</span><textarea value={String(form.security_notes ?? '')} onChange={(e) => set('security_notes', e.target.value)} style={{ width: '100%', minHeight: 54, marginTop: 6, padding: 10 }} /></label>
-                <label style={{ display: 'block', marginTop: 12 }}><span>Setup instructions</span><textarea value={String(form.setup_instructions ?? '')} onChange={(e) => set('setup_instructions', e.target.value)} style={{ width: '100%', minHeight: 54, marginTop: 6, padding: 10 }} /></label>
-              </details>
+              <NetworkDetailFields
+                summary="Equipment, addressing &amp; recovery"
+                value={(key) => String((form as Record<string, unknown>)[key] ?? '')}
+                onChange={set}
+              />
               <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={Boolean(form.is_iot)} onChange={(e) => set('is_iot', e.target.checked)} /><span>IoT network</span></label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={Boolean(form.is_guest)} onChange={(e) => set('is_guest', e.target.checked)} /><span>Guest network</span></label>

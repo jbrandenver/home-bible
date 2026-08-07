@@ -37,6 +37,7 @@ import { getRoomsForProperty } from '../../lib/rooms';
 import { formatRoomLocation } from '../../lib/roomLabels';
 import { usePropertyAccess } from '../../lib/access';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { PlateScanButton } from '../../components/PlateScanButton';
 
 type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
@@ -286,13 +287,49 @@ export default function AddDevicePage() {
                 {AUTOMATION_DEVICE_STATUSES.map((s) => <option key={s} value={s}>{AUTOMATION_STATUS_LABELS[s]}</option>)}
               </Select>
             </label>
-            <label style={labelStyle}><span>Manufacturer</span><Input value={form.manufacturer} onChange={(e) => set('manufacturer', e.target.value)} placeholder="Yale" style={{ marginTop: 6 }} /></label>
-            <label style={labelStyle}><span>Model</span><Input value={form.model} onChange={(e) => set('model', e.target.value)} style={{ marginTop: 6 }} /></label>
-            <label style={labelStyle}><span>Serial number</span><Input value={form.serial_number} onChange={(e) => set('serial_number', e.target.value)} style={{ marginTop: 6 }} /></label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 24 }}>
               <input type="checkbox" checked={form.is_critical} onChange={(e) => set('is_critical', e.target.checked)} />
               <span>Critical device (safety/security/entry)</span>
             </label>
+          </div>
+        </Card>
+
+        {/*
+          The page already told people "only the name is required", and then
+          showed them twenty fields. Folded away, the ones that matter on the
+          day are on screen and the rest are one click behind — the same shape
+          as the asset form.
+        */}
+        <details style={{ display: 'grid', gap: 16 }}>
+          <summary style={{ cursor: 'pointer', fontWeight: 700, padding: '4px 0' }}>
+            More about this device
+            <span style={{ display: 'block', fontWeight: 400, color: 'var(--text-muted)', fontSize: 14 }}>
+              Make and model, where it lives, how it connects, power, and what the next owner
+              needs to set it up again. All optional.
+            </span>
+          </summary>
+
+        <Card>
+          {sectionHeading('Make & model')}
+          {/* A smart device has a data plate like anything else. Same scanner,
+              same rule: it prefills and a person checks it. */}
+          <div style={{ marginBottom: 16 }}>
+            <PlateScanButton
+              signedIn={context?.mode === 'supabase'}
+              onScanned={(result) =>
+                setForm((f) => ({
+                  ...f,
+                  manufacturer: result.brand ?? f.manufacturer,
+                  model: result.model_number ?? f.model,
+                  serial_number: result.serial_number ?? f.serial_number
+                }))
+              }
+            />
+          </div>
+          <div style={fieldWrap}>
+            <label style={labelStyle}><span>Manufacturer</span><Input value={form.manufacturer} onChange={(e) => set('manufacturer', e.target.value)} placeholder="Yale" style={{ marginTop: 6 }} /></label>
+            <label style={labelStyle}><span>Model</span><Input value={form.model} onChange={(e) => set('model', e.target.value)} style={{ marginTop: 6 }} /></label>
+            <label style={labelStyle}><span>Serial number</span><Input value={form.serial_number} onChange={(e) => set('serial_number', e.target.value)} style={{ marginTop: 6 }} /></label>
           </div>
         </Card>
 
@@ -405,6 +442,7 @@ export default function AddDevicePage() {
             </label>
           </div>
         </Card>
+        </details>
 
         <Card>
           {error ? <p style={{ color: 'var(--status-urgent)', fontWeight: 700, marginTop: 0 }} role="alert">{error}</p> : null}

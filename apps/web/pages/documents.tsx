@@ -16,6 +16,7 @@ import { getAutomationContext, getDevicesForContext, type AutomationDeviceRow } 
 import { listComplianceObligations, type ComplianceObligationRow } from '../lib/compliance';
 import { listConditionReports, type ConditionReportRow } from '../lib/conditionReports';
 import { getDemoRooms } from '../lib/demoStorage';
+import { documentTitleFromFileName, documentTypeFromFile } from '../lib/derivations';
 import {
   createDocumentSignedUrlForContext,
   createDocumentThumbnailUrlsForContext,
@@ -213,6 +214,9 @@ export default function DocumentsPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [documentType, setDocumentType] = useState<DocumentType>('other');
+  // Once someone picks a type themselves, choosing another file must not
+  // quietly overrule them.
+  const [typeChosenByHand, setTypeChosenByHand] = useState(false);
   const [visibilityContexts, setVisibilityContexts] = useState<VisibilityContext[]>(['personal_archive']);
   const [linkKind, setLinkKind] = useState<LinkKind>('property');
   const [linkId, setLinkId] = useState('');
@@ -408,8 +412,25 @@ export default function DocumentsPage() {
   const handleFileChange = (nextFile: File | null) => {
     setFile(nextFile);
 
-    if (nextFile && !title.trim()) {
-      setTitle(nextFile.name.replace(/\.[^.]+$/, ''));
+    if (!nextFile) {
+      return;
+    }
+
+    if (!title.trim()) {
+      // Migration 007 already backfills the title from the file name
+      // server-side, so asking for it was asking for something the database
+      // would have worked out anyway. This just tidies it on the way in.
+      setTitle(documentTitleFromFileName(nextFile.name));
+    }
+
+    // Nineteen options is a lot to read when you already know what you
+    // dragged in. Only ever overwrite a value nobody has chosen: once the
+    // select is touched by hand, the guess stops applying.
+    if (!typeChosenByHand) {
+      const guessed = documentTypeFromFile(nextFile.name, nextFile.type);
+      if (guessed) {
+        setDocumentType(guessed);
+      }
     }
   };
 
@@ -606,7 +627,14 @@ export default function DocumentsPage() {
 
                 <label style={{ display: 'grid', gap: 6 }}>
                   <span style={{ fontWeight: 600 }}>Type</span>
-                  <select value={documentType} onChange={(event) => setDocumentType(event.target.value as DocumentType)} style={fieldStyle}>
+                  <select
+                    value={documentType}
+                    onChange={(event) => {
+                      setDocumentType(event.target.value as DocumentType);
+                      setTypeChosenByHand(true);
+                    }}
+                    style={fieldStyle}
+                  >
                     {DOCUMENT_TYPES.map((type) => (
                       <option key={type} value={type}>{formatEnumLabel(type)}</option>
                     ))}

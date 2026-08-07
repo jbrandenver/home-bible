@@ -14,6 +14,7 @@ import { Button, Card, ConfirmDialog, EmptyState, PageHeader, UtilityBadge } fro
 import { ActionLink } from '../components/ActionLink';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
+import { impliedIssueStatus } from '../lib/derivations';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import {
@@ -706,32 +707,58 @@ export default function IssuesPage() {
               </select>
             </label>
 
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>First seen</span>
-                <input type="date" value={firstSeenDate} onChange={(event) => setFirstSeenDate(event.target.value)} style={fieldStyle} />
-              </label>
-
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Last seen</span>
-                <input type="date" value={lastSeenDate} onChange={(event) => setLastSeenDate(event.target.value)} style={fieldStyle} />
-              </label>
-
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Resolved</span>
-                <input type="date" value={resolvedDate} onChange={(event) => setResolvedDate(event.target.value)} style={fieldStyle} />
-              </label>
-            </div>
-
             <label style={{ display: 'grid', gap: 6 }}>
               <span style={{ fontWeight: 600 }}>Description</span>
               <textarea value={description} onChange={(event) => setDescription(event.target.value)} style={{ ...fieldStyle, minHeight: 76 }} />
             </label>
 
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Notes</span>
-              <textarea value={notes} onChange={(event) => setNotes(event.target.value)} style={{ ...fieldStyle, minHeight: 76 }} />
-            </label>
+            {/* Noticing something is wrong is the moment this form gets used.
+                The dates and the private notes belong to the follow-up. */}
+            <details style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                Dates and notes
+                <span style={{ display: 'block', fontWeight: 400, color: 'var(--text-muted)', fontSize: 14 }}>
+                  All optional.
+                </span>
+              </summary>
+
+              <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>First seen</span>
+                    <input type="date" value={firstSeenDate} onChange={(event) => setFirstSeenDate(event.target.value)} style={fieldStyle} />
+                  </label>
+
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Last seen</span>
+                    <input type="date" value={lastSeenDate} onChange={(event) => setLastSeenDate(event.target.value)} style={fieldStyle} />
+                  </label>
+
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Resolved</span>
+                    <input
+                      type="date"
+                      value={resolvedDate}
+                      onChange={(event) => {
+                        setResolvedDate(event.target.value);
+                        // An issue with a resolved date still marked open is a
+                        // contradiction the form used to allow.
+                        const implied = impliedIssueStatus(event.target.value);
+                        if (implied && status !== 'resolved' && status !== 'dismissed') {
+                          setStatus(implied);
+                        }
+                      }}
+                      style={fieldStyle}
+                    />
+                  </label>
+                </div>
+
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Notes</span>
+                  <textarea value={notes} onChange={(event) => setNotes(event.target.value)} style={{ ...fieldStyle, minHeight: 76 }} />
+                </label>
+              </div>
+            </details>
 
             <div>
               <Button type="submit" disabled={savingIssue || (dataMode === 'supabase' && !hasProperty)}>

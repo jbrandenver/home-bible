@@ -11,6 +11,7 @@ import { ActionLink } from '../components/ActionLink';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
 import { resolveDataContext, type ResolvedDataContext } from '../lib/dataContext';
+import { nextDueFrom } from '../lib/derivations';
 import {
   advanceNextDue,
   createComplianceObligation,
@@ -76,6 +77,26 @@ const EMPTY_DRAFT: ObligationDraft = {
   reference_url: '',
   notes: ''
 };
+
+/**
+ * Fill in "next due" from "last completed" plus the interval.
+ *
+ * The form asks for all three and lets them disagree. This only ever fills a
+ * blank — a date somebody typed is never overwritten, because a certificate
+ * can be due earlier than the interval implies.
+ */
+function withDerivedNextDue(
+  draft: ObligationDraft,
+  patch: Partial<ObligationDraft>
+): Partial<ObligationDraft> {
+  const merged = { ...draft, ...patch };
+  if (merged.next_due) {
+    return patch;
+  }
+
+  const derived = nextDueFrom(merged.last_completed_on, Number(merged.frequency_months));
+  return derived ? { ...patch, next_due: derived } : patch;
+}
 
 function draftFields(draft: ObligationDraft) {
   return {
@@ -197,7 +218,9 @@ function ObligationFormFields({
             min={1}
             max={240}
             value={draft.frequency_months}
-            onChange={(event) => set({ frequency_months: event.target.value })}
+            onChange={(event) =>
+              set(withDerivedNextDue(draft, { frequency_months: event.target.value }))
+            }
             placeholder="Blank = one-time"
             style={fieldStyle}
           />
@@ -218,7 +241,9 @@ function ObligationFormFields({
             id={`${idPrefix}-last-completed`}
             type="date"
             value={draft.last_completed_on}
-            onChange={(event) => set({ last_completed_on: event.target.value })}
+            onChange={(event) =>
+              set(withDerivedNextDue(draft, { last_completed_on: event.target.value }))
+            }
             style={fieldStyle}
           />
         </label>

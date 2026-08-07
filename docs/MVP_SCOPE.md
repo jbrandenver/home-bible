@@ -78,6 +78,12 @@ Users and testers can use `/mvp-test` and the docs checklist to validate the pri
 
 ## Explicitly Out Of Scope
 
+> **Stale, 2026-08-06.** This list described the *private MVP* and has since been
+> overtaken. Email sending, AI/OCR parsing, Supabase Edge Functions, scheduled
+> jobs, GitHub Actions and production deployment have all shipped. Treat it as
+> a record of the original boundary, not as a current constraint. Two entries
+> are corrected below.
+
 - Public sharing
 - Real guest invitations
 - Email sending
@@ -96,7 +102,17 @@ Users and testers can use `/mvp-test` and the docs checklist to validate the pri
 - New storage buckets
 - GitHub Actions
 - External APIs
-- Automatic seed data
+- ~~Automatic seed data~~ — **reversed, 2026-08-06.** First-run setup now
+  pre-fills a room and system list from the property type and asks the person
+  to correct it. This is not seed data in the sense meant here: nothing is
+  created that they did not see and tick, and the grid starts from *their*
+  answer about what kind of home it is. The original objection — inventing
+  records nobody asked for — still stands and still applies to anything that
+  would write without being shown first. See `apps/web/lib/starterTemplates.ts`.
+- ~~Address / property-data lookup~~ — **ruled out, 2026-08-06.** No
+  Estated/ATTOM/Rentcast-class vendor and no listing-site scrapers. The room
+  grid derives from property type and what the person ticks, not from a
+  purchased beds/baths record.
 
 ## Release-Candidate Boundary
 

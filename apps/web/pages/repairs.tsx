@@ -13,6 +13,8 @@ import { ActionLink } from '../components/ActionLink';
 import { RoomLocationSelect, roomSelectionValue } from '../components/RoomLocationSelect';
 import { ViewOnlyNotice } from '../components/ViewOnlyNotice';
 import { usePropertyAccess } from '../lib/access';
+import { collectKnownContacts, matchContact } from '../lib/contactSuggestions';
+import { repairStatusNeedsCorrection } from '../lib/derivations';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from '../lib/assets';
 import { getDemoRooms } from '../lib/demoStorage';
 import { getIssueDataContext, getIssuesForContext, type IssueRow } from '../lib/issues';
@@ -390,6 +392,45 @@ export default function RepairsPage() {
       isMounted = false;
     };
   }, []);
+
+  /**
+   * Everyone already named on this property's records.
+   *
+   * There is no contacts table, so the same plumber gets re-keyed on every
+   * job. Gathering the names already on file costs nothing and no migration.
+   */
+  const knownContacts = useMemo(
+    () =>
+      collectKnownContacts([
+        ...repairs.map((repair) => ({
+          name: repair.contractor_name,
+          phone: repair.contractor_phone,
+          email: repair.contractor_email,
+          at: repair.completed_date || repair.scheduled_date || repair.created_at
+        })),
+        ...serviceRecords.map((record) => ({
+          name: record.provider_name,
+          phone: record.provider_phone,
+          email: record.provider_email,
+          at: record.service_date || record.created_at
+        }))
+      ]),
+    [repairs, serviceRecords]
+  );
+
+  /**
+   * Filling the name fills the number — but only into empty fields. Someone
+   * correcting a phone number must not have it undone by retyping the name.
+   */
+  function applyContractorName(name: string) {
+    setContractorName(name);
+
+    const match = matchContact(name, knownContacts);
+    if (!match) return;
+
+    if (!contractorPhone.trim() && match.phone) setContractorPhone(match.phone);
+    if (!contractorEmail.trim() && match.email) setContractorEmail(match.email);
+  }
 
   const openRepairCount = useMemo(
     () => repairs.filter((repair) => repair.status === 'open').length,
@@ -976,63 +1017,106 @@ export default function RepairsPage() {
               <textarea value={repairDescription} onChange={(event) => setRepairDescription(event.target.value)} style={{ ...fieldStyle, minHeight: 80 }} />
             </label>
 
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Reported date</span>
-                <input type="date" value={reportedDate} onChange={(event) => setReportedDate(event.target.value)} style={fieldStyle} />
-              </label>
+            {/*
+              Dates, money, the visit and the contractor were all on screen at
+              once, which is most of why this was the heaviest page in the app.
+              None of it is needed to write down that something is broken —
+              which is the moment somebody actually reaches for this form.
+            */}
+            <details style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12 }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 600 }}>
+                Dates, cost and the contractor
+                <span style={{ display: 'block', fontWeight: 400, color: 'var(--text-muted)', fontSize: 14 }}>
+                  All optional. Easier to fill in once the job is booked.
+                </span>
+              </summary>
 
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Completed date</span>
-                <input type="date" value={completedDate} onChange={(event) => setCompletedDate(event.target.value)} style={fieldStyle} />
-              </label>
+              <div style={{ display: 'grid', gap: 12, marginTop: 12 }}>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Reported date</span>
+                    <input type="date" value={reportedDate} onChange={(event) => setReportedDate(event.target.value)} style={fieldStyle} />
+                  </label>
 
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Estimated cost</span>
-                <input type="number" step="0.01" value={estimatedCost} onChange={(event) => setEstimatedCost(event.target.value)} style={fieldStyle} />
-              </label>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Completed date</span>
+                    <input
+                      type="date"
+                      value={completedDate}
+                      onChange={(event) => {
+                        setCompletedDate(event.target.value);
+                        // A repair with a completed date that is still marked
+                        // open is a contradiction the form used to allow.
+                        if (repairStatusNeedsCorrection(repairStatus, event.target.value)) {
+                          setRepairStatus('completed');
+                        }
+                      }}
+                      style={fieldStyle}
+                    />
+                  </label>
 
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Actual cost</span>
-                <input type="number" step="0.01" value={actualCost} onChange={(event) => setActualCost(event.target.value)} style={fieldStyle} />
-              </label>
-            </div>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Estimated cost</span>
+                    <input type="number" step="0.01" value={estimatedCost} onChange={(event) => setEstimatedCost(event.target.value)} style={fieldStyle} />
+                  </label>
 
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Visit scheduled for</span>
-                <input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} style={fieldStyle} />
-              </label>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Arrival window</span>
-                <input
-                  value={scheduledWindow}
-                  onChange={(event) => setScheduledWindow(event.target.value)}
-                  placeholder="8am – 12pm"
-                  style={fieldStyle}
-                />
-              </label>
-            </div>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Actual cost</span>
+                    <input type="number" step="0.01" value={actualCost} onChange={(event) => setActualCost(event.target.value)} style={fieldStyle} />
+                  </label>
+                </div>
 
-            <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Contractor name</span>
-                <input value={contractorName} onChange={(event) => setContractorName(event.target.value)} style={fieldStyle} />
-              </label>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Contractor phone</span>
-                <input value={contractorPhone} onChange={(event) => setContractorPhone(event.target.value)} style={fieldStyle} />
-              </label>
-              <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontWeight: 600 }}>Contractor email</span>
-                <input type="email" value={contractorEmail} onChange={(event) => setContractorEmail(event.target.value)} style={fieldStyle} />
-              </label>
-            </div>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Visit scheduled for</span>
+                    <input type="date" value={scheduledDate} onChange={(event) => setScheduledDate(event.target.value)} style={fieldStyle} />
+                  </label>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Arrival window</span>
+                    <input
+                      value={scheduledWindow}
+                      onChange={(event) => setScheduledWindow(event.target.value)}
+                      placeholder="8am – 12pm"
+                      style={fieldStyle}
+                    />
+                  </label>
+                </div>
 
-            <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontWeight: 600 }}>Notes</span>
-              <textarea value={repairNotes} onChange={(event) => setRepairNotes(event.target.value)} style={{ ...fieldStyle, minHeight: 70 }} />
-            </label>
+                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Contractor name</span>
+                    <input
+                      value={contractorName}
+                      list="known-contractors"
+                      onChange={(event) => applyContractorName(event.target.value)}
+                      style={fieldStyle}
+                    />
+                  </label>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Contractor phone</span>
+                    <input value={contractorPhone} onChange={(event) => setContractorPhone(event.target.value)} style={fieldStyle} />
+                  </label>
+                  <label style={{ display: 'grid', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>Contractor email</span>
+                    <input type="email" value={contractorEmail} onChange={(event) => setContractorEmail(event.target.value)} style={fieldStyle} />
+                  </label>
+                </div>
+
+                {/* Everyone already named on a repair, a service record or a
+                    receipt. There is no contacts table, so this is gathered
+                    from what is on file rather than stored a second time. */}
+                <datalist id="known-contractors">
+                  {knownContacts.map((contact) => (
+                    <option key={contact.name} value={contact.name} />
+                  ))}
+                </datalist>
+
+                <label style={{ display: 'grid', gap: 6 }}>
+                  <span style={{ fontWeight: 600 }}>Notes</span>
+                  <textarea value={repairNotes} onChange={(event) => setRepairNotes(event.target.value)} style={{ ...fieldStyle, minHeight: 70 }} />
+                </label>
+              </div>
+            </details>
 
             <div>
               <Button type="submit" disabled={savingRepair || (dataMode === 'supabase' && !hasProperty)}>

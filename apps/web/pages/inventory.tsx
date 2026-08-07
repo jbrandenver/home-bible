@@ -3,9 +3,11 @@ import { formatEnumLabel } from '@home-folder/shared';
 import { PageHeader, Card, Button, EmptyState, Input, Select, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../components/ActionLink';
 import { PhotoCaptureButton } from '../components/PhotoCaptureButton';
+import { BulkPlateCapture } from '../components/BulkPlateCapture';
 import {
   getAssetDataContext,
   getAssetsForContext,
+  type AssetDataContext,
   type AssetDataMode,
   type AssetRow
 } from '../lib/assets';
@@ -46,6 +48,9 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState('');
   const [documentContext, setDocumentContext] = useState<DocumentDataContext | null>(null);
   const [walkMode, setWalkMode] = useState(false);
+  const [assetContext, setAssetContext] = useState<AssetDataContext | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkNotice, setBulkNotice] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -72,6 +77,7 @@ export default function InventoryPage() {
         }
 
         setDataMode(context.mode);
+        setAssetContext(context);
         setDocumentContext(docContext);
         setPropertyNickname(context.property?.nickname || 'Your home');
         setAssets(nextAssets);
@@ -253,6 +259,14 @@ export default function InventoryPage() {
                   {walkMode ? '📷 Walk mode on' : '📷 Walk the house'}
                 </Button>
               ) : null}
+              {dataMode === 'supabase' && (access.loading || access.canWrite) ? (
+                <Button
+                  variant={bulkOpen ? 'primary' : 'secondary'}
+                  onClick={() => setBulkOpen((current) => !current)}
+                >
+                  {bulkOpen ? 'Hide bulk capture' : 'Record several at once'}
+                </Button>
+              ) : null}
               <Button variant="secondary" onClick={() => window.print()}>
                 Print inventory
               </Button>
@@ -276,6 +290,27 @@ export default function InventoryPage() {
             Tip: insurers ask for brand, model, serial number, and price. Items missing those are flagged so you can strengthen the record.
           </p>
         </Card>
+
+        {bulkNotice ? (
+          <Card>
+            <p style={{ color: 'var(--status-good)', fontWeight: 700, margin: 0 }} role="status">
+              {bulkNotice}
+            </p>
+          </Card>
+        ) : null}
+
+        {bulkOpen ? (
+          <BulkPlateCapture
+            context={assetContext}
+            rooms={rooms}
+            signedIn={dataMode === 'supabase'}
+            onSaved={(count) => {
+              setBulkNotice(
+                `${count} ${count === 1 ? 'item' : 'items'} added. Reload to see them in the list below.`
+              );
+            }}
+          />
+        ) : null}
 
         {error ? (
           <Card>

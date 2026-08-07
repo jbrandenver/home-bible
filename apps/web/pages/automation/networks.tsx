@@ -15,6 +15,7 @@ import {
 } from '../../lib/automation';
 import { getRoomsForProperty } from '../../lib/rooms';
 import { formatRoomLocation } from '../../lib/roomLabels';
+import { NetworkDetailFields } from '../../components/NetworkDetailFields';
 
 type Room = { id: string; name: string; room_type?: string | null; floor_name?: string | null };
 
@@ -237,27 +238,7 @@ export default function AutomationNetworksPage() {
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={isGuest} onChange={(e) => setIsGuest(e.target.checked)} /><span>Guest network</span></label>
               </div>
 
-              <details>
-                <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Equipment, addressing &amp; recovery (optional)</summary>
-                <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', marginTop: 12 }}>
-                  <label><span>Router model</span><Input value={detail('router_model')} onChange={(e) => setDetail('router_model', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Modem</span><Input value={detail('modem')} onChange={(e) => setDetail('modem', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Mesh system</span><Input value={detail('mesh_system')} onChange={(e) => setDetail('mesh_system', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Access points</span><Input value={detail('access_points')} onChange={(e) => setDetail('access_points', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Gateway address</span><Input value={detail('gateway')} onChange={(e) => setDetail('gateway', e.target.value)} placeholder="192.168.1.1" style={{ marginTop: 6 }} /></label>
-                  <label><span>Subnet</span><Input value={detail('subnet')} onChange={(e) => setDetail('subnet', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>VLAN</span><Input value={detail('vlan')} onChange={(e) => setDetail('vlan', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>DHCP range</span><Input value={detail('dhcp_range')} onChange={(e) => setDetail('dhcp_range', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Backup internet</span><Input value={detail('backup_internet')} onChange={(e) => setDetail('backup_internet', e.target.value)} style={{ marginTop: 6 }} /></label>
-                  <label><span>Battery backup (UPS)</span><Input value={detail('ups_backup')} onChange={(e) => setDetail('ups_backup', e.target.value)} style={{ marginTop: 6 }} /></label>
-                </div>
-                <label style={{ display: 'block', marginTop: 12 }}><span>DNS notes</span><textarea value={detail('dns_notes')} onChange={(e) => setDetail('dns_notes', e.target.value)} style={textareaStyle} /></label>
-                <label style={{ display: 'block', marginTop: 12 }}><span>Security notes (reference only — never a password)</span><textarea value={detail('security_notes')} onChange={(e) => setDetail('security_notes', e.target.value)} style={textareaStyle} /></label>
-                <label style={{ display: 'block', marginTop: 12 }}><span>Setup instructions</span><textarea value={detail('setup_instructions')} onChange={(e) => setDetail('setup_instructions', e.target.value)} style={textareaStyle} /></label>
-                <label style={{ display: 'block', marginTop: 12 }}><span>Recovery instructions (shown in the emergency guide)</span><textarea value={detail('recovery_instructions')} onChange={(e) => setDetail('recovery_instructions', e.target.value)} placeholder="Power-cycle the modem, then the router; wait 3 min." style={textareaStyle} /></label>
-                <label style={{ display: 'block', marginTop: 12 }}><span>Where credentials are stored (reference only — never the Wi-Fi password)</span><Input value={detail('credential_reference')} onChange={(e) => setDetail('credential_reference', e.target.value)} placeholder="1Password › Home Wi-Fi" style={{ marginTop: 6 }} /></label>
-                <label style={{ display: 'block', marginTop: 12 }}><span>Notes</span><textarea value={detail('notes')} onChange={(e) => setDetail('notes', e.target.value)} style={textareaStyle} /></label>
-              </details>
+              <NetworkDetailFields value={detail} onChange={setDetail} />
 
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
                 <Button onClick={add} disabled={saving}>{saving ? 'Adding…' : 'Add network'}</Button>

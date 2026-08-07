@@ -4,6 +4,7 @@ import { ASSET_TYPES, formatEnumLabel, getWarrantyMeta, safeHttpUrl, toLocalDate
 import { PageHeader, Card, Button, ConfirmDialog, UtilityBadge } from '@home-folder/ui';
 import { ActionLink } from '../../components/ActionLink';
 import { ViewOnlyNotice } from '../../components/ViewOnlyNotice';
+import { PlateScanButton } from '../../components/PlateScanButton';
 import { usePropertyAccess } from '../../lib/access';
 import { VisibilityContextPicker } from '../../components/VisibilityContextPicker';
 import { RelatedDocuments } from '../../components/RelatedDocuments';
@@ -678,6 +679,21 @@ export default function AssetDetailPage() {
                   ))}
                 </select>
               </label>
+            </div>
+
+            {/* The commonest reason to open an item again is to fill in the
+                serial number nobody wrote down. Standing in front of it with a
+                phone should be enough. */}
+            <div style={{ marginBottom: 4 }}>
+              <PlateScanButton
+                signedIn={context?.mode === 'supabase'}
+                label="Scan the data plate"
+                onScanned={(result) => {
+                  if (result.brand) setEditBrand(result.brand);
+                  if (result.model_number) setEditModel(result.model_number);
+                  if (result.serial_number) setEditSerialNumber(result.serial_number);
+                }}
+              />
             </div>
 
             <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
