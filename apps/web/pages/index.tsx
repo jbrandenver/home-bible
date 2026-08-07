@@ -251,7 +251,8 @@ export default function Home() {
             <h3 style={{ marginTop: 0, marginBottom: 6 }}>Issued to the next keeper</h3>
             <p style={{ color: 'rgba(244,238,221,0.82)' }}>
               When the day comes, produce a clean handover copy for family, a buyer, or a
-              caretaker — the whole record, legible to someone who was never there.
+              caretaker — the whole record, legible to someone who was never there, with your
+              private notes kept back.
             </p>
             <PlateRow onDark label="Issued to" value="The bearer" />
             <PlateRow onDark label="Contains" value="Everything they need · nothing they don't" />

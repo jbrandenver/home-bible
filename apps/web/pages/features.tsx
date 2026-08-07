@@ -229,7 +229,7 @@ const chapters: Chapter[] = [
       {
         name: 'Entry-by-entry visibility',
         detail:
-          'Documents and assets are marked for the contexts they belong to — family, buyer, maintenance, insurance, or your personal archive.'
+          'Documents and assets are marked for the contexts they belong to — family, buyer, maintenance, insurance, or your personal archive. Private entries stay out of shared views and the handover.'
       }
     ]
   },
@@ -245,7 +245,7 @@ const chapters: Chapter[] = [
       {
         name: 'The handover pack',
         detail:
-          'The whole record, produced as a clean print or PDF copy — legible to someone who was never there.'
+          'The whole record, produced as a clean print or PDF copy — legible to someone who was never there, with your private notes kept back.'
       },
       {
         name: 'Export, in open formats',

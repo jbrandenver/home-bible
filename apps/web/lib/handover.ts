@@ -1,5 +1,6 @@
 import type { User } from '@supabase/supabase-js';
-import { getWarrantyMeta, type WarrantyStatus } from '@home-folder/shared';
+import { getWarrantyMeta, type VisibilityContext, type WarrantyStatus } from '@home-folder/shared';
+import { normalizeVisibilityContexts } from './visibility';
 import { getCurrentUser, isSupabaseConfigured, getCurrentUserUncached } from './auth';
 import { getAssetsForProperty, getDemoAssets, type AssetRow } from './assets';
 import { getDemoActiveProperty, getDemoRooms } from './demoStorage';
@@ -296,6 +297,26 @@ const DEFAULT_SECTIONS_BY_REPORT_TYPE: Record<HandoverReportType, HandoverSectio
   personal_archive: [...HANDOVER_SECTIONS]
 };
 
+/**
+ * Keep only the entries marked for this report's audience. The report types
+ * are the visibility contexts: a family pack shows family-context entries, a
+ * buyer pack shows buyer-context entries, and an entry marked only for the
+ * personal archive stays out of every shared pack. The personal archive
+ * report is the keeper's own complete record, so nothing is held back there.
+ */
+export function filterEntriesForReportType<T extends { visibility_contexts: VisibilityContext[] }>(
+  entries: T[],
+  reportType: HandoverReportType
+): T[] {
+  if (reportType === 'personal_archive') {
+    return entries;
+  }
+
+  return entries.filter((entry) =>
+    normalizeVisibilityContexts(entry.visibility_contexts).includes(reportType)
+  );
+}
+
 function buildDemoProperty(): PropertySummary | null {
   const demoProperty = getDemoActiveProperty();
 
@@ -446,9 +467,11 @@ export async function loadHandoverReport(input: HandoverReportInput): Promise<Ha
 
   if (context.mode === 'demo') {
     const rooms = needsRooms ? getDemoRoomsWithFloors() : [];
-    const demoAssets = needsAssets ? getDemoAssets() : [];
+    const demoAssets = needsAssets ? filterEntriesForReportType(getDemoAssets(), input.reportType) : [];
     const demoServiceRecords = needsServiceRecords ? getDemoServiceRecords() : [];
-    const demoDocuments = needsDocuments ? getDemoDocuments() : [];
+    const demoDocuments = needsDocuments
+      ? filterEntriesForReportType(getDemoDocuments(), input.reportType)
+      : [];
     const demoReceipts = needsReceipts ? getDemoReceipts() : [];
 
     return {
@@ -490,19 +513,24 @@ export async function loadHandoverReport(input: HandoverReportInput): Promise<Ha
       needsReceipts ? safeLoad('receipts_summary', () => getReceiptsForProperty(propertyId), sectionErrors) : Promise.resolve([])
     ]);
 
+  const visibleAssets = filterEntriesForReportType(assets, input.reportType);
+  const visibleDocuments = filterEntriesForReportType(documents, input.reportType);
+
   return {
     ...emptyReport,
     floors,
     rooms,
     utilities,
-    assets,
+    assets: visibleAssets,
     reminders,
     repairs,
     serviceRecords,
     issues,
     trendFlags,
-    documents,
+    documents: visibleDocuments,
     receipts,
-    claimInventory: isInsurance ? buildClaimInventory(assets, receipts, documents, serviceRecords) : null
+    claimInventory: isInsurance
+      ? buildClaimInventory(visibleAssets, receipts, visibleDocuments, serviceRecords)
+      : null
   };
 }
